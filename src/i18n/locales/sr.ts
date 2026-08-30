@@ -245,6 +245,64 @@ export default {
       'Pozicija je posao (Marketing Manager). Uloga je šta neko sme unutar ovog sistema (Manager). Namerno su odvojene.',
   },
 
+  tabs: {
+    employees: 'Zaposleni',
+    pending: 'Na čekanju',
+    suspended: 'Suspendovani',
+    rejected: 'Odbijeni',
+  },
+
+  table: {
+    name: 'Ime',
+    position: 'Pozicija',
+    department: 'Sektor',
+    status: 'Status',
+    joined: 'Učlanjen',
+    submitted: 'Poslato',
+    requestedPosition: 'Tražena pozicija',
+    location: 'Lokacija',
+    reviewedBy: 'Odlučio',
+    reason: 'Razlog',
+  },
+
+  approval: {
+    review: 'Pregledaj',
+    approve: 'Odobri',
+    reject: 'Odbij',
+    approveTitle: 'Odobriti ovog zaposlenog?',
+    approveText: 'Moći će odmah da se prijavi sa ulogom koju mu dodeliš ispod.',
+    rejectTitle: 'Odbiti ovaj zahtev?',
+    rejectText: 'Neće dobiti pristup. Zahtev se čuva, zajedno sa tvojim razlogom.',
+    reason: 'Razlog odbijanja',
+    reasonOptional: 'Opciono. Prikazuje se podnosiocu.',
+    assignRole: 'Uloga',
+    assignPosition: 'Pozicija',
+    assignDepartment: 'Sektor',
+    assignEmployment: 'Vrsta angažmana',
+    assignStartDate: 'Datum početka',
+    beforeApproving: 'Postavi pre odobravanja',
+    noRoleWarning: 'Dodeli bar jednu ulogu, inače će se prijaviti bez ikakvog pristupa.',
+    approved: 'Zaposleni je odobren.',
+    rejected: 'Zahtev je odbijen.',
+    failed: 'Odluka nije mogla da se sačuva.',
+    emptyPending: 'Nema zahteva na čekanju',
+    emptyPendingHint: 'Novi zahtevi za registraciju pojavljuju se ovde na tvoju odluku.',
+    emptyRejected: 'Nema odbijenih zahteva',
+    emptyRejectedHint: 'Zahtevi koje odbiješ čuvaju se ovde.',
+    emptySuspended: 'Niko nije suspendovan',
+    emptySuspendedHint: 'Suspendovani i deaktivirani nalozi su ovde. Zapisi se nikad ne brišu.',
+    contactDetails: 'Kontakt',
+    aboutApplicant: 'O kandidatu',
+  },
+
+  coAdmin: {
+    warningTitle: 'Ovo daje punu kontrolu',
+    warningText:
+      'Drugi CEO može da upravlja svim zaposlenima, čita svaku privatnu belešku i menja tvoju ulogu i status. Daj to samo nekome kome bi poverio firmu.',
+    whyNotSelf:
+      'Ne možeš sam sebi da menjaš ulogu ni status. Postavi drugog administratora i on to može umesto tebe — to je ono što sprečava da jedan provaljen nalog preuzme sve.',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',

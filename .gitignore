@@ -41,3 +41,6 @@ firebase-export-*
 *.njsproj
 *.sln
 *.sw?
+
+# TypeScript incremental build artefact
+*.tsbuildinfo

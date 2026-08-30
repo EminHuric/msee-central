@@ -246,6 +246,64 @@ export default {
       'A position is the job (Marketing Manager). A role is what they may do inside this system (Manager). They are kept separate on purpose.',
   },
 
+  tabs: {
+    employees: 'Employees',
+    pending: 'Pending',
+    suspended: 'Suspended',
+    rejected: 'Rejected',
+  },
+
+  table: {
+    name: 'Name',
+    position: 'Position',
+    department: 'Department',
+    status: 'Status',
+    joined: 'Joined',
+    submitted: 'Submitted',
+    requestedPosition: 'Requested position',
+    location: 'Location',
+    reviewedBy: 'Decided by',
+    reason: 'Reason',
+  },
+
+  approval: {
+    review: 'Review',
+    approve: 'Approve',
+    reject: 'Reject',
+    approveTitle: 'Approve this employee?',
+    approveText: 'They will be able to sign in immediately with the role you assign below.',
+    rejectTitle: 'Reject this request?',
+    rejectText: 'They will not gain access. The request is kept, with your reason.',
+    reason: 'Reason for rejection',
+    reasonOptional: 'Optional. Shown to the applicant.',
+    assignRole: 'Role',
+    assignPosition: 'Position',
+    assignDepartment: 'Department',
+    assignEmployment: 'Employment status',
+    assignStartDate: 'Start date',
+    beforeApproving: 'Set before approving',
+    noRoleWarning: 'Assign at least one role, or they will sign in with no access at all.',
+    approved: 'Employee approved.',
+    rejected: 'Request rejected.',
+    failed: 'The decision could not be saved.',
+    emptyPending: 'No requests waiting',
+    emptyPendingHint: 'New registration requests appear here for your decision.',
+    emptyRejected: 'No rejected requests',
+    emptyRejectedHint: 'Requests you turn down are kept here.',
+    emptySuspended: 'Nobody suspended',
+    emptySuspendedHint: 'Suspended and deactivated accounts are listed here. Records are never deleted.',
+    contactDetails: 'Contact',
+    aboutApplicant: 'About',
+  },
+
+  coAdmin: {
+    warningTitle: 'This grants full control',
+    warningText:
+      'A second CEO can manage every employee, read every private note, and change your own role and status. Give it only to someone you would trust with the company.',
+    whyNotSelf:
+      'You cannot change your own role or status. Appoint a second administrator and they can do it for you — that is what keeps a single compromised account from taking over.',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',

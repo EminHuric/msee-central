@@ -1,18 +1,32 @@
 <script setup lang="ts">
 /**
- * Employee directory.
+ * Employees.
  *
- * Only the professional tier is fetched here — no personal field is requested
- * for anybody. A phone number cannot leak from a list that never asks for one,
- * which is why the card shows position and department and nothing else.
+ * Four tabs, because these are four different states of a person and mixing
+ * them makes the main list useless: someone still waiting is not an employee,
+ * and someone turned away never was.
+ *
+ *   Employees   active accounts — the working directory
+ *   Pending     registration requests awaiting a decision
+ *   Suspended   suspended and deactivated accounts, records intact
+ *   Rejected    requests that were turned down, with the reason
+ *
+ * A table rather than cards: this is a list you scan, comparing position,
+ * department and status across many rows at once. Cards are for browsing;
+ * this is for working.
+ *
+ * Only the professional tier is fetched. No personal field is requested for
+ * anybody, so nothing private can leak from a list that never asks for it.
  */
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import RequestReviewPanel from '@/components/RequestReviewPanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
+import { fetchRequests, nextEmployeeCode } from '@/api/approval'
 import { fetchEmployees } from '@/api/employees'
 import {
   departmentName,
@@ -22,88 +36,153 @@ import {
   lookupLabel,
   positionName,
 } from '@/api/organisation'
+import { fetchRoles } from '@/api/roles'
 import { formatDate } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_STATUSES, type AccountStatus, type Department, type EmployeePublic, type Position } from '@/types/domain'
+import type {
+  Department,
+  EmployeePublic,
+  Position,
+  RegistrationRequest,
+  Role,
+} from '@/types/domain'
+import { PERMISSIONS } from '@/types/permissions'
 
 const auth = useAuthStore()
 const { t } = useI18n()
 
+type Tab = 'employees' | 'pending' | 'suspended' | 'rejected'
+
+const tab = ref<Tab>('employees')
 const loading = ref(true)
 const loadError = ref(false)
+
 const employees = ref<EmployeePublic[]>([])
+const requests = ref<RegistrationRequest[]>([])
 const departments = ref<Department[]>([])
 const positions = ref<Position[]>([])
+const roles = ref<Role[]>([])
 
 const search = ref('')
-const statusFilter = ref<AccountStatus | ''>('')
 const departmentFilter = ref('')
+const reviewing = ref<RegistrationRequest | null>(null)
+
+const canSeeRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
 
 const departmentIndex = computed(() => indexById(departments.value))
 const positionIndex = computed(() => indexById(positions.value))
 
-function labelFor(employee: EmployeePublic): { position: string | null; department: string | null } {
-  return {
-    position: lookupLabel(positionIndex.value, employee.positionId, positionName),
-    department: lookupLabel(departmentIndex.value, employee.departmentId, departmentName),
-  }
+function positionLabel(employee: EmployeePublic): string | null {
+  return lookupLabel(positionIndex.value, employee.positionId, positionName)
 }
 
-const filtered = computed(() => {
+function departmentLabel(employee: EmployeePublic): string | null {
+  return lookupLabel(departmentIndex.value, employee.departmentId, departmentName)
+}
+
+/* ---- Tab contents ------------------------------------------------- */
+
+const activeEmployees = computed(() => employees.value.filter((e) => e.status === 'active'))
+
+const inactiveEmployees = computed(() =>
+  employees.value.filter((e) => e.status === 'suspended' || e.status === 'deactivated'),
+)
+
+const pendingRequests = computed(() => requests.value.filter((r) => r.status === 'pending'))
+const rejectedRequests = computed(() => requests.value.filter((r) => r.status === 'rejected'))
+
+const tabs = computed(() => {
+  const list: { key: Tab; label: string; count: number }[] = [
+    { key: 'employees', label: t('tabs.employees'), count: activeEmployees.value.length },
+  ]
+
+  if (canSeeRequests.value) {
+    list.push({ key: 'pending', label: t('tabs.pending'), count: pendingRequests.value.length })
+  }
+
+  list.push({ key: 'suspended', label: t('tabs.suspended'), count: inactiveEmployees.value.length })
+
+  if (canSeeRequests.value) {
+    list.push({ key: 'rejected', label: t('tabs.rejected'), count: rejectedRequests.value.length })
+  }
+
+  return list
+})
+
+/** People shown in the current tab, after search and department filter. */
+const visiblePeople = computed(() => {
+  const source = tab.value === 'suspended' ? inactiveEmployees.value : activeEmployees.value
   const term = search.value.trim().toLowerCase()
 
-  return employees.value.filter((employee) => {
-    if (statusFilter.value && employee.status !== statusFilter.value) return false
+  return source.filter((employee) => {
     if (departmentFilter.value && employee.departmentId !== departmentFilter.value) return false
     if (!term) return true
 
-    const { position, department } = labelFor(employee)
-    const haystack = [
+    return [
       employee.firstName,
       employee.lastName,
       employee.employeeCode,
-      position ?? '',
-      department ?? '',
+      positionLabel(employee) ?? '',
+      departmentLabel(employee) ?? '',
       ...(employee.skills ?? []),
-      ...(employee.expertise ?? []),
     ]
       .join(' ')
       .toLowerCase()
-
-    return haystack.includes(term)
+      .includes(term)
   })
 })
 
-const hasFilters = computed(
-  () => search.value.trim() !== '' || statusFilter.value !== '' || departmentFilter.value !== '',
-)
+const visibleRequests = computed(() => {
+  const source = tab.value === 'pending' ? pendingRequests.value : rejectedRequests.value
+  const term = search.value.trim().toLowerCase()
+  if (!term) return source
 
-function clearFilters(): void {
-  search.value = ''
-  statusFilter.value = ''
-  departmentFilter.value = ''
-}
+  return source.filter((r) =>
+    [r.firstName, r.lastName, r.email, r.desiredPosition, r.city, r.country]
+      .join(' ')
+      .toLowerCase()
+      .includes(term),
+  )
+})
+
+const showingRequests = computed(() => tab.value === 'pending' || tab.value === 'rejected')
 
 async function load(): Promise<void> {
   loading.value = true
   loadError.value = false
 
   try {
-    // Departments and positions are reference data; failing to read them is not
-    // fatal, the directory just falls back to showing raw identifiers.
-    const [people, deps, pos] = await Promise.all([
+    // Reference data and requests are optional: a viewer without permission
+    // simply gets fewer tabs rather than an error page.
+    const [people, deps, pos, allRoles, reqs] = await Promise.all([
       fetchEmployees(),
       fetchDepartments().catch(() => []),
       fetchPositions().catch(() => []),
+      fetchRoles().catch(() => []),
+      canSeeRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
     ])
+
     employees.value = people
     departments.value = deps
     positions.value = pos
+    roles.value = allRoles
+    requests.value = reqs
   } catch {
     loadError.value = true
   } finally {
     loading.value = false
   }
+}
+
+async function onDecided(): Promise<void> {
+  reviewing.value = null
+  await load()
+}
+
+function switchTab(next: Tab): void {
+  tab.value = next
+  reviewing.value = null
+  search.value = ''
 }
 
 onMounted(load)
@@ -116,10 +195,26 @@ onMounted(load)
         <h1 class="page-title">{{ t('employees.title') }}</h1>
         <p class="page-subtitle">{{ t('employees.subtitle') }}</p>
       </div>
-      <span v-if="!loading" class="badge badge-plain">
-        {{ t('common.results', filtered.length, { named: { n: filtered.length } }) }}
-      </span>
     </header>
+
+    <!-- Tabs ----------------------------------------------------------- -->
+    <div class="tabs" role="tablist">
+      <button
+        v-for="item in tabs"
+        :key="item.key"
+        type="button"
+        role="tab"
+        class="tab"
+        :class="{ 'is-active': tab === item.key }"
+        :aria-selected="tab === item.key"
+        @click="switchTab(item.key)"
+      >
+        {{ item.label }}
+        <span v-if="item.count > 0" class="tab-count" :class="{ 'is-alert': item.key === 'pending' }">
+          {{ item.count }}
+        </span>
+      </button>
+    </div>
 
     <!-- Toolbar -------------------------------------------------------- -->
     <div class="toolbar">
@@ -134,38 +229,36 @@ onMounted(load)
         />
       </div>
 
-      <select v-model="statusFilter" class="select" :aria-label="t('employees.filterStatus')">
-        <option value="">{{ t('employees.allStatuses') }}</option>
-        <option v-for="s in ACCOUNT_STATUSES" :key="s" :value="s">{{ t(`status.${s}`) }}</option>
-      </select>
-
       <select
-        v-if="departments.length"
+        v-if="!showingRequests && departments.length"
         v-model="departmentFilter"
         class="select"
         :aria-label="t('employees.filterDepartment')"
       >
         <option value="">{{ t('employees.allDepartments') }}</option>
-        <option v-for="d in departments" :key="d.id" :value="d.id">
-          {{ departmentName(d) }}
-        </option>
+        <option v-for="d in departments" :key="d.id" :value="d.id">{{ departmentName(d) }}</option>
       </select>
-
-      <button v-if="hasFilters" type="button" class="btn btn-ghost" @click="clearFilters">
-        {{ t('common.clear') }}
-      </button>
     </div>
 
-    <!-- Loading -------------------------------------------------------- -->
-    <div v-if="loading" class="grid">
-      <div v-for="n in 6" :key="n" class="card skeleton-card">
-        <div class="skeleton" style="width: 60px; height: 60px; border-radius: 999px" />
-        <div class="skeleton" style="height: 15px; width: 60%" />
-        <div class="skeleton" style="height: 12px; width: 40%" />
+    <!-- Review panel --------------------------------------------------- -->
+    <RequestReviewPanel
+      v-if="reviewing"
+      :request="reviewing"
+      :roles="roles"
+      :departments="departments"
+      :positions="positions"
+      :employee-code="nextEmployeeCode(employees.length)"
+      @decided="onDecided"
+      @close="reviewing = null"
+    />
+
+    <!-- Loading / error ------------------------------------------------ -->
+    <div v-if="loading" class="card">
+      <div class="card-body stack">
+        <div v-for="n in 4" :key="n" class="skeleton" style="height: 44px" />
       </div>
     </div>
 
-    <!-- Error ---------------------------------------------------------- -->
     <div v-else-if="loadError" class="card">
       <div class="empty">
         <span class="empty-icon"><AppIcon name="alert" :size="20" /></span>
@@ -174,74 +267,167 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- Empty ---------------------------------------------------------- -->
-    <div v-else-if="filtered.length === 0" class="card">
-      <div class="empty">
-        <span class="empty-icon"><AppIcon name="users" :size="20" /></span>
+    <!-- Requests ------------------------------------------------------- -->
+    <div v-else-if="showingRequests" class="card">
+      <div v-if="visibleRequests.length === 0" class="empty">
+        <span class="empty-icon"><AppIcon name="inbox" :size="20" /></span>
         <p class="empty-title">
-          {{ employees.length === 0 ? t('employees.emptyAll') : t('employees.empty') }}
+          {{ tab === 'pending' ? t('approval.emptyPending') : t('approval.emptyRejected') }}
         </p>
         <p class="empty-text">
-          {{ employees.length === 0 ? t('employees.emptyAllHint') : t('employees.emptyHint') }}
+          {{ tab === 'pending' ? t('approval.emptyPendingHint') : t('approval.emptyRejectedHint') }}
         </p>
-        <button v-if="hasFilters" class="btn btn-secondary" @click="clearFilters">
-          {{ t('common.clear') }}
-        </button>
+      </div>
+
+      <div v-else class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{{ t('table.name') }}</th>
+              <th>{{ t('table.requestedPosition') }}</th>
+              <th>{{ t('table.location') }}</th>
+              <th>{{ t('table.submitted') }}</th>
+              <th v-if="tab === 'rejected'">{{ t('table.reason') }}</th>
+              <th class="col-actions" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="request in visibleRequests" :key="request.uid">
+              <td>
+                <div class="person-cell">
+                  <UserAvatar
+                    :name="`${request.firstName} ${request.lastName}`"
+                    :photo-url="request.photoUrl"
+                    :size="34"
+                  />
+                  <div class="person-text">
+                    <span class="person-name">{{ request.firstName }} {{ request.lastName }}</span>
+                    <span class="person-sub truncate">{{ request.email }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>{{ request.desiredPosition || '—' }}</td>
+              <td class="muted">{{ request.city }}, {{ request.country }}</td>
+              <td class="muted">{{ formatDate(request.submittedAt) }}</td>
+              <td v-if="tab === 'rejected'" class="muted truncate">
+                {{ request.rejectionReason || '—' }}
+              </td>
+              <td class="col-actions">
+                <button class="btn btn-secondary btn-sm" @click="reviewing = request">
+                  {{ t('approval.review') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Directory ------------------------------------------------------ -->
-    <div v-else class="grid">
-      <RouterLink
-        v-for="employee in filtered"
-        :key="employee.uid"
-        :to="`/employees/${employee.uid}`"
-        class="card person"
-      >
-        <UserAvatar
-          :name="`${employee.firstName} ${employee.lastName}`"
-          :photo-url="employee.photoUrl"
-          :size="64"
-        />
+    <!-- Employees ------------------------------------------------------ -->
+    <div v-else class="card">
+      <div v-if="visiblePeople.length === 0" class="empty">
+        <span class="empty-icon"><AppIcon name="users" :size="20" /></span>
+        <p class="empty-title">
+          {{ tab === 'suspended' ? t('approval.emptySuspended') : t('employees.emptyAll') }}
+        </p>
+        <p class="empty-text">
+          {{ tab === 'suspended' ? t('approval.emptySuspendedHint') : t('employees.emptyAllHint') }}
+        </p>
+      </div>
 
-        <div class="person-body">
-          <p class="person-name truncate">
-            {{ employee.firstName }} {{ employee.lastName }}
-            <span v-if="employee.uid === auth.uid" class="badge badge-plain badge-accent person-you">
-              {{ t('employees.you') }}
-            </span>
-          </p>
-
-          <p class="person-position truncate">
-            {{ labelFor(employee).position ?? t('employees.noPosition') }}
-          </p>
-
-          <p v-if="labelFor(employee).department" class="person-department truncate">
-            {{ labelFor(employee).department }}
-          </p>
-        </div>
-
-        <div class="person-foot">
-          <StatusBadge :status="employee.status" />
-          <span class="tertiary person-joined">
-            {{ t('employees.joined', { date: formatDate(employee.dateJoined) }) }}
-          </span>
-        </div>
-
-        <ul v-if="employee.skills?.length" class="person-skills">
-          <li v-for="skill in employee.skills.slice(0, 3)" :key="skill" class="person-skill">
-            {{ skill }}
-          </li>
-          <li v-if="employee.skills.length > 3" class="person-skill person-skill-more">
-            +{{ employee.skills.length - 3 }}
-          </li>
-        </ul>
-      </RouterLink>
+      <div v-else class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{{ t('table.name') }}</th>
+              <th>{{ t('table.position') }}</th>
+              <th>{{ t('table.department') }}</th>
+              <th>{{ t('table.status') }}</th>
+              <th>{{ t('table.joined') }}</th>
+              <th class="col-actions" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="employee in visiblePeople" :key="employee.uid">
+              <td>
+                <RouterLink :to="`/employees/${employee.uid}`" class="person-cell">
+                  <UserAvatar
+                    :name="`${employee.firstName} ${employee.lastName}`"
+                    :photo-url="employee.photoUrl"
+                    :size="34"
+                  />
+                  <div class="person-text">
+                    <span class="person-name">
+                      {{ employee.firstName }} {{ employee.lastName }}
+                      <span v-if="employee.uid === auth.uid" class="you">{{ t('employees.you') }}</span>
+                    </span>
+                    <span class="person-sub mono">{{ employee.employeeCode }}</span>
+                  </div>
+                </RouterLink>
+              </td>
+              <td>{{ positionLabel(employee) ?? t('employees.noPosition') }}</td>
+              <td class="muted">{{ departmentLabel(employee) ?? '—' }}</td>
+              <td><StatusBadge :status="employee.status" /></td>
+              <td class="muted">{{ formatDate(employee.dateJoined) }}</td>
+              <td class="col-actions">
+                <RouterLink :to="`/employees/${employee.uid}`" class="btn btn-ghost btn-sm">
+                  {{ t('common.view') }}
+                </RouterLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid transparent;
+  font-size: var(--text-base);
+  font-weight: 550;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.is-active {
+  color: var(--text-brand);
+  border-bottom-color: var(--accent);
+}
+
+.tab-count {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-3);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  color: var(--text-tertiary);
+}
+
+.tab-count.is-alert {
+  background: var(--accent-soft-bg);
+  color: var(--text-brand);
+}
+
 .search {
   position: relative;
   display: flex;
@@ -259,102 +445,50 @@ onMounted(load)
   padding-left: calc(var(--space-3) * 2 + 16px);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-  gap: var(--space-4);
-}
-
-.skeleton-card {
+.person-cell {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-6);
-}
-
-.person {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6) var(--space-5);
-  text-align: center;
+  min-width: 0;
   text-decoration: none;
   color: inherit;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
 }
 
-.person:hover {
+.person-cell:hover {
   text-decoration: none;
-  border-color: var(--accent-soft-border);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
 }
 
-.person-body {
-  width: 100%;
+.person-cell:hover .person-name {
+  color: var(--text-brand);
+}
+
+.person-text {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .person-name {
-  font-size: var(--text-md);
-  font-weight: 620;
-  letter-spacing: -0.008em;
+  font-weight: 550;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 
-.person-you {
+.person-sub {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.you {
   margin-left: var(--space-2);
-  vertical-align: middle;
-}
-
-.person-position {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin-top: var(--space-1);
-}
-
-.person-department {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft-bg);
+  color: var(--text-brand);
   font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  margin-top: 2px;
+  font-weight: 600;
 }
 
-.person-foot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.person-joined {
-  font-size: var(--text-xs);
-}
-
-.person-skills {
-  list-style: none;
-  padding: var(--space-3) 0 0;
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
-  border-top: 1px solid var(--border-subtle);
-  width: 100%;
-}
-
-.person-skill {
-  padding: 2px var(--space-2);
-  background: var(--bg-surface-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.person-skill-more {
-  color: var(--text-tertiary);
+.mono {
+  font-family: var(--font-mono);
 }
 </style>
