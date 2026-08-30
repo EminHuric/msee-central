@@ -93,10 +93,36 @@ service cloud.firestore {
     match /userPermissions/{uid} {
       allow read: if isSelf(uid) || can('roles.assign');
 
-      allow create, update: if can('roles.assign')
-        && !isSelf(uid)
-        && request.resource.data.uid == uid
-        && (request.resource.data.isCeo == false || isCeo());
+      allow create, update: if request.resource.data.uid == uid
+        && (
+          /*
+           * Somebody else's access document. The !isSelf clause is what stops
+           * a manager holding roles.assign from promoting themselves, and it
+           * is the single most important condition in this file.
+           */
+          (
+            can('roles.assign')
+            && !isSelf(uid)
+            && (request.resource.data.isCeo == false || isCeo())
+          )
+          /*
+           * The CEO editing their own. Deliberately allowed: the CEO already
+           * holds every permission, so there is nothing here to escalate to.
+           * Scoped to isCeo() precisely so the branch above keeps protecting
+           * everyone who is not already at the top.
+           *
+           * Two conditions prevent the CEO locking themselves out of their own
+           * company: they cannot drop their own CEO flag and cannot set
+           * themselves to anything but active. Stepping down is done by
+           * appointing a second CEO, who can then demote the first.
+           */
+          || (
+            isCeo()
+            && isSelf(uid)
+            && request.resource.data.isCeo == true
+            && request.resource.data.status == 'active'
+          )
+        );
 
       /* Access is revoked by setting status, never by deleting history. */
       allow delete: if false;

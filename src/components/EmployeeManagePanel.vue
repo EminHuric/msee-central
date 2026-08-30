@@ -9,10 +9,14 @@
  *   roles.assign                 authority  — what they may do in the system
  *   employees.manage_status      access     — whether they may sign in at all
  *
- * An administrator cannot use the last two on themselves. That is not a
- * courtesy check: `userPermissions` rejects a self-write outright, so the
- * attempt would fail at the database. The controls are disabled here so the
- * refusal is explained rather than merely experienced.
+ * A manager cannot use the last two on themselves. That is not a courtesy
+ * check: `userPermissions` rejects the write outright, so the attempt would
+ * fail at the database anyway. The controls are disabled here so the refusal
+ * is explained rather than merely experienced.
+ *
+ * The CEO is exempt for roles, having nothing left to escalate to, but still
+ * cannot suspend their own account or drop their own CEO role — both would
+ * leave the company with nobody able to administer it.
  */
 
 import { computed, onMounted, ref } from 'vue'
@@ -26,6 +30,7 @@ import {
   setAccountStatus,
   updateWorkInformation,
   SelfActionError,
+  SelfDemotionError,
   type WorkInformation,
 } from '@/api/administration'
 import { fetchEmployees } from '@/api/employees'
@@ -60,7 +65,14 @@ const isSelf = computed(() => props.employee.uid === auth.uid)
 const label = computed(() => `${props.employee.firstName} ${props.employee.lastName}`.trim())
 
 const canEditWork = computed(() => auth.hasPermission(PERMISSIONS.EMPLOYEES_EDIT_PROFESSIONAL))
-const canAssignRoles = computed(() => auth.hasPermission(PERMISSIONS.ROLES_ASSIGN) && !isSelf.value)
+/**
+ * The CEO may edit their own roles — they already hold every permission, so
+ * there is nothing to escalate to. A manager holding roles.assign may not,
+ * which is what stops self-promotion.
+ */
+const canAssignRoles = computed(
+  () => auth.hasPermission(PERMISSIONS.ROLES_ASSIGN) && (!isSelf.value || auth.isCeo),
+)
 const canManageStatus = computed(
   () => auth.hasPermission(PERMISSIONS.EMPLOYEES_MANAGE_STATUS) && !isSelf.value,
 )
@@ -91,8 +103,12 @@ const availablePositions = computed(() => {
 })
 
 const assignableRoles = computed(() =>
-  // The CEO role is minted by the setup script alone and never handed out here.
-  roles.value.filter((role) => role.status === 'active' && !role.grantsAll),
+  /*
+   * The CEO role is offered only to a CEO. That is how a second administrator
+   * is appointed — and appointing one is the only way anybody can ever manage
+   * the first, since nobody may suspend their own account.
+   */
+  roles.value.filter((role) => role.status === 'active' && (!role.grantsAll || auth.isCeo)),
 )
 
 const pendingStatus = ref<AccountStatus | null>(null)
@@ -144,11 +160,20 @@ async function saveRoles(): Promise<void> {
   if (savingRoles.value || !auth.uid) return
   savingRoles.value = true
   try {
-    await assignRoles(props.employee.uid, label.value, selectedRoleIds.value, roles.value, auth.uid)
+    await assignRoles(
+      props.employee.uid,
+      label.value,
+      selectedRoleIds.value,
+      roles.value,
+      auth.uid,
+      auth.isCeo,
+    )
     ui.notify('ok', t('manage.saved'))
     emit('updated')
   } catch (error) {
-    ui.notify('danger', error instanceof SelfActionError ? t('manage.selfNotice') : t('manage.saveFailed'))
+    if (error instanceof SelfDemotionError) ui.notify('danger', t('manage.selfDemotion'))
+    else if (error instanceof SelfActionError) ui.notify('danger', t('manage.selfNotice'))
+    else ui.notify('danger', t('manage.saveFailed'))
   } finally {
     savingRoles.value = false
   }
@@ -267,9 +292,9 @@ onMounted(load)
       </div>
 
       <div class="card-body stack">
-        <div v-if="isSelf" class="alert alert-warn">
-          <AppIcon name="lock" :size="16" />
-          <span>{{ t('manage.selfNotice') }}</span>
+        <div v-if="isSelf" class="alert" :class="auth.isCeo ? 'alert-info' : 'alert-warn'">
+          <AppIcon :name="auth.isCeo ? 'shield' : 'lock'" :size="16" />
+          <span>{{ auth.isCeo ? t('manage.selfCeoNotice') : t('manage.selfNotice') }}</span>
         </div>
 
         <!-- Roles -->

@@ -5,11 +5,14 @@
  * the security rules unless the caller genuinely holds the permission — the
  * checks in the UI only decide whether a button is shown.
  *
- * ONE RULE SHAPES THIS WHOLE FILE: nobody may write their own
- * `userPermissions` document, not even the CEO. That is what stops an employee
- * promoting themselves. It also means an administrator cannot change their own
- * role or suspend their own account, and the functions below fail loudly
- * rather than quietly half-succeeding when that is attempted.
+ * ONE RULE SHAPES THIS WHOLE FILE: a manager holding roles.assign may not
+ * write their OWN `userPermissions` document. That is what stops an employee
+ * promoting themselves.
+ *
+ * The CEO is exempt, because the CEO already holds every permission and so has
+ * nothing to escalate to. Two limits still apply to them, and both exist to
+ * prevent a company locking itself out: the CEO cannot drop their own CEO role
+ * and cannot suspend their own account.
  */
 
 import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
@@ -23,6 +26,20 @@ export class SelfActionError extends Error {
   constructor() {
     super('An administrator cannot perform this action on their own account.')
     this.name = 'SelfActionError'
+  }
+}
+
+/**
+ * Raised when the CEO tries to remove their own CEO role.
+ *
+ * The rules refuse it too. Stepping down is done by appointing a second CEO,
+ * who can then demote the first — that way the company can never end up with
+ * nobody able to administer it.
+ */
+export class SelfDemotionError extends Error {
+  constructor() {
+    super('The CEO cannot remove their own CEO role. Appoint another CEO first.')
+    this.name = 'SelfDemotionError'
   }
 }
 
@@ -153,11 +170,18 @@ export async function assignRoles(
   roleIds: string[],
   allRoles: Role[],
   actorUid: string,
+  actorIsCeo = false,
 ): Promise<void> {
-  if (uid === actorUid) throw new SelfActionError()
+  const editingSelf = uid === actorUid
+
+  // A manager may never touch their own roles; the CEO may.
+  if (editingSelf && !actorIsCeo) throw new SelfActionError()
 
   const chosen = allRoles.filter((role) => roleIds.includes(role.id))
   const grantsAll = chosen.some((role) => role.grantsAll)
+
+  // Refuse the one self-edit that cannot be undone from inside the app.
+  if (editingSelf && !grantsAll) throw new SelfDemotionError()
 
   const permissions = [
     ...new Set(chosen.flatMap((role) => role.permissions)),

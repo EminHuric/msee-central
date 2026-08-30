@@ -18,7 +18,12 @@ import {
 import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore'
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from 'firebase/storage'
 
-const config = {
+/**
+ * Exported so a second, short-lived app instance can be created for
+ * provisioning employee accounts. See src/api/provisioning.ts for why that is
+ * necessary.
+ */
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -29,7 +34,7 @@ const config = {
 
 /** Which required environment variables are still empty. */
 export function missingFirebaseConfig(): string[] {
-  return Object.entries(config)
+  return Object.entries(firebaseConfig)
     .filter(([, value]) => !value)
     .map(([key]) => `VITE_FIREBASE_${camelToScreamingSnake(key)}`)
 }
@@ -56,7 +61,7 @@ function ensureApp(): FirebaseApp {
   }
 
   if (!app) {
-    app = initializeApp(config)
+    app = initializeApp(firebaseConfig)
   }
   return app
 }

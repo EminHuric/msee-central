@@ -23,6 +23,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import AddEmployeeForm from '@/components/AddEmployeeForm.vue'
 import RequestReviewPanel from '@/components/RequestReviewPanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
@@ -68,6 +69,17 @@ const departmentFilter = ref('')
 const reviewing = ref<RegistrationRequest | null>(null)
 
 const canSeeRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
+
+/*
+ * Creating an account outright touches both the employee profile and the
+ * access document, so it needs the permission behind each. Anything less and
+ * the write would be refused halfway by the rules.
+ */
+const canCreateAccounts = computed(() =>
+  auth.hasAll(PERMISSIONS.REQUESTS_APPROVE, PERMISSIONS.ROLES_ASSIGN),
+)
+
+const showAdd = ref(false)
 
 const departmentIndex = computed(() => indexById(departments.value))
 const positionIndex = computed(() => indexById(positions.value))
@@ -182,6 +194,7 @@ async function onDecided(): Promise<void> {
 function switchTab(next: Tab): void {
   tab.value = next
   reviewing.value = null
+  showAdd.value = false
   search.value = ''
 }
 
@@ -195,7 +208,25 @@ onMounted(load)
         <h1 class="page-title">{{ t('employees.title') }}</h1>
         <p class="page-subtitle">{{ t('employees.subtitle') }}</p>
       </div>
+      <button
+        v-if="canCreateAccounts && !showAdd"
+        class="btn btn-primary"
+        @click="showAdd = true; reviewing = null"
+      >
+        <AppIcon name="plus" :size="16" />
+        {{ t('newEmployee.open') }}
+      </button>
     </header>
+
+    <AddEmployeeForm
+      v-if="showAdd"
+      :roles="roles"
+      :departments="departments"
+      :positions="positions"
+      :employee-code="nextEmployeeCode(employees.length)"
+      @created="load"
+      @close="showAdd = false"
+    />
 
     <!-- Tabs ----------------------------------------------------------- -->
     <div class="tabs" role="tablist">

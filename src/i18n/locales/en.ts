@@ -206,6 +206,10 @@ export default {
     createInSettings: 'Create them in Settings.',
     saved: 'Changes saved.',
     saveFailed: 'Changes could not be saved.',
+    selfDemotion:
+      'You cannot remove your own CEO role. Appoint a second CEO first, and they can then change yours — that way the company can never be left with nobody able to administer it.',
+    selfCeoNotice:
+      'As CEO you can change your own roles. Two things stay locked: you cannot remove your own CEO role and cannot suspend your own account, so you can never lock yourself out.',
     selfNotice:
       'You cannot change your own role or account status. Nobody may edit their own permissions — that is the rule which stops an employee promoting themselves, and it applies to the CEO too.',
     rolePermissionCount: '{n} permissions',
@@ -302,6 +306,27 @@ export default {
       'A second CEO can manage every employee, read every private note, and change your own role and status. Give it only to someone you would trust with the company.',
     whyNotSelf:
       'You cannot change your own role or status. Appoint a second administrator and they can do it for you — that is what keeps a single compromised account from taking over.',
+  },
+
+  newEmployee: {
+    open: 'Add employee',
+    title: 'Create an employee account',
+    subtitle:
+      'Creates the login yourself, so nobody has to register and wait. They can sign in the moment you are done.',
+    tempPassword: 'Temporary password',
+    generate: 'Generate',
+    passwordHint: 'Give this to them directly. They should change it after signing in.',
+    sendReset: 'Email them a link to set their own password',
+    sendResetHint: 'Recommended. Then you never have to handle their password at all.',
+    create: 'Create account',
+    creating: 'Creating…',
+    created: 'Account created for {name}.',
+    exists: 'An account with that email already exists.',
+    failed: 'The account could not be created.',
+    noRole: 'Choose at least one role, or they will sign in with no access.',
+    credentialsTitle: 'Account ready',
+    credentialsText: 'Pass these on now — the password is not stored anywhere and will not be shown again.',
+    copied: 'Copied.',
   },
 
   nav: {

@@ -205,6 +205,10 @@ export default {
     createInSettings: 'Napravi ih u Podešavanjima.',
     saved: 'Izmene su sačuvane.',
     saveFailed: 'Izmene nisu mogle da se sačuvaju.',
+    selfDemotion:
+      'Ne možeš sam sebi da skineš CEO ulogu. Prvo postavi drugog CEO-a, pa on može da menja tvoju — tako firma nikad ne može da ostane bez ikoga ko njome upravlja.',
+    selfCeoNotice:
+      'Kao CEO možeš da menjaš sopstvene uloge. Dve stvari ostaju zaključane: ne možeš sam sebi da skineš CEO ulogu ni da suspenduješ svoj nalog, pa ne možeš sam sebe da zaključaš napolje.',
     selfNotice:
       'Ne možeš menjati sopstvenu ulogu ni status naloga. Niko ne sme da menja svoje dozvole — to je pravilo koje sprečava zaposlenog da sam sebe unapredi, i važi i za CEO-a.',
     rolePermissionCount: '{n} dozvola',
@@ -301,6 +305,27 @@ export default {
       'Drugi CEO može da upravlja svim zaposlenima, čita svaku privatnu belešku i menja tvoju ulogu i status. Daj to samo nekome kome bi poverio firmu.',
     whyNotSelf:
       'Ne možeš sam sebi da menjaš ulogu ni status. Postavi drugog administratora i on to može umesto tebe — to je ono što sprečava da jedan provaljen nalog preuzme sve.',
+  },
+
+  newEmployee: {
+    open: 'Dodaj zaposlenog',
+    title: 'Napravi nalog zaposlenom',
+    subtitle:
+      'Sam praveš nalog, pa niko ne mora da se registruje i čeka. Može da se prijavi čim završiš.',
+    tempPassword: 'Privremena lozinka',
+    generate: 'Generiši',
+    passwordHint: 'Predaj mu je lično. Treba da je promeni posle prve prijave.',
+    sendReset: 'Pošalji mu email da sam postavi lozinku',
+    sendResetHint: 'Preporučeno. Tada uopšte ne držiš tuđu lozinku u rukama.',
+    create: 'Napravi nalog',
+    creating: 'Pravljenje…',
+    created: 'Nalog je napravljen za {name}.',
+    exists: 'Nalog sa tom email adresom već postoji.',
+    failed: 'Nalog nije mogao da se napravi.',
+    noRole: 'Izaberi bar jednu ulogu, inače će se prijaviti bez pristupa.',
+    credentialsTitle: 'Nalog je spreman',
+    credentialsText: 'Predaj ovo odmah — lozinka se nigde ne čuva i neće biti ponovo prikazana.',
+    copied: 'Kopirano.',
   },
 
   nav: {
