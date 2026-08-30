@@ -47,9 +47,7 @@ export function ownerRank(roleIds: string[] | undefined): number {
 export interface RoleInput {
   id: string
   name: string
-  nameSr: string
   description: string
-  descriptionSr: string
   permissions: Permission[]
   status: 'active' | 'inactive'
 }
@@ -62,15 +60,26 @@ export interface RoleInput {
  * reproducible from this screen. The security rules refuse it too.
  */
 export async function saveRole(input: RoleInput, isNew: boolean): Promise<void> {
+  const name = input.name.trim()
+  const description = input.description.trim()
+
   await setDoc(
     doc(getDb(), 'roles', input.id),
     {
       id: input.id,
       key: input.id,
-      name: input.name.trim(),
-      nameSr: input.nameSr.trim() || input.name.trim(),
-      description: input.description.trim(),
-      descriptionSr: input.descriptionSr.trim() || input.description.trim(),
+      /*
+       * One name, stored in both language fields.
+       *
+       * A role is usually called the same thing in both languages here
+       * ("Marketing Manager"), and demanding two spellings for every role is
+       * friction with nothing behind it. The pair of fields stays in the model
+       * so a translation can be added later without a migration.
+       */
+      name,
+      nameSr: name,
+      description,
+      descriptionSr: description,
       permissions: input.permissions,
       status: input.status,
       ...(isNew ? { isSystem: false, grantsAll: false, createdAt: serverTimestamp() } : {}),
