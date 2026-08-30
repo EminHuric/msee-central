@@ -111,6 +111,7 @@ Ako `.env` nije popunjen, aplikacija to jasno kaže i navede koje vrednosti nedo
 | `npm run rules:deploy` | Objavljuje `firebase/firestore.rules` |
 | `npm run rules:verify` | Napada živa pravila i dokazuje da drže |
 | `npm run i18n:check` | Proverava da se srpski i engleski poklapaju |
+| `npm run recover` | Oporavak naloga vlasnika (traži service account ključ) |
 
 ---
 
@@ -190,6 +191,32 @@ zapis, ali ne mogu da **nateraju** da se zapis upiše — neko ko radi direktno
 protiv API-ja može izvesti radnju i preskočiti beleženje. Sve što se radi kroz
 aplikaciju se beleži. Potpuno zatvaranje traži Cloud Functions (Blaze plan),
 što je predviđen sledeći korak.
+
+---
+
+## Oporavak naloga vlasnika
+
+Nalog vlasnika (`isFounder`) ne može da menja **niko** iz aplikacije, ni
+suvlasnici. To je namerno — ali znači da nema kolege koji može da pomogne ako
+sam nalog postane nedostupan.
+
+**Zaboravljena lozinka ne traži ništa od ovoga** — koristi link za promenu
+lozinke na ekranu za prijavu.
+
+Za teže slučajeve (nedostupan mejl, promena adrese, prelazak na drugi nalog):
+
+```bash
+npm run recover -- --status          # ko je trenutno vlasnik
+npm run recover                      # ponudi opcije
+```
+
+Traži `tools/serviceAccount.json`. **Taj fajl je jedini put nazad** —
+napravi mu kopiju van ovog računara.
+
+### Zašto suvlasnik ne može da pomogne
+
+Ako bi neko mogao da vrati vlasnika, mogao bi i da ga zameni — to je isti upis.
+Zaštita i oporavak su jedna te ista moć, i ona je namerno izvan aplikacije.
 
 ---
 
