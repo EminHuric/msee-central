@@ -462,6 +462,35 @@ export default {
     'data.exported': 'Podaci izvezeni',
   },
 
+  nav2: {
+    sectionCompany: 'Kompanija',
+    sectionBusiness: 'Poslovanje',
+    sectionPeople: 'Ljudi',
+    sectionAdmin: 'Administracija',
+    sectionWorkspace: 'Moj prostor',
+
+    clients: 'Klijenti',
+    leads: 'Potencijalni klijenti',
+    goals: 'Ciljevi i KPI',
+    performance: 'Učinak',
+    organization: 'Organizacija',
+    tasks: 'Moji zadaci',
+    earnings: 'Moja zarada',
+
+    soon: 'Uskoro',
+    soonTitle: 'Još nije napravljeno',
+  },
+
+  search: {
+    placeholder: 'Pretraži ljude, uloge, stranice',
+    open: 'Pretraga',
+    shortcut: 'Ctrl K',
+    noResults: 'Ništa nije nađeno za {term}',
+    people: 'Ljudi',
+    pages: 'Stranice',
+    hint: 'Ukucaj ime, poziciju ili stranicu.',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',

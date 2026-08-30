@@ -86,6 +86,12 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.ROLES_VIEW, titleKey: 'nav.roles' },
       },
       {
+        path: 'organization',
+        name: 'organization',
+        component: () => import('@/views/admin/OrganizationView.vue'),
+        meta: { permission: PERMISSIONS.DEPARTMENTS_MANAGE, titleKey: 'nav2.organization' },
+      },
+      {
         path: 'audit',
         name: 'audit',
         component: () => import('@/views/admin/AuditLogView.vue'),

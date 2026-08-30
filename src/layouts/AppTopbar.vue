@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import GlobalSearch from '@/components/GlobalSearch.vue'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -57,6 +58,8 @@ async function handleSignOut(): Promise<void> {
     >
       <AppIcon name="menu" :size="20" />
     </button>
+
+    <GlobalSearch />
 
     <div class="topbar-spacer" />
 
@@ -141,6 +144,7 @@ async function handleSignOut(): Promise<void> {
 
 .topbar-spacer {
   flex: 1;
+  min-width: var(--space-4);
 }
 
 .topbar-burger {

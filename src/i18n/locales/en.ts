@@ -463,6 +463,35 @@ export default {
     'data.exported': 'Data exported',
   },
 
+  nav2: {
+    sectionCompany: 'Company',
+    sectionBusiness: 'Business',
+    sectionPeople: 'People',
+    sectionAdmin: 'Administration',
+    sectionWorkspace: 'My Workspace',
+
+    clients: 'Clients',
+    leads: 'Leads',
+    goals: 'Goals & KPIs',
+    performance: 'Performance',
+    organization: 'Organization',
+    tasks: 'My Tasks',
+    earnings: 'My Earnings',
+
+    soon: 'Soon',
+    soonTitle: 'Not built yet',
+  },
+
+  search: {
+    placeholder: 'Search people, roles, pages',
+    open: 'Search',
+    shortcut: 'Ctrl K',
+    noResults: 'Nothing found for {term}',
+    people: 'People',
+    pages: 'Pages',
+    hint: 'Type a name, a position or a page.',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',
