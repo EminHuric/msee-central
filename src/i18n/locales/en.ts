@@ -210,6 +210,17 @@ export default {
       'This is the founder account — the owner of the company. It cannot be altered by anybody, including other owners. That is what makes it impossible to remove them from their own company.',
     founderOnly:
       'Only the founder may appoint or remove a co-owner. Co-owners have full authority over everything else, but cannot widen the circle of owners themselves.',
+    deletePermanently: 'Delete permanently',
+    deleteTitle: 'Delete this person and all their data?',
+    deleteText:
+      'This cannot be undone. Their profile, contact details and CEO notes are erased. Deactivate instead if you only want to remove their access — that keeps the record and can be reversed.',
+    deleteConfirmLabel: 'Type {name} to confirm',
+    deleteDone: '{name} has been deleted.',
+    deleteFailed: 'The person could not be deleted.',
+    deleteLoginNote:
+      'Their sign-in still exists but now reaches nothing. Run npm run purge-logins to remove it.',
+    reversible: 'Reversible — you can bring them back',
+    irreversible: 'Permanent — there is no way back',
     founderBadge: 'Founder',
     selfDemotion:
       'You cannot remove your own CEO role. Appoint a second CEO first, and they can then change yours — that way the company can never be left with nobody able to administer it.',
@@ -264,6 +275,7 @@ export default {
 
   table: {
     name: 'Name',
+    role: 'Role',
     position: 'Position',
     department: 'Department',
     status: 'Status',

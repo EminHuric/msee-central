@@ -209,6 +209,17 @@ export default {
       'Ovo je nalog vlasnika kompanije. Niko ne može da ga menja, ni drugi suvlasnici. To je ono što čini nemogućim da ga neko skloni iz sopstvene firme.',
     founderOnly:
       'Samo vlasnik može da postavi ili skine suvlasnika. Suvlasnici imaju punu nadležnost nad svim ostalim, ali ne mogu sami da šire krug vlasnika.',
+    deletePermanently: 'Obriši trajno',
+    deleteTitle: 'Obrisati ovu osobu i sve njene podatke?',
+    deleteText:
+      'Ovo se ne može poništiti. Brišu se profil, kontakt podaci i CEO beleške. Ako samo hoćeš da mu oduzmeš pristup, koristi deaktiviranje — ono čuva zapis i može da se vrati.',
+    deleteConfirmLabel: 'Ukucaj {name} za potvrdu',
+    deleteDone: '{name} je obrisan.',
+    deleteFailed: 'Osoba nije mogla da se obriše.',
+    deleteLoginNote:
+      'Njegova prijava još postoji ali više ne vodi nigde. Pokreni npm run purge-logins da je ukloniš.',
+    reversible: 'Može da se poništi — vratićeš ga kad hoćeš',
+    irreversible: 'Trajno — nema povratka',
     founderBadge: 'Vlasnik',
     selfDemotion:
       'Ne možeš sam sebi da skineš CEO ulogu. Prvo postavi drugog CEO-a, pa on može da menja tvoju — tako firma nikad ne može da ostane bez ikoga ko njome upravlja.',
@@ -263,6 +274,7 @@ export default {
 
   table: {
     name: 'Ime',
+    role: 'Uloga',
     position: 'Pozicija',
     department: 'Sektor',
     status: 'Status',

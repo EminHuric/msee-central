@@ -26,6 +26,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import {
   assignRoles,
+  deleteEmployeePermanently,
   fetchUserAccess,
   setAccountStatus,
   updateWorkInformation,
@@ -40,6 +41,7 @@ import { departmentName, positionName } from '@/api/organisation'
 import { fetchRoles, roleName } from '@/api/roles'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { useRouter } from 'vue-router'
 import { LIMITS } from '@/lib/validation'
 import {
   EMPLOYMENT_STATUSES,
@@ -61,6 +63,7 @@ const emit = defineEmits<{ updated: [] }>()
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const router = useRouter()
 const { t } = useI18n()
 
 const isSelf = computed(() => props.employee.uid === auth.uid)
@@ -225,6 +228,47 @@ async function confirmStatus(): Promise<void> {
   }
 }
 
+/* ---- Permanent erasure ------------------------------------------- */
+
+const deleteTyped = ref('')
+const deleting = ref(false)
+const showDelete = ref(false)
+
+/**
+ * Typing the name is the guard. A second "are you sure" is clicked through on
+ * autopilot; typing somebody's name is not something you do by accident.
+ */
+const deleteArmed = computed(
+  () => deleteTyped.value.trim().toLowerCase() === label.value.toLowerCase(),
+)
+
+const canDelete = computed(
+  () => auth.isCeo && !isSelf.value && !targetIsFounder.value,
+)
+
+async function confirmDelete(): Promise<void> {
+  if (!deleteArmed.value || deleting.value || !auth.uid) return
+  deleting.value = true
+
+  try {
+    await deleteEmployeePermanently(
+      props.employee.uid,
+      label.value,
+      auth.uid,
+      targetIsFounder.value,
+    )
+    ui.notify('ok', t('manage.deleteDone', { name: label.value }))
+    ui.notify('info', t('manage.deleteLoginNote'))
+    await router.push('/employees')
+  } catch (error) {
+    if (error instanceof FounderProtectedError) ui.notify('danger', t('manage.founderProtected'))
+    else if (error instanceof SelfActionError) ui.notify('danger', t('manage.selfNotice'))
+    else ui.notify('danger', t('manage.deleteFailed'))
+  } finally {
+    deleting.value = false
+  }
+}
+
 function toggleRole(id: string): void {
   selectedRoleIds.value = selectedRoleIds.value.includes(id)
     ? selectedRoleIds.value.filter((r) => r !== id)
@@ -370,6 +414,7 @@ onMounted(load)
         <!-- Status -->
         <div v-if="canManageStatus" class="field">
           <span class="field-label">{{ t('manage.accountStatus') }}</span>
+          <p class="field-hint">{{ t('manage.reversible') }}</p>
           <div class="row">
             <button
               v-if="accountStatus !== 'active'"
@@ -396,6 +441,52 @@ onMounted(load)
               {{ t('status.deactivated') }}
             </button>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Permanent erasure ------------------------------------------- -->
+    <section v-if="canDelete" class="card danger-zone">
+      <div class="card-header">
+        <h2 class="card-title danger-title">{{ t('manage.deletePermanently') }}</h2>
+        <button
+          v-if="!showDelete"
+          class="btn btn-danger-soft btn-sm"
+          @click="showDelete = true"
+        >
+          <AppIcon name="alert" :size="15" />
+          {{ t('manage.deletePermanently') }}
+        </button>
+      </div>
+
+      <div v-if="showDelete" class="card-body stack">
+        <div class="alert alert-danger">
+          <AppIcon name="alert" :size="16" />
+          <span>
+            <strong>{{ t('manage.irreversible') }}</strong><br />
+            {{ t('manage.deleteText') }}
+          </span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="del-confirm">
+            {{ t('manage.deleteConfirmLabel', { name: label }) }}
+          </label>
+          <input id="del-confirm" v-model="deleteTyped" class="input" autocomplete="off" />
+        </div>
+
+        <div class="row delete-actions">
+          <button class="btn btn-secondary" @click="showDelete = false; deleteTyped = ''">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="btn btn-danger"
+            :disabled="!deleteArmed || deleting"
+            @click="confirmDelete"
+          >
+            <span v-if="deleting" class="spinner" />
+            {{ t('manage.deletePermanently') }}
+          </button>
         </div>
       </div>
     </section>
@@ -445,5 +536,17 @@ onMounted(load)
 .role-count {
   font-size: var(--text-xs);
   margin-left: var(--space-2);
+}
+
+.danger-zone {
+  border-color: var(--danger-border);
+}
+
+.danger-title {
+  color: var(--danger-500);
+}
+
+.delete-actions {
+  justify-content: flex-end;
 }
 </style>

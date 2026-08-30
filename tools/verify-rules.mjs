@@ -132,6 +132,7 @@ const testEmail = `rules-test-${stamp}@msee-central-test.com`
 const testPassword = `rules-test-password-${stamp}`
 let testUid = null
 let ownerUid = null
+let founderSnapshot = null
 
 console.log('\n  Security rule verification')
 console.log(`  project: ${serviceAccount.project_id}`)
@@ -292,6 +293,24 @@ try {
     .limit(1)
     .get()
 
+  /*
+   * Snapshot the founder before attacking it.
+   *
+   * A mustDeny that FAILS means the write went through — the test found a hole
+   * by actually exploiting it. Without restoring afterwards the test leaves
+   * real damage behind, which is exactly what happened the first time this
+   * phase ran: the founder was left showing as suspended in the directory.
+   */
+  if (!founder.empty) {
+    const uid = founder.docs[0].id
+    const employeeDoc = await adminDb.collection('employees').doc(uid).get()
+    founderSnapshot = {
+      uid,
+      access: founder.docs[0].data(),
+      employee: employeeDoc.exists ? employeeDoc.data() : null,
+    }
+  }
+
   if (founder.empty) {
     console.log('  SKIP  no founder account found — run npm run setup:ceo first')
   } else {
@@ -355,6 +374,24 @@ try {
     await adminAuth.deleteUser(uid).catch(() => {})
   }
   await adminDb.collection('userPermissions').doc(`would-be-owner-${stamp}`).delete().catch(() => {})
+
+  /* Put the founder back exactly as it was, whatever the tests managed to do. */
+  if (founderSnapshot) {
+    await adminDb
+      .collection('userPermissions')
+      .doc(founderSnapshot.uid)
+      .set(founderSnapshot.access)
+      .catch(() => {})
+
+    if (founderSnapshot.employee) {
+      await adminDb
+        .collection('employees')
+        .doc(founderSnapshot.uid)
+        .set(founderSnapshot.employee)
+        .catch(() => {})
+    }
+    console.log('  founder account restored to its exact prior state')
+  }
 
   console.log()
   console.log('  test accounts and their documents removed')

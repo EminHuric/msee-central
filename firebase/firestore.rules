@@ -190,8 +190,12 @@ service cloud.firestore {
           )
         );
 
-      /* Access is revoked by setting status, never by deleting history. */
-      allow delete: if false;
+      /*
+       * Access is revoked by setting status, never by deleting. The one
+       * exception is permanent erasure of a person, which an owner performs
+       * on somebody who is neither themselves nor the founder.
+       */
+      allow delete: if isOwner() && !isSelf(uid) && !targetIsFounder();
     }
 
     /* ------------------------------------------------------------------ *
@@ -271,8 +275,19 @@ service cloud.firestore {
           || (can('roles.assign') && changedOnly(['roleIds', 'updatedAt']))
         );
 
-      /* Historical employee records are preserved, never deleted. */
-      allow delete: if false;
+      /*
+       * Permanent erasure. Deliberately narrow.
+       *
+       * Deactivation is the normal way to remove somebody: it keeps the record
+       * and is reversible. This exists for the cases where the data itself has
+       * to go, and it is restricted to an owner acting on somebody who is
+       * neither themselves nor the founder.
+       *
+       * The audit trail survives it. Log entries store a snapshot of the name
+       * they acted on, so what a deleted person did remains readable after
+       * their record is gone.
+       */
+      allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
 
       /* ---------------------------------------------------------------- *
        * Privacy tiers.
@@ -285,11 +300,14 @@ service cloud.firestore {
       match /visibility/everyone {
         allow read: if isSelf(uid) || can('employees.view');
         allow write: if isSelf(uid) || isOwner();
+        /* Firestore does not cascade, so erasure has to reach each tier. */
+        allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
       }
 
       match /visibility/management {
         allow read: if isSelf(uid) || can('employees.view_private_info');
         allow write: if isSelf(uid) || isOwner();
+        allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
       }
 
       /*
@@ -300,6 +318,7 @@ service cloud.firestore {
       match /visibility/private {
         allow read: if isSelf(uid) || isOwner();
         allow write: if isSelf(uid) || isOwner();
+        allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
       }
 
       /* ---------------------------------------------------------------- *

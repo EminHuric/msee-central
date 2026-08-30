@@ -37,7 +37,7 @@ import {
   lookupLabel,
   positionName,
 } from '@/api/organisation'
-import { fetchRoles } from '@/api/roles'
+import { fetchRoles, ownerRank, roleName } from '@/api/roles'
 import { formatDate } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import type {
@@ -92,6 +92,28 @@ function departmentLabel(employee: EmployeePublic): string | null {
   return lookupLabel(departmentIndex.value, employee.departmentId, departmentName)
 }
 
+const roleIndex = computed(() => new Map(roles.value.map((r) => [r.id, r])))
+
+/** Role names as shown in the list, in the order they were assigned. */
+function roleLabels(employee: EmployeePublic): { id: string; name: string; owner: boolean }[] {
+  return (employee.roleIds ?? []).map((id) => {
+    const role = roleIndex.value.get(id)
+    return { id, name: role ? roleName(role) : id, owner: role?.grantsAll === true }
+  })
+}
+
+/**
+ * Owners first, then everybody else by surname.
+ *
+ * Who runs the company is the first thing anybody scanning this list looks
+ * for, and that should not depend on where the alphabet happens to put them.
+ */
+function byRank(a: EmployeePublic, b: EmployeePublic): number {
+  const rank = ownerRank(a.roleIds) - ownerRank(b.roleIds)
+  if (rank !== 0) return rank
+  return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
+}
+
 /* ---- Tab contents ------------------------------------------------- */
 
 const activeEmployees = computed(() => employees.value.filter((e) => e.status === 'active'))
@@ -126,22 +148,25 @@ const visiblePeople = computed(() => {
   const source = tab.value === 'suspended' ? inactiveEmployees.value : activeEmployees.value
   const term = search.value.trim().toLowerCase()
 
-  return source.filter((employee) => {
-    if (departmentFilter.value && employee.departmentId !== departmentFilter.value) return false
-    if (!term) return true
+  return source
+    .filter((employee) => {
+      if (departmentFilter.value && employee.departmentId !== departmentFilter.value) return false
+      if (!term) return true
 
-    return [
-      employee.firstName,
-      employee.lastName,
-      employee.employeeCode,
-      positionLabel(employee) ?? '',
-      departmentLabel(employee) ?? '',
-      ...(employee.skills ?? []),
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(term)
-  })
+      return [
+        employee.firstName,
+        employee.lastName,
+        employee.employeeCode,
+        positionLabel(employee) ?? '',
+        departmentLabel(employee) ?? '',
+        ...roleLabels(employee).map((r) => r.name),
+        ...(employee.skills ?? []),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(term)
+    })
+    .sort(byRank)
 })
 
 const visibleRequests = computed(() => {
@@ -371,10 +396,10 @@ onMounted(load)
           <thead>
             <tr>
               <th>{{ t('table.name') }}</th>
+              <th>{{ t('table.role') }}</th>
               <th>{{ t('table.position') }}</th>
               <th>{{ t('table.department') }}</th>
               <th>{{ t('table.status') }}</th>
-              <th>{{ t('table.joined') }}</th>
               <th class="col-actions" />
             </tr>
           </thead>
@@ -396,13 +421,23 @@ onMounted(load)
                   </div>
                 </RouterLink>
               </td>
+              <td>
+                <span v-if="roleLabels(employee).length === 0" class="tertiary">—</span>
+                <span
+                  v-for="role in roleLabels(employee)"
+                  :key="role.id"
+                  class="badge badge-plain role-chip"
+                  :class="{ 'is-owner': role.owner }"
+                >
+                  {{ role.name }}
+                </span>
+              </td>
               <td>{{ positionLabel(employee) ?? t('employees.noPosition') }}</td>
               <td class="muted">{{ departmentLabel(employee) ?? '—' }}</td>
               <td><StatusBadge :status="employee.status" /></td>
-              <td class="muted">{{ formatDate(employee.dateJoined) }}</td>
               <td class="col-actions">
-                <RouterLink :to="`/employees/${employee.uid}`" class="btn btn-ghost btn-sm">
-                  {{ t('common.view') }}
+                <RouterLink :to="`/employees/${employee.uid}`" class="btn btn-secondary btn-sm">
+                  {{ t('common.edit') }}
                 </RouterLink>
               </td>
             </tr>
@@ -521,5 +556,16 @@ onMounted(load)
 
 .mono {
   font-family: var(--font-mono);
+}
+
+.role-chip {
+  margin-right: var(--space-1);
+}
+
+/* Owner roles carry the brand colour, so CEO and CTO read at a glance. */
+.role-chip.is-owner {
+  background: var(--accent-soft-bg);
+  border-color: var(--accent-soft-border);
+  color: var(--text-brand);
 }
 </style>

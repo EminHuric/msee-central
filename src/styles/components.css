@@ -219,6 +219,29 @@
   color: var(--text-tertiary);
 }
 
+/*
+ * The dropdown list itself is drawn by the operating system, not by us, so it
+ * ignores the surrounding design and falls back to a flat grey. These two
+ * declarations are what Chrome and Edge honour to bring it back in line.
+ */
+.select option {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  padding: var(--space-2);
+}
+
+.select option:checked {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* Firefox reads the field's own colours for the open list. */
+@supports (-moz-appearance: none) {
+  .select {
+    background-color: var(--bg-surface-2);
+  }
+}
+
 .input:focus,
 .select:focus,
 .textarea:focus {

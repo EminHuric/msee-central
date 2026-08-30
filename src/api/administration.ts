@@ -15,7 +15,15 @@
  * and cannot suspend their own account.
  */
 
-import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore'
 
 import { logAudit } from './audit'
 import { getDb } from '@/lib/firebase'
@@ -260,6 +268,62 @@ export async function fetchUserAccess(uid: string): Promise<{
     isFounder: data.isFounder === true,
     status: data.status as AccountStatus,
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Permanent erasure
+ * ------------------------------------------------------------------ */
+
+/**
+ * Delete a person and everything stored about them. There is no undo.
+ *
+ * Deactivation is the normal way to remove somebody from the company: it keeps
+ * the record, keeps the history legible, and can be reversed the next morning.
+ * This is for the other case — data that has to be gone.
+ *
+ * Firestore does not cascade deletes, so every tier and every note is removed
+ * explicitly. Missing one would leave a private phone number behind after the
+ * profile that explained whose it was had gone.
+ *
+ * The audit trail survives: entries carry a snapshot of the name they acted
+ * on, so what this person did stays readable after the person does not.
+ *
+ * Their sign-in credentials are not removed here — the browser has no
+ * authority to delete a Firebase Auth account. They are left owning a login
+ * that reaches nothing at all. `npm run purge-logins` clears those.
+ */
+export async function deleteEmployeePermanently(
+  uid: string,
+  label: string,
+  actorUid: string,
+  targetIsFounder = false,
+): Promise<void> {
+  if (uid === actorUid) throw new SelfActionError()
+  if (targetIsFounder) throw new FounderProtectedError()
+
+  const db = getDb()
+
+  // Logged BEFORE the deletion: afterwards there is nothing left to describe.
+  await logAudit({
+    action: 'account.deactivated',
+    targetType: 'user',
+    targetId: uid,
+    targetLabel: label,
+    metadata: { permanentDeletion: true },
+  })
+
+  const notes = await getDocs(collection(db, 'employees', uid, 'notes'))
+  const batch = writeBatch(db)
+  for (const note of notes.docs) batch.delete(note.ref)
+  for (const tier of ['everyone', 'management', 'private']) {
+    batch.delete(doc(db, 'employees', uid, 'visibility', tier))
+  }
+  await batch.commit()
+
+  // The two root documents last, so a failure part-way leaves the person
+  // findable rather than orphaning their subdocuments.
+  await deleteDoc(doc(db, 'employees', uid))
+  await deleteDoc(doc(db, 'userPermissions', uid))
 }
 
 /* ------------------------------------------------------------------ *

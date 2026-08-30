@@ -30,6 +30,20 @@ export function roleDescription(role: Role | undefined): string {
   return (currentLocale() === 'sr' ? role.descriptionSr : role.description) || role.description
 }
 
+/**
+ * Sort key that keeps the owners at the top of any list of people.
+ *
+ * CEO first, then CTO, then everybody else alphabetically. Who runs the
+ * company is the first thing somebody scanning the directory looks for, so it
+ * should not depend on where the alphabet happens to put them.
+ */
+export function ownerRank(roleIds: string[] | undefined): number {
+  if (!roleIds) return 9
+  if (roleIds.includes('ceo')) return 0
+  if (roleIds.includes('cto')) return 1
+  return 9
+}
+
 export interface RoleInput {
   id: string
   name: string
