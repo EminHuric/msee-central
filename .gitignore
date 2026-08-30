@@ -20,6 +20,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+# Public Firebase web config for production builds. Safe to commit:
+# these values ship inside the browser bundle either way.
+!.env.production
 
 # SECRET. Firebase Admin service account key used by tools/setup scripts.
 # This one grants full access to the project and bypasses all security rules.
