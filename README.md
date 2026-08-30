@@ -53,15 +53,14 @@ Prepiši vrednosti iz Firebase konzole (`Project settings → General → SDK se
 **Uradi ovo pre nego što u bazu uđe ijedan podatak.** Ako si bazu napravio u
 *test mode*, otvorena je za bilo koga na internetu narednih 30 dana.
 
-Firebase konzola → **Firestore Database** → tab **Rules** → obriši sve →
-nalepi ceo sadržaj `firebase/firestore.rules` → **Publish**.
-
-Ili, kad se prijaviš na CLI:
-
 ```bash
-npx firebase login
-npm run rules:deploy
+npm run rules:publish     # objavi
+npm run rules:verify      # napadni ih i proveri da drže
 ```
+
+Koristi service account ključ, pa ne traži prijavu na CLI. Ručno lepljenje u
+konzolu radi, ali je to mesto gde zastareo paste tiho poništi bezbednosnu
+ispravku — zato postoji komanda.
 
 Provera da je stvarno zaključano — ovo mora da vrati `PERMISSION_DENIED`:
 
@@ -108,7 +107,7 @@ Ako `.env` nije popunjen, aplikacija to jasno kaže i navede koje vrednosti nedo
 | `npm run type-check` | Provera tipova bez build-a |
 | `npm run preview` | Pregled produkcijskog build-a |
 | `npm run setup:ceo` | Pravi prvi CEO nalog i osnovne podatke |
-| `npm run rules:deploy` | Objavljuje `firebase/firestore.rules` |
+| `npm run rules:publish` | Objavljuje `firebase/firestore.rules` na živi projekat |
 | `npm run rules:verify` | Napada živa pravila i dokazuje da drže |
 | `npm run i18n:check` | Proverava da se srpski i engleski poklapaju |
 | `npm run recover` | Oporavak naloga vlasnika (traži service account ključ) |

@@ -237,11 +237,19 @@ service cloud.firestore {
       /*
        * Four distinct ways this document may change, and no others.
        *
-       * Note the second branch: holding edit_professional is NOT enough to
-       * change status or roleIds. Editing somebody's job title must never
+       * The founder guard sits at the TOP rather than inside each branch. It
+       * was written per-branch first and one path slipped through — a rule
+       * that has to be remembered in four places will eventually be forgotten
+       * in one. Stated once, it covers every branch here and every branch
+       * added later.
+       *
+       * Note also the second branch: holding edit_professional is NOT enough
+       * to change status or roleIds. Editing somebody's job title must never
        * double as a way to change who they are or what they may do.
        */
       allow update: if request.resource.data.uid == resource.data.uid
+        /* The founder's record is theirs alone to change. */
+        && (isSelf(uid) || !personIsFounder(uid))
         && (
           (
             isSelf(uid)
@@ -252,29 +260,15 @@ service cloud.firestore {
             can('employees.edit_professional')
             && (
               request.resource.data.status == resource.data.status
-              || (can('employees.manage_status') && (isSelf(uid) || !personIsFounder(uid)))
+              || can('employees.manage_status')
             )
             && (
               request.resource.data.roleIds == resource.data.roleIds
-              || (can('roles.assign') && (isSelf(uid) || !personIsFounder(uid)))
+              || can('roles.assign')
             )
           )
-          /*
-           * Status and roles on somebody else's profile. Both refuse the
-           * founder: their account is not suspendable or reassignable by
-           * anyone, and letting the mirrored copy drift would only produce a
-           * profile that looks suspended while access stays live.
-           */
-          || (
-            can('employees.manage_status')
-            && changedOnly(['status', 'updatedAt'])
-            && (isSelf(uid) || !personIsFounder(uid))
-          )
-          || (
-            can('roles.assign')
-            && changedOnly(['roleIds', 'updatedAt'])
-            && (isSelf(uid) || !personIsFounder(uid))
-          )
+          || (can('employees.manage_status') && changedOnly(['status', 'updatedAt']))
+          || (can('roles.assign') && changedOnly(['roleIds', 'updatedAt']))
         );
 
       /* Historical employee records are preserved, never deleted. */
