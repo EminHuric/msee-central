@@ -28,7 +28,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
-import type { AccountStatus, RegistrationRequest, UserPermissions } from '@/types/domain'
+import type {
+  AccountStatus,
+  EmployeePublic,
+  RegistrationRequest,
+  UserPermissions,
+} from '@/types/domain'
 import type { Permission } from '@/types/permissions'
 
 export type SessionState =
@@ -44,14 +49,36 @@ export const useAuthStore = defineStore('auth', () => {
   const firebaseUser = ref<FirebaseUser | null>(null)
   const access = ref<UserPermissions | null>(null)
   const request = ref<RegistrationRequest | null>(null)
+  /**
+   * The signed-in person's own employee record.
+   *
+   * Watched live rather than fetched once, so a new profile photo appears in
+   * the header the moment it is saved, on every open tab.
+   */
+  const profile = ref<EmployeePublic | null>(null)
   const initialised = ref(false)
 
   let stopAccessWatch: Unsubscribe | null = null
   let stopRequestWatch: Unsubscribe | null = null
+  let stopProfileWatch: Unsubscribe | null = null
 
   const uid = computed(() => firebaseUser.value?.uid ?? null)
   const email = computed(() => firebaseUser.value?.email ?? null)
-  const displayName = computed(() => firebaseUser.value?.displayName ?? null)
+  /*
+   * The employee record wins over the Firebase Auth display name. Auth only
+   * holds whatever was set at sign-up; the profile is what the CEO and the
+   * person themselves actually maintain.
+   */
+  const displayName = computed(() => {
+    const p = profile.value
+    if (p) {
+      const full = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()
+      if (full) return full
+    }
+    return firebaseUser.value?.displayName ?? null
+  })
+
+  const photoUrl = computed(() => profile.value?.photoUrl ?? null)
   /** Owner: CEO or an appointed co-owner. Full authority. */
   const isCeo = computed(() => access.value?.isCeo === true)
   /**
@@ -140,13 +167,26 @@ export const useAuthStore = defineStore('auth', () => {
         request.value = null
       },
     )
+
+    stopProfileWatch = onSnapshot(
+      doc(db, 'employees', user.uid),
+      (snap) => {
+        profile.value = snap.exists() ? (snap.data() as EmployeePublic) : null
+      },
+      () => {
+        // Somebody still awaiting approval has no employee record yet.
+        profile.value = null
+      },
+    )
   }
 
   function stopWatching(): void {
     stopAccessWatch?.()
     stopRequestWatch?.()
+    stopProfileWatch?.()
     stopAccessWatch = null
     stopRequestWatch = null
+    stopProfileWatch = null
   }
 
   /** Called once at boot. Resolves when the first auth state is known. */
@@ -166,6 +206,7 @@ export const useAuthStore = defineStore('auth', () => {
           stopWatching()
           access.value = null
           request.value = null
+          profile.value = null
           initialised.value = true
         }
 
@@ -203,6 +244,7 @@ export const useAuthStore = defineStore('auth', () => {
     stopWatching()
     access.value = null
     request.value = null
+    profile.value = null
     await firebaseSignOut(getFirebaseAuth())
   }
 
@@ -214,10 +256,12 @@ export const useAuthStore = defineStore('auth', () => {
     firebaseUser,
     access,
     request,
+    profile,
     initialised,
     uid,
     email,
     displayName,
+    photoUrl,
     isCeo,
     isFounder,
     status,

@@ -82,7 +82,7 @@ async function handleSignOut(): Promise<void> {
           aria-haspopup="menu"
           @click="menuOpen = !menuOpen"
         >
-          <UserAvatar :name="name" :size="30" />
+          <UserAvatar :name="name" :photo-url="auth.photoUrl" :size="30" />
           <span class="user-name truncate">{{ name }}</span>
           <AppIcon name="chevronDown" :size="15" class="tertiary" />
         </button>
@@ -90,9 +90,15 @@ async function handleSignOut(): Promise<void> {
         <Transition name="menu">
           <div v-if="menuOpen" class="menu card" role="menu">
             <div class="menu-head">
+              <UserAvatar :name="name" :photo-url="auth.photoUrl" :size="40" class="menu-avatar" />
               <p class="menu-name truncate">{{ name }}</p>
               <p class="menu-email truncate tertiary">{{ auth.email }}</p>
-              <span v-if="auth.isCeo" class="badge badge-accent badge-plain menu-role">CEO</span>
+              <span v-if="auth.isFounder" class="badge badge-accent badge-plain menu-role">
+                {{ t('manage.founderBadge') }}
+              </span>
+              <span v-else-if="auth.isCeo" class="badge badge-accent badge-plain menu-role">
+                {{ t('roles.ownerRole') }}
+              </span>
             </div>
 
             <RouterLink to="/profile" class="menu-item" role="menuitem" @click="menuOpen = false">
@@ -188,6 +194,10 @@ async function handleSignOut(): Promise<void> {
 .menu-head {
   padding: var(--space-2) var(--space-3) var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-2);
+}
+
+.menu-avatar {
   margin-bottom: var(--space-2);
 }
 
