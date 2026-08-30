@@ -379,6 +379,18 @@ export default {
     statusHint: 'Neaktivna uloga ne može da se dodeli, ali je zadržavaju oni koji je već imaju.',
   },
 
+  accountType: {
+    label: 'Tip naloga',
+    employee: 'Zaposleni',
+    affiliate: 'Affiliate partner',
+    employeeHint: 'Zaposlen u firmi. Šta vidi zavisi od uloge koju mu daš.',
+    affiliateHint:
+      'Spoljni saradnik koji dovodi posao i zarađuje proviziju. Vidi samo svoje brojke — nikad kolege, podatke firme ni interne spiskove.',
+    filterAll: 'Svi',
+    isolationNotice:
+      'Affiliate naloge izoluju sigurnosna pravila, ne njihova uloga. I da ima sve dozvole, i dalje vidi samo svoj zapis.',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',

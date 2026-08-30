@@ -110,6 +110,31 @@ service cloud.firestore {
     }
 
     /*
+     * An AFFILIATE — an outside partner, not staff.
+     *
+     * They bring business and earn commission. They hold a real account and a
+     * real login, and none of that makes them part of the company: they see
+     * their own figures and nothing else. No colleagues, no departments, no
+     * roles catalogue, no company settings.
+     *
+     * Checked here rather than left to permissions, because a permission can
+     * be granted by mistake and this line should not be crossable by mistake.
+     * Every internal read below asks isInternal() first, so an affiliate
+     * holding employees.view still sees nobody.
+     *
+     * Defaults to 'employee' so accounts written before this existed keep
+     * working as staff.
+     */
+    function isAffiliate() {
+      return isActive() && access().get('accountType', 'employee') == 'affiliate';
+    }
+
+    /** Inside the company: staff, whatever their role. */
+    function isInternal() {
+      return isActive() && !isAffiliate();
+    }
+
+    /*
      * The CEO role carries grantsAll, so it answers true for permissions that
      * do not exist yet. Future modules are covered without touching this file.
      */
@@ -233,7 +258,8 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /employees/{uid} {
-      allow read: if isSelf(uid) || can('employees.view');
+      /* Own record always; everybody else's only from inside the company. */
+      allow read: if isSelf(uid) || (isInternal() && can('employees.view'));
 
       allow create: if can('registration_requests.approve')
         && request.resource.data.uid == uid;
@@ -298,14 +324,14 @@ service cloud.firestore {
        * ---------------------------------------------------------------- */
 
       match /visibility/everyone {
-        allow read: if isSelf(uid) || can('employees.view');
+        allow read: if isSelf(uid) || (isInternal() && can('employees.view'));
         allow write: if isSelf(uid) || isOwner();
         /* Firestore does not cascade, so erasure has to reach each tier. */
         allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
       }
 
       match /visibility/management {
-        allow read: if isSelf(uid) || can('employees.view_private_info');
+        allow read: if isSelf(uid) || (isInternal() && can('employees.view_private_info'));
         allow write: if isSelf(uid) || isOwner();
         allow delete: if isOwner() && !isSelf(uid) && !personIsFounder(uid);
       }
@@ -355,7 +381,7 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /roles/{roleId} {
-      allow read: if isActive();
+      allow read: if isInternal();
 
       allow create: if can('roles.create')
         && (request.resource.data.grantsAll == false || isOwner())
@@ -375,17 +401,17 @@ service cloud.firestore {
     }
 
     match /permissions/{key} {
-      allow read: if isActive();
+      allow read: if isInternal();
       allow write: if false;
     }
 
     match /departments/{id} {
-      allow read: if isActive();
+      allow read: if isInternal();
       allow write: if can('departments.manage');
     }
 
     match /positions/{id} {
-      allow read: if isActive();
+      allow read: if isInternal();
       allow write: if can('positions.manage');
     }
 
@@ -418,7 +444,7 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /companySettings/{key} {
-      allow read: if isActive();
+      allow read: if isInternal();
       allow write: if can('company_settings.edit');
     }
 

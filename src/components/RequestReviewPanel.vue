@@ -14,11 +14,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AccountTypeSelect from '@/components/ui/AccountTypeSelect.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { approveRequest, rejectRequest, type ApprovalDecision } from '@/api/approval'
-import { departmentName, positionName } from '@/api/organisation'
+import { departmentName, positionName, positionsFor } from '@/api/organisation'
 import { roleName } from '@/api/roles'
 import { formatDate } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +48,7 @@ const ui = useUiStore()
 const { t } = useI18n()
 
 const decision = ref<ApprovalDecision>({
+  accountType: 'employee',
   roleIds: [],
   positionId: null,
   departmentId: null,
@@ -74,10 +76,16 @@ const grantingFullControl = computed(() =>
 )
 
 const availablePositions = computed(() => {
-  const active = props.positions.filter((p) => p.status === 'active')
-  if (!decision.value.departmentId) return active
-  return active.filter((p) => !p.departmentId || p.departmentId === decision.value.departmentId)
+  const forType = positionsFor(props.positions, decision.value.accountType)
+  if (!decision.value.departmentId) return forType
+  return forType.filter((p) => !p.departmentId || p.departmentId === decision.value.departmentId)
 })
+
+function onTypeChange(next: ApprovalDecision['accountType']): void {
+  decision.value.accountType = next
+  decision.value.positionId = null
+  if (next === 'affiliate') decision.value.departmentId = null
+}
 
 function toggleRole(id: string): void {
   decision.value.roleIds = decision.value.roleIds.includes(id)
@@ -160,6 +168,8 @@ async function confirm(): Promise<void> {
       <div class="card-body decision">
         <p class="eyebrow">{{ t('approval.beforeApproving') }}</p>
 
+        <AccountTypeSelect :model-value="decision.accountType" @update:model-value="onTypeChange" />
+
         <div class="field">
           <span class="field-label">{{ t('approval.assignRole') }}<span class="req">*</span></span>
           <ul class="roles">
@@ -194,7 +204,7 @@ async function confirm(): Promise<void> {
         </div>
 
         <div class="field-grid">
-          <div class="field">
+          <div v-if="decision.accountType === 'employee'" class="field">
             <label class="field-label" for="a-dep">{{ t('approval.assignDepartment') }}</label>
             <select id="a-dep" v-model="decision.departmentId" class="select">
               <option :value="null">{{ t('manage.noneSelected') }}</option>

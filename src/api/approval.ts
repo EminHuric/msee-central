@@ -29,6 +29,7 @@ import { logAudit } from './audit'
 import { getDb } from '@/lib/firebase'
 import {
   DEFAULT_PRIVACY,
+  type AccountType,
   type EmploymentStatus,
   type RegistrationRequest,
   type Role,
@@ -51,6 +52,7 @@ export async function fetchPendingCount(): Promise<number> {
 }
 
 export interface ApprovalDecision {
+  accountType: AccountType
   roleIds: string[]
   positionId: string | null
   departmentId: string | null
@@ -85,6 +87,7 @@ export async function approveRequest(
   // 1. Professional profile.
   batch.set(doc(db, 'employees', request.uid), {
     uid: request.uid,
+    accountType: decision.accountType,
     employeeCode,
     firstName: request.firstName,
     lastName: request.lastName,
@@ -137,6 +140,7 @@ export async function approveRequest(
   batch.set(doc(db, 'userPermissions', request.uid), {
     uid: request.uid,
     status: 'active',
+    accountType: decision.accountType,
     isCeo: grantsAll,
     roleIds: decision.roleIds,
     permissions,

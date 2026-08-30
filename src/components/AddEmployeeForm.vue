@@ -13,6 +13,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AccountTypeSelect from '@/components/ui/AccountTypeSelect.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import {
   AccountExistsError,
@@ -20,7 +21,7 @@ import {
   suggestPassword,
   type NewEmployeeInput,
 } from '@/api/provisioning'
-import { departmentName, positionName } from '@/api/organisation'
+import { departmentName, positionName, positionsFor } from '@/api/organisation'
 import { roleName } from '@/api/roles'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -46,6 +47,7 @@ const ui = useUiStore()
 const { t } = useI18n()
 
 const form = ref<NewEmployeeInput>({
+  accountType: 'employee',
   firstName: '',
   lastName: '',
   email: '',
@@ -72,10 +74,17 @@ const assignableRoles = computed(() =>
 )
 
 const availablePositions = computed(() => {
-  const active = props.positions.filter((p) => p.status === 'active')
-  if (!form.value.departmentId) return active
-  return active.filter((p) => !p.departmentId || p.departmentId === form.value.departmentId)
+  const forType = positionsFor(props.positions, form.value.accountType)
+  if (!form.value.departmentId) return forType
+  return forType.filter((p) => !p.departmentId || p.departmentId === form.value.departmentId)
 })
+
+/* Switching type invalidates a position picked for the other one. */
+function onTypeChange(next: NewEmployeeInput['accountType']): void {
+  form.value.accountType = next
+  form.value.positionId = null
+  if (next === 'affiliate') form.value.departmentId = null
+}
 
 const errors = computed(() => {
   const f = form.value
@@ -183,6 +192,8 @@ async function submit(): Promise<void> {
       <div class="card-body stack">
         <p class="field-hint">{{ t('newEmployee.subtitle') }}</p>
 
+        <AccountTypeSelect :model-value="form.accountType" @update:model-value="onTypeChange" />
+
         <div class="field-grid">
           <div class="field">
             <label class="field-label" for="n-first">
@@ -271,7 +282,7 @@ async function submit(): Promise<void> {
         </div>
 
         <div class="field-grid">
-          <div class="field">
+          <div v-if="form.accountType === 'employee'" class="field">
             <label class="field-label" for="n-dep">{{ t('approval.assignDepartment') }}</label>
             <select id="n-dep" v-model="form.departmentId" class="select">
               <option :value="null">{{ t('manage.noneSelected') }}</option>

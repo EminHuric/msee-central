@@ -35,12 +35,15 @@ import { logAudit } from './audit'
 import { firebaseConfig, getDb } from '@/lib/firebase'
 import {
   DEFAULT_PRIVACY,
+  type AccountType,
   type EmploymentStatus,
   type Role,
 } from '@/types/domain'
 import type { Permission } from '@/types/permissions'
 
 export interface NewEmployeeInput {
+  /** Staff, or an outside partner who only ever sees their own figures. */
+  accountType: AccountType
   firstName: string
   lastName: string
   email: string
@@ -165,6 +168,7 @@ async function writeEmployeeDocuments(
 
   batch.set(doc(db, 'employees', uid), {
     uid,
+    accountType: input.accountType,
     employeeCode,
     firstName: input.firstName.trim(),
     lastName: input.lastName.trim(),
@@ -214,6 +218,7 @@ async function writeEmployeeDocuments(
   batch.set(doc(db, 'userPermissions', uid), {
     uid,
     status: 'active',
+    accountType: input.accountType,
     isCeo: grantsAll,
     roleIds: input.roleIds,
     permissions,

@@ -40,6 +40,7 @@ import {
 import { fetchRoles, ownerRank, roleName } from '@/api/roles'
 import { formatDate } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_TYPES, type AccountType } from '@/types/domain'
 import type {
   Department,
   EmployeePublic,
@@ -66,6 +67,7 @@ const roles = ref<Role[]>([])
 
 const search = ref('')
 const departmentFilter = ref('')
+const typeFilter = ref<AccountType | ''>('')
 const reviewing = ref<RegistrationRequest | null>(null)
 
 const canSeeRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
@@ -151,6 +153,7 @@ const visiblePeople = computed(() => {
   return source
     .filter((employee) => {
       if (departmentFilter.value && employee.departmentId !== departmentFilter.value) return false
+      if (typeFilter.value && (employee.accountType ?? 'employee') !== typeFilter.value) return false
       if (!term) return true
 
       return [
@@ -285,6 +288,13 @@ onMounted(load)
         />
       </div>
 
+      <select v-if="!showingRequests" v-model="typeFilter" class="select" :aria-label="t('accountType.label')">
+        <option value="">{{ t('accountType.filterAll') }}</option>
+        <option v-for="type in ACCOUNT_TYPES" :key="type" :value="type">
+          {{ t(`accountType.${type}`) }}
+        </option>
+      </select>
+
       <select
         v-if="!showingRequests && departments.length"
         v-model="departmentFilter"
@@ -417,7 +427,12 @@ onMounted(load)
                       {{ employee.firstName }} {{ employee.lastName }}
                       <span v-if="employee.uid === auth.uid" class="you">{{ t('employees.you') }}</span>
                     </span>
-                    <span class="person-sub mono">{{ employee.employeeCode }}</span>
+                    <span class="person-sub">
+                      <span class="mono">{{ employee.employeeCode }}</span>
+                      <span v-if="employee.accountType === 'affiliate'" class="affiliate-tag">
+                        {{ t('accountType.affiliate') }}
+                      </span>
+                    </span>
                   </div>
                 </RouterLink>
               </td>
@@ -560,6 +575,17 @@ onMounted(load)
 
 .role-chip {
   margin-right: var(--space-1);
+}
+
+/* Affiliates are outside the company; the list should never let that blur. */
+.affiliate-tag {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--info-500);
+  font-weight: 600;
 }
 
 /* Owner roles carry the brand colour, so CEO and CTO read at a glance. */

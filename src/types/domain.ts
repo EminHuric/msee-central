@@ -32,6 +32,28 @@ export function canAccessApplication(status: AccountStatus): boolean {
 }
 
 /* ------------------------------------------------------------------ *
+ * Account type
+ *
+ * The first and coarsest division in the system, and the one that decides
+ * whether somebody is inside the company at all.
+ *
+ *   employee   staff. What they reach depends on their role and position.
+ *   affiliate  an outside partner who brings business and earns commission.
+ *              Not staff. Sees their own figures and nothing else — no
+ *              colleagues, no company data, no internal reference lists.
+ *
+ * It lives on userPermissions, which the security rules already read, so
+ * isolating an affiliate costs no extra document lookup. Holding an account is
+ * not the same as being inside the company, and this is where that line is
+ * drawn.
+ * ------------------------------------------------------------------ */
+
+export const ACCOUNT_TYPES = ['employee', 'affiliate'] as const
+export type AccountType = (typeof ACCOUNT_TYPES)[number]
+
+export const DEFAULT_ACCOUNT_TYPE: AccountType = 'employee'
+
+/* ------------------------------------------------------------------ *
  * Privacy
  * ------------------------------------------------------------------ */
 
@@ -84,6 +106,8 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
  */
 export interface EmployeePublic {
   uid: string
+  /** Employee or affiliate. Mirrors userPermissions for display and filtering. */
+  accountType: AccountType
   employeeCode: string
   firstName: string
   lastName: string
@@ -177,6 +201,11 @@ export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number]
 export interface UserPermissions {
   uid: string
   status: AccountStatus
+  /**
+   * The authoritative copy. The security rules read this one to decide whether
+   * somebody may see anything internal at all.
+   */
+  accountType: AccountType
   /** Owner: full authority over everything. CEO and any co-owner they appoint. */
   isCeo: boolean
   /**
@@ -233,6 +262,12 @@ export interface Position {
   titleSr: string
   departmentId: string | null
   description: string
+  /**
+   * Which kind of account this position is offered for. An affiliate is not
+   * hired as a Developer, and staff are not hired as Affiliate Partners, so
+   * the picker only shows what applies.
+   */
+  forAccountType: AccountType
   status: 'active' | 'inactive'
   createdAt: string
 }

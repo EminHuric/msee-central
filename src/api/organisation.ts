@@ -11,7 +11,7 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 
 import { getDb } from '@/lib/firebase'
 import { currentLocale } from '@/i18n'
-import type { Department, Position } from '@/types/domain'
+import type { AccountType, Department, Position } from '@/types/domain'
 
 export async function fetchDepartments(): Promise<Department[]> {
   const snap = await getDocs(query(collection(getDb(), 'departments'), orderBy('name')))
@@ -20,7 +20,26 @@ export async function fetchDepartments(): Promise<Department[]> {
 
 export async function fetchPositions(): Promise<Position[]> {
   const snap = await getDocs(query(collection(getDb(), 'positions'), orderBy('title')))
-  return snap.docs.map((d) => ({ ...(d.data() as Position), id: d.id }))
+  return snap.docs.map((d) => {
+    // Positions created before account types existed are staff positions.
+    const data = d.data() as Partial<Position>
+    return {
+      ...data,
+      id: d.id,
+      forAccountType: data.forAccountType ?? 'employee',
+    } as Position
+  })
+}
+
+/**
+ * Positions offered for one kind of account.
+ *
+ * An affiliate is not hired as a Developer and staff are not hired as
+ * Affiliate Partners, so showing the whole list in either picker only invites
+ * a wrong choice.
+ */
+export function positionsFor(positions: Position[], accountType: AccountType): Position[] {
+  return positions.filter((p) => p.status === 'active' && p.forAccountType === accountType)
 }
 
 /** Localised name, falling back to the English one when no translation exists. */

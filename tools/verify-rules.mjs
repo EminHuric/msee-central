@@ -11,6 +11,10 @@
  *   - cannot write its own permissions and promote itself;
  *   - cannot read employees, notes, the audit log, or anyone else's request.
  *
+ * Phase three, as an AFFILIATE holding every permission there is:
+ *   - sees their own record and nothing else;
+ *   - cannot read colleagues, roles, departments or company settings.
+ *
  * Phase two, as a genuine CO-OWNER holding every permission:
  *   - cannot alter the founder's access in any way;
  *   - cannot suspend the founder;
@@ -133,6 +137,7 @@ const testPassword = `rules-test-password-${stamp}`
 let testUid = null
 let ownerUid = null
 let founderSnapshot = null
+let affiliateUid = null
 
 console.log('\n  Security rule verification')
 console.log(`  project: ${serviceAccount.project_id}`)
@@ -361,12 +366,102 @@ try {
       }),
     )
   }
+
+  /* ------------------------------------------------------------------ *
+   * Phase three — an affiliate, isolated by rule rather than by role
+   *
+   * Given every permission the system has, deliberately. If isolation
+   * depended on withholding permissions it would be one bad checkbox away
+   * from failing; it has to hold even when the permissions say yes.
+   * ------------------------------------------------------------------ */
+
+  console.log()
+  console.log('  now acting as an affiliate holding every permission')
+  console.log()
+
+  await signOut(clientAuth).catch(() => {})
+
+  const affiliateEmail = `rules-affiliate-${stamp}@msee-central-test.com`
+  const affiliatePassword = `rules-affiliate-password-${stamp}`
+  const affiliateCredential = await createUserWithEmailAndPassword(
+    clientAuth,
+    affiliateEmail,
+    affiliatePassword,
+  )
+  affiliateUid = affiliateCredential.user.uid
+
+  const allPermissionDocs = await adminDb.collection('permissions').get()
+  const allPermissions = allPermissionDocs.docs.map((d) => d.id)
+
+  await adminDb.collection('userPermissions').doc(affiliateUid).set({
+    uid: affiliateUid,
+    status: 'active',
+    accountType: 'affiliate',
+    isCeo: false,
+    isFounder: false,
+    roleIds: [],
+    permissions: allPermissions,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system:verify-rules',
+  })
+
+  await adminDb.collection('employees').doc(affiliateUid).set({
+    uid: affiliateUid,
+    accountType: 'affiliate',
+    employeeCode: 'TEST',
+    firstName: 'Rules',
+    lastName: 'Affiliate',
+    status: 'active',
+    roleIds: [],
+    photoUrl: null,
+    positionId: null,
+    departmentId: null,
+    employmentStatus: 'contractor',
+    managerUid: null,
+    responsibilities: '',
+    skills: [],
+    expertise: [],
+    bio: '',
+    startDate: null,
+    dateJoined: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+
+  await signInWithEmailAndPassword(clientAuth, affiliateEmail, affiliatePassword)
+
+  await mustAllow('affiliate CAN read their own record', () =>
+    getDoc(doc(db, 'employees', affiliateUid)),
+  )
+
+  if (!founderSnapshot) {
+    console.log('  SKIP  no founder to test isolation against')
+  } else {
+    await mustDeny('affiliate CANNOT read a colleague', () =>
+      getDoc(doc(db, 'employees', founderSnapshot.uid)),
+    )
+
+    await mustDeny("affiliate CANNOT read a colleague's contact tier", () =>
+      getDoc(doc(db, 'employees', founderSnapshot.uid, 'visibility', 'everyone')),
+    )
+  }
+
+  await mustDeny('affiliate CANNOT read the roles catalogue', () =>
+    getDoc(doc(db, 'roles', 'ceo')),
+  )
+
+  await mustDeny('affiliate CANNOT read positions', () => getDoc(doc(db, 'positions', 'ceo')))
+
+  await mustDeny('affiliate CANNOT read company settings', () =>
+    getDoc(doc(db, 'companySettings', 'general')),
+  )
+
 } finally {
   /* --- clean up ----------------------------------------------------- */
 
   await signOut(clientAuth).catch(() => {})
 
-  for (const uid of [testUid, ownerUid]) {
+  for (const uid of [testUid, ownerUid, affiliateUid]) {
     if (!uid) continue
     await adminDb.collection('registrationRequests').doc(uid).delete().catch(() => {})
     await adminDb.collection('employees').doc(uid).delete().catch(() => {})

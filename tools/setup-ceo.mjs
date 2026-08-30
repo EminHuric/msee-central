@@ -375,6 +375,48 @@ await db
 console.log('  + roles seeded            ceo, cto, employee')
 
 /* ------------------------------------------------------------------ *
+ * 3b. Positions
+ *
+ * A position is the job somebody does; a role is what they may reach in this
+ * system. Two people with different job titles often need identical access,
+ * which is why these are separate lists rather than one.
+ *
+ * Seeded as a starting point. The company adds, renames and retires them from
+ * Settings — nothing here is fixed.
+ * ------------------------------------------------------------------ */
+
+const POSITIONS = [
+  { id: 'ceo', title: 'CEO', titleSr: 'CEO', forAccountType: 'employee' },
+  { id: 'cto', title: 'CTO', titleSr: 'CTO', forAccountType: 'employee' },
+  { id: 'coo', title: 'COO', titleSr: 'COO', forAccountType: 'employee' },
+  { id: 'marketing-manager', title: 'Marketing Manager', titleSr: 'Marketing menadzer', forAccountType: 'employee' },
+  { id: 'sales-manager', title: 'Sales Manager', titleSr: 'Menadzer prodaje', forAccountType: 'employee' },
+  { id: 'sales-agent', title: 'Sales Agent', titleSr: 'Agent prodaje', forAccountType: 'employee' },
+  { id: 'developer', title: 'Developer', titleSr: 'Programer', forAccountType: 'employee' },
+  { id: 'employee', title: 'Employee', titleSr: 'Zaposleni', forAccountType: 'employee' },
+  { id: 'affiliate-partner', title: 'Affiliate Partner', titleSr: 'Affiliate partner', forAccountType: 'affiliate' },
+]
+
+{
+  const batch = db.batch()
+  for (const position of POSITIONS) {
+    batch.set(
+      db.collection('positions').doc(position.id),
+      {
+        ...position,
+        departmentId: null,
+        description: '',
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
+  await batch.commit()
+  console.log(`  + positions seeded        ${POSITIONS.length} entries`)
+}
+
+/* ------------------------------------------------------------------ *
  * 4. The CEO's access document
  *
  * The one document the rules will not let anybody write for themselves.
@@ -387,6 +429,7 @@ await db
     {
       uid,
       status: 'active',
+      accountType: 'employee',
       isCeo: true,
       // The founder mark. Set here and nowhere else: the security rules refuse
       // to grant it, so it cannot be fabricated from inside the application.
@@ -410,11 +453,12 @@ const employeeRef = db.collection('employees').doc(uid)
 await employeeRef.set(
   {
     uid,
+    accountType: 'employee',
     employeeCode: 'MSEE-0001',
     firstName,
     lastName,
     photoUrl: null,
-    positionId: null,
+    positionId: 'ceo',
     departmentId: null,
     roleIds: ['ceo'],
     status: 'active',

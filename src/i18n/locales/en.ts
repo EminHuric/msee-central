@@ -380,6 +380,18 @@ export default {
     statusHint: 'An inactive role cannot be assigned, but people who already hold it keep it.',
   },
 
+  accountType: {
+    label: 'Account type',
+    employee: 'Employee',
+    affiliate: 'Affiliate Partner',
+    employeeHint: 'Staff. What they reach depends on the role you give them.',
+    affiliateHint:
+      'An outside partner who brings business and earns commission. Sees only their own figures — never colleagues, company data or internal lists.',
+    filterAll: 'Everyone',
+    isolationNotice:
+      'Affiliates are isolated by the security rules, not by their role. Even one holding every permission still sees only their own record.',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',
