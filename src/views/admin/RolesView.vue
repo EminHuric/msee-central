@@ -260,11 +260,13 @@ onMounted(load)
                   @change="togglePermission(permission)"
                 />
                 <span class="perm-text">
-                  {{ t(`permission.${permission}`) }}
-                  <span v-if="isSensitive(permission)" class="perm-flag">
-                    {{ t('roles.sensitive') }}
+                  <span class="perm-label">
+                    {{ t(`permission.${permission}.label`) }}
+                    <span v-if="isSensitive(permission)" class="perm-flag">
+                      {{ t('roles.sensitive') }}
+                    </span>
                   </span>
-                  <code class="perm-key">{{ permission }}</code>
+                  <span class="perm-desc">{{ t(`permission.${permission}.description`) }}</span>
                 </span>
               </label>
             </fieldset>
@@ -396,8 +398,9 @@ onMounted(load)
 }
 
 .perm {
-  padding: var(--space-2);
+  padding: var(--space-3);
   border-radius: var(--radius-sm);
+  align-items: flex-start;
 }
 
 .perm:hover {
@@ -421,11 +424,21 @@ onMounted(load)
   font-weight: 600;
 }
 
-.perm-key {
+.perm-label {
   display: block;
-  font-family: var(--font-mono);
+  font-weight: 550;
+}
+
+/*
+ * The description is the point of this screen. "employees.view_private_info"
+ * tells somebody choosing permissions nothing at all about what they are
+ * agreeing to, so the plain sentence carries equal weight to the name.
+ */
+.perm-desc {
+  display: block;
   font-size: var(--text-xs);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
   margin-top: 2px;
 }
 

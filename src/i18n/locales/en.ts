@@ -474,30 +474,142 @@ export default {
   },
 
   permission: {
-    'employees.view': 'View employees',
-    'employees.view_all': 'View every employee',
-    'employees.view_private_info': 'View management-level contact details',
-    'employees.edit_professional': 'Edit professional information',
-    'employees.manage_status': 'Suspend, activate and deactivate accounts',
-    'employees.export': 'Export employee data',
-    'registration_requests.view': 'View registration requests',
-    'registration_requests.approve': 'Approve registration requests',
-    'registration_requests.reject': 'Reject registration requests',
-    'roles.view': 'View roles',
-    'roles.create': 'Create roles',
-    'roles.edit': 'Edit roles',
-    'roles.deactivate': 'Deactivate roles',
-    'roles.assign': 'Assign roles to employees',
-    'departments.manage': 'Manage departments',
-    'positions.manage': 'Manage positions',
-    'employee_notes.view': 'Read CEO notes',
-    'employee_notes.create': 'Write CEO notes',
-    'employee_notes.edit': 'Edit CEO notes',
-    'employee_notes.delete': 'Delete CEO notes',
-    'audit_log.view': 'View the audit log',
-    'audit_log.export': 'Export the audit log',
-    'company_settings.view': 'View company settings',
-    'company_settings.edit': 'Edit company settings',
+    employees: {
+      view: {
+        label: 'View the directory',
+        description:
+          'See the list of colleagues: photo, name, position and department. Nothing private.',
+      },
+      view_all: {
+        label: 'See everyone',
+        description:
+          'Include people outside their own department in that list.',
+      },
+      view_private_info: {
+        label: 'See management contact details',
+        description:
+          'Read the phone and email of people who set those to management only. This crosses into private information.',
+      },
+      edit_professional: {
+        label: 'Edit job details',
+        description:
+          'Change a person position, department, duties and start date. Not their role or account status.',
+      },
+      manage_status: {
+        label: 'Suspend and reactivate',
+        description:
+          'Cut off or restore access to the system. The record is kept either way.',
+      },
+      export: {
+        label: 'Export employee data',
+        description:
+          'Download the employee list as a file that leaves the system.',
+      },
+    },
+    registration_requests: {
+      view: {
+        label: 'See who applied',
+        description:
+          'Open the Pending tab and read what applicants submitted.',
+      },
+      approve: {
+        label: 'Let people in',
+        description:
+          'Turn an applicant into an active account with a role you choose.',
+      },
+      reject: {
+        label: 'Turn applicants away',
+        description:
+          'Refuse a request, with a reason kept on record.',
+      },
+    },
+    roles: {
+      view: {
+        label: 'See the roles',
+        description:
+          'Open this page and read which role holds what.',
+      },
+      create: {
+        label: 'Create roles',
+        description:
+          'Add new roles to the company.',
+      },
+      edit: {
+        label: 'Change what roles may do',
+        description:
+          'Tick and untick permissions. This changes what every holder can reach, immediately.',
+      },
+      deactivate: {
+        label: 'Retire a role',
+        description:
+          'Stop a role being assigned to anybody new.',
+      },
+      assign: {
+        label: 'Give people roles',
+        description:
+          'Decide who holds which role. Whoever has this decides what others may do.',
+      },
+    },
+    departments: {
+      manage: {
+        label: 'Manage departments',
+        description:
+          'Create, rename and retire departments.',
+      },
+    },
+    positions: {
+      manage: {
+        label: 'Manage positions',
+        description:
+          'Create, rename and retire job titles.',
+      },
+    },
+    employee_notes: {
+      view: {
+        label: 'Read private notes',
+        description:
+          'Open the CEO notes on people: performance, warnings, disciplinary records. Never visible to the person themselves.',
+      },
+      create: {
+        label: 'Write private notes',
+        description:
+          'Add a note to somebody file.',
+      },
+      edit: {
+        label: 'Change notes',
+        description:
+          'Edit a note after it was written.',
+      },
+      delete: {
+        label: 'Delete notes',
+        description:
+          'Remove a note permanently. There is no undo.',
+      },
+    },
+    audit_log: {
+      view: {
+        label: 'Read the history',
+        description:
+          'See who did what and when: role changes, approvals, suspensions.',
+      },
+      export: {
+        label: 'Export the history',
+        description:
+          'Download the log as a file.',
+      },
+    },
+    company_settings: {
+      view: {
+        label: 'See company settings',
+        description:
+          'Read the company name, language and registration settings.',
+      },
+      edit: {
+        label: 'Change company settings',
+        description:
+          'Change those settings, including whether people may register at all.',
+      },
+    },
   },
 
   errors: {

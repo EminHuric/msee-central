@@ -473,30 +473,142 @@ export default {
   },
 
   permission: {
-    'employees.view': 'Pregled zaposlenih',
-    'employees.view_all': 'Pregled svih zaposlenih',
-    'employees.view_private_info': 'Pregled kontakata na nivou menadžmenta',
-    'employees.edit_professional': 'Izmena poslovnih podataka',
-    'employees.manage_status': 'Suspendovanje, aktiviranje i deaktiviranje naloga',
-    'employees.export': 'Izvoz podataka o zaposlenima',
-    'registration_requests.view': 'Pregled zahteva za registraciju',
-    'registration_requests.approve': 'Odobravanje zahteva za registraciju',
-    'registration_requests.reject': 'Odbijanje zahteva za registraciju',
-    'roles.view': 'Pregled uloga',
-    'roles.create': 'Kreiranje uloga',
-    'roles.edit': 'Izmena uloga',
-    'roles.deactivate': 'Deaktiviranje uloga',
-    'roles.assign': 'Dodela uloga zaposlenima',
-    'departments.manage': 'Upravljanje sektorima',
-    'positions.manage': 'Upravljanje pozicijama',
-    'employee_notes.view': 'Čitanje CEO beleški',
-    'employee_notes.create': 'Pisanje CEO beleški',
-    'employee_notes.edit': 'Izmena CEO beleški',
-    'employee_notes.delete': 'Brisanje CEO beleški',
-    'audit_log.view': 'Pregled revizionog dnevnika',
-    'audit_log.export': 'Izvoz revizionog dnevnika',
-    'company_settings.view': 'Pregled podešavanja kompanije',
-    'company_settings.edit': 'Izmena podešavanja kompanije',
+    employees: {
+      view: {
+        label: 'Pregled imenika',
+        description:
+          'Vidi spisak kolega: sliku, ime, poziciju i sektor. Ništa privatno.',
+      },
+      view_all: {
+        label: 'Vidi sve',
+        description:
+          'U tom spisku vidi i ljude van svog sektora.',
+      },
+      view_private_info: {
+        label: 'Vidi kontakte za menadžment',
+        description:
+          'Čita telefon i email onih koji su to postavili na samo menadžment. Ovo zalazi u privatne podatke.',
+      },
+      edit_professional: {
+        label: 'Izmena radnih podataka',
+        description:
+          'Menja poziciju, sektor, dužnosti i datum početka. Ne i ulogu ni status naloga.',
+      },
+      manage_status: {
+        label: 'Suspendovanje i aktiviranje',
+        description:
+          'Oduzima ili vraća pristup sistemu. Zapis se čuva u oba slučaja.',
+      },
+      export: {
+        label: 'Izvoz podataka o zaposlenima',
+        description:
+          'Preuzima spisak zaposlenih kao fajl koji izlazi iz sistema.',
+      },
+    },
+    registration_requests: {
+      view: {
+        label: 'Vidi ko se prijavio',
+        description:
+          'Otvara karticu Na čekanju i čita šta su kandidati poslali.',
+      },
+      approve: {
+        label: 'Pušta ljude unutra',
+        description:
+          'Pretvara kandidata u aktivan nalog sa ulogom koju izabereš.',
+      },
+      reject: {
+        label: 'Odbija kandidate',
+        description:
+          'Odbija zahtev, uz razlog koji ostaje zabeležen.',
+      },
+    },
+    roles: {
+      view: {
+        label: 'Vidi uloge',
+        description:
+          'Otvara ovu stranicu i čita koja uloga šta sme.',
+      },
+      create: {
+        label: 'Pravi uloge',
+        description:
+          'Dodaje nove uloge u firmu.',
+      },
+      edit: {
+        label: 'Menja šta uloge smeju',
+        description:
+          'Čekira i odčekira dozvole. Time odmah menja šta svi nosioci te uloge mogu.',
+      },
+      deactivate: {
+        label: 'Povlači ulogu',
+        description:
+          'Sprečava da se uloga dodeli nekom novom.',
+      },
+      assign: {
+        label: 'Dodeljuje uloge ljudima',
+        description:
+          'Odlučuje ko nosi koju ulogu. Ko ovo ima, odlučuje šta drugi smeju.',
+      },
+    },
+    departments: {
+      manage: {
+        label: 'Upravljanje sektorima',
+        description:
+          'Pravi, preimenuje i povlači sektore.',
+      },
+    },
+    positions: {
+      manage: {
+        label: 'Upravljanje pozicijama',
+        description:
+          'Pravi, preimenuje i povlači nazive radnih mesta.',
+      },
+    },
+    employee_notes: {
+      view: {
+        label: 'Čita privatne beleške',
+        description:
+          'Otvara CEO beleške o ljudima: učinak, upozorenja, disciplinske mere. Nikad vidljivo samoj osobi.',
+      },
+      create: {
+        label: 'Piše privatne beleške',
+        description:
+          'Dodaje belešku u nečije dosije.',
+      },
+      edit: {
+        label: 'Menja beleške',
+        description:
+          'Ispravlja belešku posle pisanja.',
+      },
+      delete: {
+        label: 'Briše beleške',
+        description:
+          'Trajno uklanja belešku. Nema povratka.',
+      },
+    },
+    audit_log: {
+      view: {
+        label: 'Čita istoriju',
+        description:
+          'Vidi ko je šta uradio i kada: promene uloga, odobrenja, suspenzije.',
+      },
+      export: {
+        label: 'Izvozi istoriju',
+        description:
+          'Preuzima dnevnik kao fajl.',
+      },
+    },
+    company_settings: {
+      view: {
+        label: 'Vidi podešavanja firme',
+        description:
+          'Čita naziv firme, jezik i podešavanja registracije.',
+      },
+      edit: {
+        label: 'Menja podešavanja firme',
+        description:
+          'Menja ta podešavanja, uključujući i da li je registracija uopšte otvorena.',
+      },
+    },
   },
 
   errors: {
