@@ -12,11 +12,19 @@
  * entirely needs Cloud Functions, which is the intended upgrade path.
  */
 
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  getDocs,
+  limit as limitTo,
+  orderBy,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore'
 
 import { getDb } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/auth'
-import type { AuditAction, AuditTargetType } from '@/types/domain'
+import type { AuditAction, AuditLogEntry, AuditTargetType } from '@/types/domain'
 
 export interface AuditInput {
   action: AuditAction
@@ -56,4 +64,29 @@ export async function logAudit(input: AuditInput): Promise<void> {
   } catch (error) {
     console.error('[audit] entry could not be written', input.action, error)
   }
+}
+
+/**
+ * Read the trail, newest first. Requires `audit_log.view`.
+ *
+ * Firestore returns a server timestamp as its own object rather than a string,
+ * so it is normalised here — the callers all want something they can format.
+ */
+export async function fetchAuditLog(max = 100): Promise<AuditLogEntry[]> {
+  const snap = await getDocs(
+    query(collection(getDb(), 'auditLogs'), orderBy('createdAt', 'desc'), limitTo(max)),
+  )
+
+  return snap.docs.map((d) => {
+    const data = d.data()
+    const created = data.createdAt
+    return {
+      ...(data as AuditLogEntry),
+      id: d.id,
+      createdAt:
+        typeof created?.toDate === 'function'
+          ? created.toDate().toISOString()
+          : (created ?? new Date().toISOString()),
+    }
+  })
 }

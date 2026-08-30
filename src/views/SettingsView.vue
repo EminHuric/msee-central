@@ -21,6 +21,7 @@ import {
 } from '@/api/administration'
 import { fetchEmployees } from '@/api/employees'
 import { departmentName, fetchDepartments, fetchPositions } from '@/api/organisation'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { LIMITS } from '@/lib/validation'
@@ -39,6 +40,22 @@ const employees = ref<EmployeePublic[]>([])
 const canManageDepartments = computed(() => auth.hasPermission(PERMISSIONS.DEPARTMENTS_MANAGE))
 const canManagePositions = computed(() => auth.hasPermission(PERMISSIONS.POSITIONS_MANAGE))
 
+/*
+ * The organisation chart is not everybody's business.
+ *
+ * This page stays reachable by everyone, because personal preferences have to
+ * live somewhere — but somebody without the permission sees only their own
+ * settings, not the company's department and position lists.
+ */
+const canSeeOrganisation = computed(
+  () =>
+    auth.hasAny(
+      PERMISSIONS.DEPARTMENTS_MANAGE,
+      PERMISSIONS.POSITIONS_MANAGE,
+      PERMISSIONS.SETTINGS_VIEW,
+    ),
+)
+
 const departmentDraft = ref<DepartmentInput | null>(null)
 const positionDraft = ref<PositionInput | null>(null)
 const savingDepartment = ref(false)
@@ -54,6 +71,10 @@ function positionUsage(id: string): number {
 }
 
 async function load(): Promise<void> {
+  if (!canSeeOrganisation.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   const [deps, pos, people] = await Promise.all([
     fetchDepartments().catch(() => []),
@@ -162,6 +183,34 @@ onMounted(load)
       </div>
     </header>
 
+    <!-- Personal preferences, for everybody ---------------------------- -->
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">{{ t('settings.personal') }}</h2>
+      </div>
+      <div class="card-body prefs">
+        <div class="pref">
+          <div>
+            <p class="field-label">{{ t('language.label') }}</p>
+            <p class="field-hint">{{ t('settings.languageHint') }}</p>
+          </div>
+          <LanguageSwitcher />
+        </div>
+
+        <div class="pref">
+          <div>
+            <p class="field-label">{{ t('theme.label') }}</p>
+            <p class="field-hint">{{ t('settings.themeHint') }}</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" @click="ui.toggleTheme()">
+            <AppIcon :name="ui.theme === 'dark' ? 'sun' : 'moon'" :size="15" />
+            {{ ui.theme === 'dark' ? t('theme.light') : t('theme.dark') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <template v-if="canSeeOrganisation">
     <div class="alert alert-info">
       <AppIcon name="shield" :size="16" />
       <span>{{ t('organisation.positionVsRole') }}</span>
@@ -359,6 +408,7 @@ onMounted(load)
         </table>
       </div>
     </section>
+    </template>
   </div>
 </template>
 
@@ -373,5 +423,19 @@ onMounted(load)
 
 .draft-actions {
   justify-content: flex-end;
+}
+
+.prefs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.pref {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 </style>

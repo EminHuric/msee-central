@@ -391,6 +391,72 @@ export default {
       'Affiliate naloge izoluju sigurnosna pravila, ne njihova uloga. I da ima sve dozvole, i dalje vidi samo svoj zapis.',
   },
 
+  settings: {
+    personal: 'Tvoja podešavanja',
+    languageHint: 'Važi samo za tebe. Kolege zadržavaju svoj izbor.',
+    themeHint: 'Važi samo za tebe, na ovom uređaju.',
+  },
+
+  dashboard: {
+    greeting: 'Zdravo, {name}',
+    subtitleOwner: 'Kako firma stoji danas.',
+    subtitleEmployee: 'Tvoj deo MsEe Central-a.',
+    subtitleAffiliate: 'Tvoja prodaja i provizija.',
+
+    totalEmployees: 'Zaposleni',
+    activeEmployees: 'Aktivni',
+    pendingRequests: 'Čeka tebe',
+    suspended: 'Suspendovani',
+    affiliates: 'Affiliate partneri',
+
+    pendingTitle: 'Zahtevi za registraciju',
+    pendingNone: 'Ništa ne čeka.',
+    pendingSome: 'niko ne čeka | {n} osoba čeka tvoju odluku | {n} osobe čekaju tvoju odluku | {n} osoba čeka tvoju odluku',
+    review: 'Pregledaj ih',
+
+    recentActivity: 'Nedavne radnje',
+    activityNone: 'Još ništa nije zabeleženo.',
+    seeAll: 'Vidi sve',
+
+    recentlyJoined: 'Nedavno pridruženi',
+
+    yourProfile: 'Tvoj profil',
+    profileIncomplete: 'Tvoj profil je {percent}% popunjen.',
+    profileComplete: 'Tvoj profil je kompletan.',
+    completeProfile: 'Dovrši ga',
+
+    comingSoon: 'Uskoro',
+    earningsSoon:
+      'Tvoja zarada, bonusi i zadaci pojaviće se ovde kad ti delovi sistema budu napravljeni.',
+    commissionSoon:
+      'Tvoja prodaja, provizija i isplate pojaviće se ovde kad taj deo sistema bude napravljen.',
+  },
+
+  auditAction: {
+    'registration.submitted': 'Poslat zahtev za registraciju',
+    'account.approved': 'Nalog odobren',
+    'account.rejected': 'Zahtev odbijen',
+    'account.suspended': 'Nalog suspendovan',
+    'account.activated': 'Nalog aktiviran',
+    'account.deactivated': 'Nalog deaktiviran',
+    'role.created': 'Uloga napravljena',
+    'role.updated': 'Uloga izmenjena',
+    'role.deactivated': 'Uloga povučena',
+    'role.assigned': 'Uloge dodeljene',
+    'permissions.changed': 'Dozvole izmenjene',
+    'position.changed': 'Radni podaci izmenjeni',
+    'department.changed': 'Sektor izmenjen',
+    'profile.updated': 'Profil izmenjen',
+    'privacy.changed': 'Privatnost izmenjena',
+    'note.created': 'Beleška napisana',
+    'note.updated': 'Beleška izmenjena',
+    'note.deleted': 'Beleška obrisana',
+    'auth.login': 'Prijava',
+    'auth.login_failed': 'Neuspela prijava',
+    'settings.updated': 'Podešavanja izmenjena',
+    'data.exported': 'Podaci izvezeni',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',

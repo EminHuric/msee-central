@@ -392,6 +392,72 @@ export default {
       'Affiliates are isolated by the security rules, not by their role. Even one holding every permission still sees only their own record.',
   },
 
+  settings: {
+    personal: 'Your preferences',
+    languageHint: 'Applies to you only. Colleagues keep their own choice.',
+    themeHint: 'Applies to you only, on this device.',
+  },
+
+  dashboard: {
+    greeting: 'Hello, {name}',
+    subtitleOwner: 'How the company stands today.',
+    subtitleEmployee: 'Your corner of MsEe Central.',
+    subtitleAffiliate: 'Your sales and commission.',
+
+    totalEmployees: 'Employees',
+    activeEmployees: 'Active',
+    pendingRequests: 'Waiting for you',
+    suspended: 'Suspended',
+    affiliates: 'Affiliate partners',
+
+    pendingTitle: 'Registration requests',
+    pendingNone: 'Nothing waiting.',
+    pendingSome: 'no one waiting | {n} person is waiting for a decision | {n} people are waiting for a decision',
+    review: 'Review them',
+
+    recentActivity: 'Recent activity',
+    activityNone: 'Nothing recorded yet.',
+    seeAll: 'See all',
+
+    recentlyJoined: 'Recently joined',
+
+    yourProfile: 'Your profile',
+    profileIncomplete: 'Your profile is {percent}% complete.',
+    profileComplete: 'Your profile is complete.',
+    completeProfile: 'Finish it',
+
+    comingSoon: 'Coming soon',
+    earningsSoon:
+      'Your earnings, bonuses and tasks will appear here once those parts of the system are built.',
+    commissionSoon:
+      'Your sales, commission and payouts will appear here once that part of the system is built.',
+  },
+
+  auditAction: {
+    'registration.submitted': 'Registration submitted',
+    'account.approved': 'Account approved',
+    'account.rejected': 'Request rejected',
+    'account.suspended': 'Account suspended',
+    'account.activated': 'Account activated',
+    'account.deactivated': 'Account deactivated',
+    'role.created': 'Role created',
+    'role.updated': 'Role changed',
+    'role.deactivated': 'Role retired',
+    'role.assigned': 'Roles assigned',
+    'permissions.changed': 'Permissions changed',
+    'position.changed': 'Work details changed',
+    'department.changed': 'Department changed',
+    'profile.updated': 'Profile updated',
+    'privacy.changed': 'Privacy changed',
+    'note.created': 'Note written',
+    'note.updated': 'Note changed',
+    'note.deleted': 'Note deleted',
+    'auth.login': 'Signed in',
+    'auth.login_failed': 'Failed sign-in',
+    'settings.updated': 'Settings changed',
+    'data.exported': 'Data exported',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',
