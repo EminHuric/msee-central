@@ -61,7 +61,18 @@ service cloud.firestore {
       return hasAccess() && access().status == 'active';
     }
 
-    function isCeo() {
+    /*
+     * An OWNER: CEO or CTO. Both carry a role marked grantsAll and are equal in
+     * every power the system has.
+     *
+     * The stored field is still called isCeo because that is what exists in the
+     * database; read it as "owner". Owner status is what opens the private
+     * privacy tier, CEO notes and the ability to appoint another owner.
+     *
+     * The safety rail that makes two owners meaningful: nobody may remove their
+     * own owner role, so an owner can only ever be removed by the other one.
+     */
+    function isOwner() {
       return isActive() && access().isCeo == true;
     }
 
@@ -82,8 +93,9 @@ service cloud.firestore {
      * userPermissions — the crown jewel
      *
      * Whoever writes here can grant themselves anything, so:
-     *   - nobody may write their OWN document, not even the CEO;
-     *   - only the CEO may mint another CEO.
+     *   - a manager may never write their OWN document;
+     *   - only an existing owner may mint another owner;
+     *   - no owner may strip their own owner status.
      *
      * The first CEO document is created by tools/setup-ceo.mjs through the
      * Admin SDK, which bypasses these rules. That is deliberate: it means
@@ -103,21 +115,22 @@ service cloud.firestore {
           (
             can('roles.assign')
             && !isSelf(uid)
-            && (request.resource.data.isCeo == false || isCeo())
+            && (request.resource.data.isCeo == false || isOwner())
           )
           /*
-           * The CEO editing their own. Deliberately allowed: the CEO already
-           * holds every permission, so there is nothing here to escalate to.
-           * Scoped to isCeo() precisely so the branch above keeps protecting
-           * everyone who is not already at the top.
+           * An owner editing their own document. Deliberately allowed: an
+           * owner already holds every permission, so there is nothing here to
+           * escalate to. Scoped to isOwner() precisely so the branch above
+           * keeps protecting everyone who is not already at the top.
            *
-           * Two conditions prevent the CEO locking themselves out of their own
-           * company: they cannot drop their own CEO flag and cannot set
-           * themselves to anything but active. Stepping down is done by
-           * appointing a second CEO, who can then demote the first.
+           * Two conditions stop an owner locking themselves out: they cannot
+           * drop their own owner flag and cannot set themselves to anything but
+           * active. Standing down is therefore always done by the OTHER owner,
+           * which is what makes it a two-person decision without needing an
+           * approval workflow to enforce it.
            */
           || (
-            isCeo()
+            isOwner()
             && isSelf(uid)
             && request.resource.data.isCeo == true
             && request.resource.data.status == 'active'
@@ -210,12 +223,12 @@ service cloud.firestore {
 
       match /visibility/everyone {
         allow read: if isSelf(uid) || can('employees.view');
-        allow write: if isSelf(uid) || isCeo();
+        allow write: if isSelf(uid) || isOwner();
       }
 
       match /visibility/management {
         allow read: if isSelf(uid) || can('employees.view_private_info');
-        allow write: if isSelf(uid) || isCeo();
+        allow write: if isSelf(uid) || isOwner();
       }
 
       /*
@@ -224,8 +237,8 @@ service cloud.firestore {
        * this tier.
        */
       match /visibility/private {
-        allow read: if isSelf(uid) || isCeo();
-        allow write: if isSelf(uid) || isCeo();
+        allow read: if isSelf(uid) || isOwner();
+        allow write: if isSelf(uid) || isOwner();
       }
 
       /* ---------------------------------------------------------------- *
@@ -236,7 +249,7 @@ service cloud.firestore {
        * ---------------------------------------------------------------- */
 
       match /notes/{noteId} {
-        allow read: if isCeo() || (can('employee_notes.view') && !isSelf(uid));
+        allow read: if isOwner() || (can('employee_notes.view') && !isSelf(uid));
 
         allow create: if can('employee_notes.create')
           && !isSelf(uid)
@@ -265,13 +278,13 @@ service cloud.firestore {
       allow read: if isActive();
 
       allow create: if can('roles.create')
-        && (request.resource.data.grantsAll == false || isCeo())
+        && (request.resource.data.grantsAll == false || isOwner())
         && request.resource.data.isSystem == false;
 
       allow update: if can('roles.edit')
         && request.resource.data.key == resource.data.key
         && request.resource.data.isSystem == resource.data.isSystem
-        && (request.resource.data.grantsAll == resource.data.grantsAll || isCeo())
+        && (request.resource.data.grantsAll == resource.data.grantsAll || isOwner())
         && (
           resource.data.isSystem == false
           || changedOnly(['name', 'nameSr', 'description', 'descriptionSr', 'updatedAt'])
@@ -335,8 +348,8 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /externalReferences/{id} {
-      allow read: if isCeo();
-      allow write: if isCeo();
+      allow read: if isOwner();
+      allow write: if isOwner();
     }
 
     /*

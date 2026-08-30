@@ -318,6 +318,39 @@ await db
     { merge: true },
   )
 
+/*
+ * CTO — the second owner.
+ *
+ * Carries grantsAll exactly like the CEO role, so the two are equal in every
+ * power the system has. That is deliberate, and it is what makes the safety
+ * rail work: nobody may remove their own owner role, so an owner can only ever
+ * be removed by the OTHER owner. Two people, neither able to act alone against
+ * the other.
+ *
+ * A company with only one owner has nobody who can recover it if that one
+ * account is lost.
+ */
+await db
+  .collection('roles')
+  .doc('cto')
+  .set(
+    {
+      id: 'cto',
+      key: 'cto',
+      name: 'CTO',
+      nameSr: 'CTO',
+      description: 'Equal authority to the CEO across every part of MsEe Central.',
+      descriptionSr: 'Jednaka nadleznost kao CEO nad svim delovima MsEe Central-a.',
+      permissions: [...ALL_PERMISSIONS],
+      isSystem: true,
+      grantsAll: true,
+      status: 'active',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: now,
+    },
+    { merge: true },
+  )
+
 await db
   .collection('roles')
   .doc('employee')
@@ -339,7 +372,7 @@ await db
     { merge: true },
   )
 
-console.log('  + roles seeded            ceo, employee')
+console.log('  + roles seeded            ceo, cto, employee')
 
 /* ------------------------------------------------------------------ *
  * 4. The CEO's access document
