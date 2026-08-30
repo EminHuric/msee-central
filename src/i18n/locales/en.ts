@@ -221,6 +221,11 @@ export default {
       'Their sign-in still exists but now reaches nothing. Run npm run purge-logins to remove it.',
     reversible: 'Reversible — you can bring them back',
     irreversible: 'Permanent — there is no way back',
+    profileSection: 'Profile',
+    profileHint: 'Photo, name and description. Editing these on somebody else is for corrections — they maintain their own.',
+    contactSection: 'Contact details',
+    contactHint: 'What each field shows to colleagues is the person’s own choice. Changing a value here does not change who sees it.',
+    profileSaved: 'Profile saved.',
     founderBadge: 'Founder',
     selfDemotion:
       'You cannot remove your own CEO role. Appoint a second CEO first, and they can then change yours — that way the company can never be left with nobody able to administer it.',

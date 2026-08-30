@@ -195,14 +195,29 @@ export interface OwnProfileInput {
   expertise: string[]
   personal: PersonalRecord
   privacy: PrivacySettings
+  /**
+   * Only sent by somebody holding `employees.edit_professional`.
+   *
+   * A person cannot rename themselves — the security rules accept just four
+   * fields from the subject, and these are not among them. An administrator
+   * correcting a misspelled surname is a different matter, so the same
+   * function serves both and simply omits these when they are absent.
+   */
+  firstName?: string
+  lastName?: string
 }
 
 /**
- * Save the parts of a profile its owner controls.
+ * Save a profile.
  *
- * The professional document is limited to the four fields the security rules
- * allow the subject to touch; role, status, position and department are the
- * CEO's to set and are not sent here at all.
+ * Serves two callers: the person editing their own, and an administrator
+ * editing somebody else's. The difference is what they pass — a subject sends
+ * no name fields, because the rules accept only four fields from them; an
+ * administrator holding edit_professional may send those too.
+ *
+ * Role, status, position and department are never sent from here. They belong
+ * to the management panel and are gated by separate permissions, so that
+ * editing a photo can never quietly become a promotion.
  *
  * The three tier documents are REPLACED, not merged. That is the important
  * line in this file: merging would leave a value behind in the `everyone`
@@ -219,6 +234,8 @@ export async function saveOwnProfile(uid: string, input: OwnProfileInput): Promi
     bio: input.bio.trim(),
     skills: input.skills,
     expertise: input.expertise,
+    ...(input.firstName !== undefined ? { firstName: input.firstName.trim() } : {}),
+    ...(input.lastName !== undefined ? { lastName: input.lastName.trim() } : {}),
     updatedAt: new Date().toISOString(),
   })
 

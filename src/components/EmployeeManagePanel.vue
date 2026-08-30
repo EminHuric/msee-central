@@ -24,6 +24,9 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import TagInput from '@/components/ui/TagInput.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
+import VisibilitySelect from '@/components/ui/VisibilitySelect.vue'
 import {
   assignRoles,
   deleteEmployeePermanently,
@@ -36,7 +39,14 @@ import {
   SelfDemotionError,
   type WorkInformation,
 } from '@/api/administration'
-import { fetchEmployees } from '@/api/employees'
+import {
+  EMPTY_PERSONAL,
+  fetchEmployee,
+  fetchEmployees,
+  saveOwnProfile,
+  type PersonalRecord,
+} from '@/api/employees'
+import { PhotoError, processProfilePhoto } from '@/api/photos'
 import { departmentName, positionName } from '@/api/organisation'
 import { fetchRoles, roleName } from '@/api/roles'
 import { useAuthStore } from '@/stores/auth'
@@ -44,11 +54,13 @@ import { useUiStore } from '@/stores/ui'
 import { useRouter } from 'vue-router'
 import { LIMITS } from '@/lib/validation'
 import {
+  DEFAULT_PRIVACY,
   EMPLOYMENT_STATUSES,
   type AccountStatus,
   type Department,
   type EmployeePublic,
   type Position,
+  type PrivacySettings,
   type Role,
 } from '@/types/domain'
 import { PERMISSIONS } from '@/types/permissions'
@@ -151,6 +163,13 @@ async function load(): Promise<void> {
   roles.value = allRoles
   colleagues.value = people.filter((p) => p.uid !== props.employee.uid)
 
+  // Contact details and their privacy settings live in the tier documents.
+  const detail = await fetchEmployee(props.employee.uid).catch(() => null)
+  if (detail) {
+    personal.value = { ...detail.personal }
+    privacy.value = { ...DEFAULT_PRIVACY, ...(detail.privacy ?? {}) }
+  }
+
   // userPermissions is the authority on access; the employee document only
   // mirrors it for display.
   if (access) {
@@ -228,6 +247,71 @@ async function confirmStatus(): Promise<void> {
   }
 }
 
+/* ---- The person's own profile -------------------------------------- *
+ *
+ * Editing somebody else's profile is for corrections: a misspelled surname, a
+ * photo they never got round to. They maintain their own, and the privacy
+ * settings stay theirs — changing a phone number here does not change who is
+ * allowed to see it.
+ * -------------------------------------------------------------------- */
+
+const photo = ref<string | null>(props.employee.photoUrl)
+const photoBusy = ref(false)
+const photoInput = ref<HTMLInputElement | null>(null)
+const firstName = ref(props.employee.firstName)
+const lastName = ref(props.employee.lastName)
+const bio = ref(props.employee.bio ?? '')
+const skills = ref<string[]>([...(props.employee.skills ?? [])])
+const expertise = ref<string[]>([...(props.employee.expertise ?? [])])
+const personal = ref<PersonalRecord>({ ...EMPTY_PERSONAL })
+const privacy = ref<PrivacySettings>({ ...DEFAULT_PRIVACY })
+const savingProfile = ref(false)
+
+async function onPhotoPicked(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  photoBusy.value = true
+  try {
+    photo.value = await processProfilePhoto(file)
+  } catch (error) {
+    ui.notify(
+      'danger',
+      error instanceof PhotoError && error.reason === 'type'
+        ? t('errors.fileWrongType')
+        : t('errors.fileTooLarge', { max: '12 MB' }),
+    )
+  } finally {
+    photoBusy.value = false
+    input.value = ''
+  }
+}
+
+async function saveProfile(): Promise<void> {
+  if (savingProfile.value) return
+  savingProfile.value = true
+
+  try {
+    await saveOwnProfile(props.employee.uid, {
+      photoUrl: photo.value,
+      bio: bio.value,
+      skills: skills.value,
+      expertise: expertise.value,
+      personal: personal.value,
+      privacy: privacy.value,
+      firstName: firstName.value,
+      lastName: lastName.value,
+    })
+    ui.notify('ok', t('manage.profileSaved'))
+    emit('updated')
+  } catch {
+    ui.notify('danger', t('manage.saveFailed'))
+  } finally {
+    savingProfile.value = false
+  }
+}
+
 /* ---- Permanent erasure ------------------------------------------- */
 
 const deleteTyped = ref('')
@@ -280,6 +364,118 @@ onMounted(load)
 
 <template>
   <div class="stack">
+    <!-- The person's own profile -------------------------------------- -->
+    <section v-if="canEditWork" class="card">
+      <div class="card-header">
+        <h2 class="card-title">{{ t('manage.profileSection') }}</h2>
+        <button class="btn btn-primary btn-sm" :disabled="savingProfile" @click="saveProfile">
+          <span v-if="savingProfile" class="spinner" />
+          {{ savingProfile ? t('common.saving') : t('common.save') }}
+        </button>
+      </div>
+
+      <div class="card-body stack">
+        <p class="field-hint">{{ t('manage.profileHint') }}</p>
+
+        <div class="photo-row">
+          <UserAvatar
+            :name="`${firstName} ${lastName}`"
+            :photo-url="photo"
+            :size="80"
+          />
+          <div class="photo-actions">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="photoBusy"
+              @click="photoInput?.click()"
+            >
+              <span v-if="photoBusy" class="spinner" />
+              {{ photo ? t('register.photoChange') : t('register.photoChoose') }}
+            </button>
+            <button v-if="photo" type="button" class="btn btn-ghost btn-sm" @click="photo = null">
+              {{ t('register.photoRemove') }}
+            </button>
+            <p class="field-hint">{{ t('register.photoHint') }}</p>
+          </div>
+          <input
+            ref="photoInput"
+            class="sr-only"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            @change="onPhotoPicked"
+          />
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label class="field-label" for="m-first">{{ t('register.firstName') }}</label>
+            <input id="m-first" v-model="firstName" class="input" :maxlength="LIMITS.name" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="m-last">{{ t('register.lastName') }}</label>
+            <input id="m-last" v-model="lastName" class="input" :maxlength="LIMITS.name" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="m-bio">{{ t('profile.bio') }}</label>
+          <textarea id="m-bio" v-model="bio" class="textarea" :maxlength="LIMITS.shortText" />
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label class="field-label" for="m-skills">{{ t('profile.skills') }}</label>
+            <TagInput id="m-skills" v-model="skills" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="m-expertise">{{ t('profile.expertise') }}</label>
+            <TagInput id="m-expertise" v-model="expertise" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact, with the person's own visibility choices intact ----- -->
+      <div class="card-body stack contact-block">
+        <div>
+          <p class="field-label">{{ t('manage.contactSection') }}</p>
+          <p class="field-hint">{{ t('manage.contactHint') }}</p>
+        </div>
+
+        <div class="private-field">
+          <div class="field">
+            <label class="field-label" for="m-phone">{{ t('register.phone') }}</label>
+            <input id="m-phone" v-model="personal.phone" class="input" :maxlength="LIMITS.phone" />
+          </div>
+          <VisibilitySelect v-model="privacy.phone" disabled />
+        </div>
+
+        <div class="private-field">
+          <div class="field">
+            <label class="field-label" for="m-city">{{ t('register.city') }}</label>
+            <input id="m-city" v-model="personal.city" class="input" :maxlength="LIMITS.city" />
+          </div>
+          <VisibilitySelect v-model="privacy.city" disabled />
+        </div>
+
+        <div class="private-field">
+          <div class="field">
+            <label class="field-label" for="m-country">{{ t('register.country') }}</label>
+            <input id="m-country" v-model="personal.country" class="input" :maxlength="LIMITS.country" />
+          </div>
+          <VisibilitySelect v-model="privacy.country" disabled />
+        </div>
+
+        <div class="private-field">
+          <div class="field">
+            <label class="field-label" for="m-lang">{{ t('profile.languages') }}</label>
+            <TagInput id="m-lang" v-model="personal.languages" />
+          </div>
+          <VisibilitySelect v-model="privacy.languages" disabled />
+        </div>
+      </div>
+    </section>
+
     <!-- Work information --------------------------------------------- -->
     <section v-if="canEditWork" class="card">
       <div class="card-header">
@@ -536,6 +732,41 @@ onMounted(load)
 .role-count {
   font-size: var(--text-xs);
   margin-left: var(--space-2);
+}
+
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.contact-block {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-2);
+}
+
+.private-field {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.private-field .field {
+  flex: 1;
+  min-width: 220px;
 }
 
 .danger-zone {

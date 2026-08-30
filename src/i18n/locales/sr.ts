@@ -220,6 +220,11 @@ export default {
       'Njegova prijava još postoji ali više ne vodi nigde. Pokreni npm run purge-logins da je ukloniš.',
     reversible: 'Može da se poništi — vratićeš ga kad hoćeš',
     irreversible: 'Trajno — nema povratka',
+    profileSection: 'Profil',
+    profileHint: 'Slika, ime i opis. Menjanje ovoga kod drugog je za ispravke — svako održava svoj.',
+    contactSection: 'Kontakt podaci',
+    contactHint: 'Šta koje polje pokazuje kolegama bira sama osoba. Izmena vrednosti ovde ne menja ko je vidi.',
+    profileSaved: 'Profil je sačuvan.',
     founderBadge: 'Vlasnik',
     selfDemotion:
       'Ne možeš sam sebi da skineš CEO ulogu. Prvo postavi drugog CEO-a, pa on može da menja tvoju — tako firma nikad ne može da ostane bez ikoga ko njome upravlja.',
