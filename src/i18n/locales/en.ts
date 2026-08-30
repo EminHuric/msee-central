@@ -529,6 +529,15 @@ export default {
     openProfile: 'Open profile',
   },
 
+  settingsHub: {
+    administration: 'Administration',
+    administrationHint: 'Company-wide settings. Each opens as its own page, under its own permission.',
+    requestsDesc: 'Approve or turn away people asking for an account.',
+    rolesDesc: 'Decide what each role may reach.',
+    organizationDesc: 'Departments and job titles.',
+    auditDesc: 'Who did what, and when.',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',

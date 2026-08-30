@@ -528,6 +528,15 @@ export default {
     openProfile: 'Otvori profil',
   },
 
+  settingsHub: {
+    administration: 'Administracija',
+    administrationHint: 'Podešavanja cele firme. Svako se otvara kao zasebna stranica, pod svojom dozvolom.',
+    requestsDesc: 'Odobri ili odbij one koji traže nalog.',
+    rolesDesc: 'Odluči šta koja uloga sme.',
+    organizationDesc: 'Sektori i nazivi radnih mesta.',
+    auditDesc: 'Ko je šta uradio i kada.',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',
