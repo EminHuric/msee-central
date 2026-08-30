@@ -51,28 +51,50 @@ const isAffiliate = computed(() => auth.access?.accountType === 'affiliate')
 const sections = computed<NavSection[]>(() => {
   const raw: NavSection[] = [
     {
-      titleKey: 'nav2.sectionCompany',
-      items: [{ to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' }],
-    },
-    {
-      titleKey: 'nav2.sectionBusiness',
+      titleKey: 'modules.groupMain',
       items: [
-        { labelKey: 'nav2.clients', icon: 'building', soon: true, internalOnly: true },
-        { labelKey: 'nav2.leads', icon: 'inbox', soon: true, internalOnly: true },
-        { labelKey: 'nav2.goals', icon: 'dashboard', soon: true, internalOnly: true },
-        { labelKey: 'nav2.performance', icon: 'history', soon: true, internalOnly: true },
+        { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
+        { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
       ],
     },
     {
-      titleKey: 'nav2.sectionPeople',
+      titleKey: 'modules.groupBusiness',
+      items: [
+        { labelKey: 'modules.clients', icon: 'building', soon: true, internalOnly: true },
+        { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
+        { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
+        { labelKey: 'modules.sales', icon: 'trending', soon: true, internalOnly: true },
+        { labelKey: 'modules.services', icon: 'spark', soon: true, internalOnly: true },
+        { labelKey: 'modules.affiliateProgram', icon: 'users', soon: true, internalOnly: true },
+        { labelKey: 'modules.contracts', icon: 'contract', soon: true, internalOnly: true },
+        { labelKey: 'modules.finance', icon: 'wallet', soon: true, internalOnly: true },
+      ],
+    },
+    {
+      titleKey: 'modules.groupTeam',
       items: [
         {
           to: '/employees',
-          labelKey: 'nav.employees',
+          labelKey: 'modules.employees',
           icon: 'users',
           permission: PERMISSIONS.EMPLOYEES_VIEW,
           internalOnly: true,
         },
+        { labelKey: 'modules.goals', icon: 'target', soon: true, internalOnly: true },
+        { labelKey: 'modules.performance', icon: 'chart', soon: true, internalOnly: true },
+      ],
+    },
+    {
+      titleKey: 'modules.groupTools',
+      items: [
+        { labelKey: 'modules.calendar', icon: 'calendar', soon: true },
+        { labelKey: 'modules.chat', icon: 'chat', soon: true },
+        { labelKey: 'modules.analytics', icon: 'chart', soon: true, internalOnly: true },
+      ],
+    },
+    {
+      titleKey: 'modules.groupSystem',
+      items: [
         {
           to: '/requests',
           labelKey: 'nav.requests',
@@ -80,11 +102,6 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.REQUESTS_VIEW,
           internalOnly: true,
         },
-      ],
-    },
-    {
-      titleKey: 'nav2.sectionAdmin',
-      items: [
         {
           to: '/roles',
           labelKey: 'nav.roles',
@@ -106,15 +123,6 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.AUDIT_VIEW,
           internalOnly: true,
         },
-      ],
-    },
-    {
-      titleKey: 'nav2.sectionWorkspace',
-      items: [
-        { to: '/profile', labelKey: 'nav.profile', icon: 'user' },
-        { labelKey: 'nav2.tasks', icon: 'check', soon: true },
-        { labelKey: 'nav2.earnings', icon: 'dashboard', soon: true },
-        { to: '/settings', labelKey: 'nav.settings', icon: 'settings' },
       ],
     },
   ]
@@ -174,7 +182,15 @@ const sections = computed<NavSection[]>(() => {
     </nav>
 
     <div class="sidebar-foot">
-      <p class="tertiary sidebar-version">{{ t('app.tagline') }}</p>
+      <RouterLink
+        to="/settings"
+        class="nav-item"
+        active-class="is-active"
+        @click="ui.closeSidebar()"
+      >
+        <AppIcon name="settings" :size="17" />
+        <span class="nav-label">{{ t('nav.settings') }}</span>
+      </RouterLink>
     </div>
   </aside>
 </template>
@@ -289,13 +305,9 @@ a.nav-item:hover {
 }
 
 .sidebar-foot {
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
-}
-
-.sidebar-version {
-  font-size: var(--text-xs);
 }
 
 @media (max-width: 900px) {

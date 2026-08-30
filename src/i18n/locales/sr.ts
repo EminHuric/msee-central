@@ -491,6 +491,43 @@ export default {
     hint: 'Ukucaj ime, poziciju ili stranicu.',
   },
 
+  modules: {
+    workspace: 'Moj prostor',
+    clients: 'Klijenti',
+    leads: 'Potencijalni klijenti',
+    projects: 'Projekti',
+    sales: 'Prodaja',
+    services: 'Usluge',
+    affiliateProgram: 'Affiliate program',
+    contracts: 'Ugovori',
+    finance: 'Finansije',
+    employees: 'Zaposleni',
+    goals: 'Ciljevi i KPI',
+    performance: 'Učinak',
+    calendar: 'Kalendar',
+    chat: 'Poruke',
+    analytics: 'Analitika',
+
+    groupMain: 'Pregled',
+    groupBusiness: 'Poslovanje',
+    groupTeam: 'Tim',
+    groupTools: 'Alati',
+    groupSystem: 'Sistem',
+  },
+
+  workspace: {
+    title: 'Moj prostor',
+    subtitle: 'Sve što je tvoje.',
+    profileCard: 'Tvoj profil',
+    tasksCard: 'Tvoji zadaci',
+    earningsCard: 'Tvoja zarada',
+    notificationsCard: 'Obaveštenja',
+    tasksSoon: 'Zadaci koji su ti dodeljeni pojaviće se ovde.',
+    earningsSoon: 'Tvoja plata, bonusi i nagrade pojaviće se ovde.',
+    notificationsSoon: 'Poruke i podsetnici za tebe pojaviće se ovde.',
+    openProfile: 'Otvori profil',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',

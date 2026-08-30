@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'nav.dashboard' },
       },
       {
+        path: 'workspace',
+        name: 'workspace',
+        component: () => import('@/views/MyWorkspaceView.vue'),
+        meta: { titleKey: 'modules.workspace' },
+      },
+      {
         path: 'employees',
         name: 'employees',
         component: () => import('@/views/EmployeesView.vue'),

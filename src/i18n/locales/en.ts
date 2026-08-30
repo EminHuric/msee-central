@@ -492,6 +492,43 @@ export default {
     hint: 'Type a name, a position or a page.',
   },
 
+  modules: {
+    workspace: 'My Workspace',
+    clients: 'Clients',
+    leads: 'Leads',
+    projects: 'Projects',
+    sales: 'Sales',
+    services: 'Services',
+    affiliateProgram: 'Affiliate Program',
+    contracts: 'Contracts',
+    finance: 'Finance',
+    employees: 'Employees',
+    goals: 'Goals & KPIs',
+    performance: 'Performance',
+    calendar: 'Calendar',
+    chat: 'Chat',
+    analytics: 'Analytics',
+
+    groupMain: 'Overview',
+    groupBusiness: 'Business',
+    groupTeam: 'Team',
+    groupTools: 'Tools',
+    groupSystem: 'System',
+  },
+
+  workspace: {
+    title: 'My Workspace',
+    subtitle: 'Everything that is yours.',
+    profileCard: 'Your profile',
+    tasksCard: 'Your tasks',
+    earningsCard: 'Your earnings',
+    notificationsCard: 'Notifications',
+    tasksSoon: 'Tasks assigned to you will appear here.',
+    earningsSoon: 'Your salary, bonuses and rewards will appear here.',
+    notificationsSoon: 'Messages and reminders for you will appear here.',
+    openProfile: 'Open profile',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',

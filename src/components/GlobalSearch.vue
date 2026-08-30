@@ -49,6 +49,7 @@ interface PageEntry {
 
 const PAGES: PageEntry[] = [
   { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
+  { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
   {
     to: '/employees',
     labelKey: 'nav.employees',
