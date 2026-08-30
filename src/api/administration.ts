@@ -30,6 +30,30 @@ export class SelfActionError extends Error {
 }
 
 /**
+ * Raised when an action targets the founder's account.
+ *
+ * The rules refuse it independently. This exists so the refusal arrives as an
+ * explanation rather than a bare permission error.
+ */
+export class FounderProtectedError extends Error {
+  constructor() {
+    super('The founder account cannot be modified by anybody.')
+    this.name = 'FounderProtectedError'
+  }
+}
+
+/**
+ * Raised when only the founder may do this — appointing or removing a
+ * co-owner.
+ */
+export class FounderOnlyError extends Error {
+  constructor() {
+    super('Only the founder may appoint or remove a co-owner.')
+    this.name = 'FounderOnlyError'
+  }
+}
+
+/**
  * Raised when the CEO tries to remove their own CEO role.
  *
  * The rules refuse it too. Stepping down is done by appointing a second CEO,
@@ -124,8 +148,10 @@ export async function setAccountStatus(
   label: string,
   status: AccountStatus,
   actorUid: string,
+  targetIsFounder = false,
 ): Promise<void> {
   if (uid === actorUid) throw new SelfActionError()
+  if (targetIsFounder) throw new FounderProtectedError()
 
   const db = getDb()
   const now = new Date().toISOString()
@@ -170,15 +196,22 @@ export async function assignRoles(
   roleIds: string[],
   allRoles: Role[],
   actorUid: string,
-  actorIsCeo = false,
+  actor: { isOwner: boolean; isFounder: boolean },
+  targetIsFounder = false,
 ): Promise<void> {
   const editingSelf = uid === actorUid
 
-  // A manager may never touch their own roles; the CEO may.
-  if (editingSelf && !actorIsCeo) throw new SelfActionError()
+  // A manager may never touch their own roles; an owner may.
+  if (editingSelf && !actor.isOwner) throw new SelfActionError()
+
+  // The founder's account is nobody's to change but their own.
+  if (!editingSelf && targetIsFounder) throw new FounderProtectedError()
 
   const chosen = allRoles.filter((role) => roleIds.includes(role.id))
   const grantsAll = chosen.some((role) => role.grantsAll)
+
+  // Only the founder hands out or takes back owner status.
+  if (!editingSelf && grantsAll && !actor.isFounder) throw new FounderOnlyError()
 
   // Refuse the one self-edit that cannot be undone from inside the app.
   if (editingSelf && !grantsAll) throw new SelfDemotionError()
@@ -212,15 +245,19 @@ export async function assignRoles(
 }
 
 /** Read one person's effective access, for the management panel. */
-export async function fetchUserAccess(
-  uid: string,
-): Promise<{ roleIds: string[]; isCeo: boolean; status: AccountStatus } | null> {
+export async function fetchUserAccess(uid: string): Promise<{
+  roleIds: string[]
+  isCeo: boolean
+  isFounder: boolean
+  status: AccountStatus
+} | null> {
   const snap = await getDoc(doc(getDb(), 'userPermissions', uid))
   if (!snap.exists()) return null
   const data = snap.data()
   return {
     roleIds: (data.roleIds ?? []) as string[],
     isCeo: data.isCeo === true,
+    isFounder: data.isFounder === true,
     status: data.status as AccountStatus,
   }
 }

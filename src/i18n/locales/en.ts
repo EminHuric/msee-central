@@ -206,6 +206,11 @@ export default {
     createInSettings: 'Create them in Settings.',
     saved: 'Changes saved.',
     saveFailed: 'Changes could not be saved.',
+    founderProtected:
+      'This is the founder account — the owner of the company. It cannot be altered by anybody, including other owners. That is what makes it impossible to remove them from their own company.',
+    founderOnly:
+      'Only the founder may appoint or remove a co-owner. Co-owners have full authority over everything else, but cannot widen the circle of owners themselves.',
+    founderBadge: 'Founder',
     selfDemotion:
       'You cannot remove your own CEO role. Appoint a second CEO first, and they can then change yours — that way the company can never be left with nobody able to administer it.',
     selfCeoNotice:

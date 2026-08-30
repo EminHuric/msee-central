@@ -66,8 +66,9 @@ const submitted = ref(false)
 /** Shown once after success, then gone for good. */
 const credentials = ref<{ name: string; email: string; password: string } | null>(null)
 
+/** Owner roles are the founder's to hand out, and nobody else's. */
 const assignableRoles = computed(() =>
-  props.roles.filter((role) => role.status === 'active' && (!role.grantsAll || auth.isCeo)),
+  props.roles.filter((role) => role.status === 'active' && (!role.grantsAll || auth.isFounder)),
 )
 
 const availablePositions = computed(() => {

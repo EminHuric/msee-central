@@ -77,6 +77,39 @@ service cloud.firestore {
     }
 
     /*
+     * The FOUNDER — the person who owns the company.
+     *
+     * One account, marked once by tools/setup-ceo.mjs and never grantable from
+     * inside the application: every rule below refuses to write the flag, so
+     * it cannot be forged or handed around.
+     *
+     * It buys two things nothing else can:
+     *   - the founder's account cannot be altered by anybody, owner or not;
+     *   - only the founder may appoint or remove a co-owner.
+     *
+     * `.get('isFounder', false)` rather than a plain field read, so documents
+     * written before this flag existed evaluate to false instead of erroring.
+     */
+    function isFounder() {
+      return isActive() && access().get('isFounder', false) == true;
+    }
+
+    /** Is the document being written the founder's own? */
+    function targetIsFounder() {
+      return resource != null && resource.data.get('isFounder', false) == true;
+    }
+
+    /**
+     * Same question asked about a person rather than a document, for rules
+     * outside the userPermissions collection.
+     */
+    function personIsFounder(uid) {
+      return exists(/databases/$(database)/documents/userPermissions/$(uid))
+        && get(/databases/$(database)/documents/userPermissions/$(uid))
+             .data.get('isFounder', false) == true;
+    }
+
+    /*
      * The CEO role carries grantsAll, so it answers true for permissions that
      * do not exist yet. Future modules are covered without touching this file.
      */
@@ -92,48 +125,68 @@ service cloud.firestore {
     /* ------------------------------------------------------------------ *
      * userPermissions — the crown jewel
      *
-     * Whoever writes here can grant themselves anything, so:
-     *   - a manager may never write their OWN document;
-     *   - only an existing owner may mint another owner;
-     *   - no owner may strip their own owner status.
+     * Three tiers of authority, and each is protected from the one below it:
      *
-     * The first CEO document is created by tools/setup-ceo.mjs through the
-     * Admin SDK, which bypasses these rules. That is deliberate: it means
-     * there is no bootstrap hole here for anyone else to climb through.
+     *   founder   the company owner. Untouchable by anyone. Only they may
+     *             appoint or remove a co-owner.
+     *   owner     CEO or a co-owner. Full authority over everybody except the
+     *             founder, and cannot create another owner.
+     *   manager   holds roles.assign. May configure ordinary employees, and
+     *             may never write their OWN document — that is what stops an
+     *             employee promoting themselves.
+     *
+     * The founder document is created by tools/setup-ceo.mjs through the Admin
+     * SDK, which bypasses these rules. That is deliberate: there is no
+     * bootstrap path here for anyone to climb through, and equally no recovery
+     * path if the founder account is lost. The service account key is the only
+     * way back, which is why it matters as much as the password.
      * ------------------------------------------------------------------ */
 
     match /userPermissions/{uid} {
       allow read: if isSelf(uid) || can('roles.assign');
 
-      allow create, update: if request.resource.data.uid == uid
+      allow create: if request.resource.data.uid == uid
+        && can('roles.assign')
+        && !isSelf(uid)
+        /* The founder mark is never granted from inside the application. */
+        && request.resource.data.get('isFounder', false) == false
+        /* Only the founder may appoint a co-owner. */
+        && (request.resource.data.isCeo == false || isFounder());
+
+      allow update: if request.resource.data.uid == uid
         && (
           /*
-           * Somebody else's access document. The !isSelf clause is what stops
-           * a manager holding roles.assign from promoting themselves, and it
-           * is the single most important condition in this file.
+           * Someone else's document.
+           *
+           * Three separate refusals here, and each closes a different door:
+           * a manager cannot touch their own; nobody at all can touch the
+           * founder's; and only the founder can hand out owner status.
            */
           (
             can('roles.assign')
             && !isSelf(uid)
-            && (request.resource.data.isCeo == false || isOwner())
+            && !targetIsFounder()
+            && request.resource.data.get('isFounder', false) == false
+            && (request.resource.data.isCeo == false || isFounder())
           )
           /*
-           * An owner editing their own document. Deliberately allowed: an
-           * owner already holds every permission, so there is nothing here to
-           * escalate to. Scoped to isOwner() precisely so the branch above
-           * keeps protecting everyone who is not already at the top.
+           * An owner editing their own document. Allowed because an owner
+           * already holds every permission — there is nothing here to escalate
+           * to — and scoped to isOwner() so the branch above keeps protecting
+           * everyone below.
            *
-           * Two conditions stop an owner locking themselves out: they cannot
-           * drop their own owner flag and cannot set themselves to anything but
-           * active. Standing down is therefore always done by the OTHER owner,
-           * which is what makes it a two-person decision without needing an
-           * approval workflow to enforce it.
+           * The three conditions stop an owner locking themselves out: they
+           * cannot drop their own owner status, cannot set themselves to
+           * anything but active, and cannot change their founder mark in
+           * either direction.
            */
           || (
             isOwner()
             && isSelf(uid)
             && request.resource.data.isCeo == true
             && request.resource.data.status == 'active'
+            && request.resource.data.get('isFounder', false)
+               == resource.data.get('isFounder', false)
           )
         );
 
@@ -199,15 +252,29 @@ service cloud.firestore {
             can('employees.edit_professional')
             && (
               request.resource.data.status == resource.data.status
-              || can('employees.manage_status')
+              || (can('employees.manage_status') && (isSelf(uid) || !personIsFounder(uid)))
             )
             && (
               request.resource.data.roleIds == resource.data.roleIds
-              || can('roles.assign')
+              || (can('roles.assign') && (isSelf(uid) || !personIsFounder(uid)))
             )
           )
-          || (can('employees.manage_status') && changedOnly(['status', 'updatedAt']))
-          || (can('roles.assign') && changedOnly(['roleIds', 'updatedAt']))
+          /*
+           * Status and roles on somebody else's profile. Both refuse the
+           * founder: their account is not suspendable or reassignable by
+           * anyone, and letting the mirrored copy drift would only produce a
+           * profile that looks suspended while access stays live.
+           */
+          || (
+            can('employees.manage_status')
+            && changedOnly(['status', 'updatedAt'])
+            && (isSelf(uid) || !personIsFounder(uid))
+          )
+          || (
+            can('roles.assign')
+            && changedOnly(['roleIds', 'updatedAt'])
+            && (isSelf(uid) || !personIsFounder(uid))
+          )
         );
 
       /* Historical employee records are preserved, never deleted. */

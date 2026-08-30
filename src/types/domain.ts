@@ -177,7 +177,22 @@ export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number]
 export interface UserPermissions {
   uid: string
   status: AccountStatus
+  /** Owner: full authority over everything. CEO and any co-owner they appoint. */
   isCeo: boolean
+  /**
+   * The founder — the person who owns the company.
+   *
+   * Exactly one account carries this, set once by tools/setup-ceo.mjs and
+   * never grantable from inside the application. It means two things:
+   *
+   *   - nobody, not even another owner, may alter this account;
+   *   - only this account may appoint or remove co-owners.
+   *
+   * The cost is stated plainly: if this account is lost there is no recovery
+   * from inside the app. tools/serviceAccount.json is the only way back, which
+   * is why that file matters as much as the password.
+   */
+  isFounder: boolean
   roleIds: string[]
   /** Union of the permissions of every assigned role. */
   permissions: Permission[]

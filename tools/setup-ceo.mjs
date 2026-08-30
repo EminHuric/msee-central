@@ -388,6 +388,9 @@ await db
       uid,
       status: 'active',
       isCeo: true,
+      // The founder mark. Set here and nowhere else: the security rules refuse
+      // to grant it, so it cannot be fabricated from inside the application.
+      isFounder: true,
       roleIds: ['ceo'],
       permissions: [...ALL_PERMISSIONS],
       updatedAt: now,
@@ -396,7 +399,7 @@ await db
     { merge: true },
   )
 
-console.log('  + access granted          isCeo = true')
+console.log('  + access granted          owner + founder')
 
 /* ------------------------------------------------------------------ *
  * 5. Employee profile and its privacy tiers

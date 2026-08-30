@@ -5,10 +5,17 @@
  * browser would. It proves the claims the architecture rests on, rather than
  * asking anyone to take them on trust:
  *
- *   - an unapproved account can file its own request, and nothing else;
- *   - it cannot approve itself;
- *   - it cannot write its own permissions and promote itself to CEO;
- *   - it cannot read employees, notes, the audit log, or anyone else's request.
+ * Phase one, as a newly registered applicant:
+ *   - can file its own request, and nothing else;
+ *   - cannot approve itself;
+ *   - cannot write its own permissions and promote itself;
+ *   - cannot read employees, notes, the audit log, or anyone else's request.
+ *
+ * Phase two, as a genuine CO-OWNER holding every permission:
+ *   - cannot alter the founder's access in any way;
+ *   - cannot suspend the founder;
+ *   - cannot make itself the founder;
+ *   - cannot appoint another owner, which only the founder may do.
  *
  * A throwaway account is created for the test and deleted afterwards, along
  * with every document it wrote. Nothing is left behind.
@@ -124,6 +131,7 @@ const stamp = Date.now()
 const testEmail = `rules-test-${stamp}@msee-central-test.com`
 const testPassword = `rules-test-password-${stamp}`
 let testUid = null
+let ownerUid = null
 
 console.log('\n  Security rule verification')
 console.log(`  project: ${serviceAccount.project_id}`)
@@ -237,19 +245,122 @@ try {
   await mustDeny('applicant CANNOT edit company settings', () =>
     updateDoc(doc(db, 'companySettings', 'general'), { registrationOpen: false }),
   )
+
+  /* ------------------------------------------------------------------ *
+   * Phase two — a real co-owner, and what they still cannot do
+   *
+   * The account below is given owner status directly through the Admin SDK,
+   * bypassing the rules, so this is not a weakened stand-in: it holds every
+   * permission the system has. What it cannot do, it cannot do because of the
+   * founder protection alone.
+   * ------------------------------------------------------------------ */
+
+  console.log()
+  console.log('  now acting as a genuine co-owner, holding every permission')
+  console.log()
+
+  await signOut(clientAuth).catch(() => {})
+
+  const ownerEmail = `rules-owner-${stamp}@msee-central-test.com`
+  const ownerPassword = `rules-owner-password-${stamp}`
+  const ownerCredential = await createUserWithEmailAndPassword(
+    clientAuth,
+    ownerEmail,
+    ownerPassword,
+  )
+  ownerUid = ownerCredential.user.uid
+
+  const permissionDocs = await adminDb.collection('permissions').get()
+  const everyPermission = permissionDocs.docs.map((d) => d.id)
+
+  await adminDb.collection('userPermissions').doc(ownerUid).set({
+    uid: ownerUid,
+    status: 'active',
+    isCeo: true,
+    isFounder: false,
+    roleIds: ['cto'],
+    permissions: everyPermission,
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system:verify-rules',
+  })
+
+  await signInWithEmailAndPassword(clientAuth, ownerEmail, ownerPassword)
+
+  const founder = await adminDb
+    .collection('userPermissions')
+    .where('isFounder', '==', true)
+    .limit(1)
+    .get()
+
+  if (founder.empty) {
+    console.log('  SKIP  no founder account found — run npm run setup:ceo first')
+  } else {
+    const founderUid = founder.docs[0].id
+    const founderData = founder.docs[0].data()
+
+    await mustAllow('co-owner CAN read the employee directory', () =>
+      getDoc(doc(db, 'employees', founderUid)),
+    )
+
+    await mustDeny('co-owner CANNOT suspend the founder', () =>
+      updateDoc(doc(db, 'userPermissions', founderUid), { status: 'suspended' }),
+    )
+
+    await mustDeny("co-owner CANNOT strip the founder's owner status", () =>
+      updateDoc(doc(db, 'userPermissions', founderUid), { isCeo: false }),
+    )
+
+    await mustDeny("co-owner CANNOT rewrite the founder's roles", () =>
+      setDoc(doc(db, 'userPermissions', founderUid), {
+        ...founderData,
+        roleIds: ['employee'],
+        permissions: [],
+      }),
+    )
+
+    await mustDeny("co-owner CANNOT suspend the founder's profile", () =>
+      updateDoc(doc(db, 'employees', founderUid), {
+        status: 'suspended',
+        updatedAt: new Date().toISOString(),
+      }),
+    )
+
+    await mustDeny('co-owner CANNOT make itself the founder', () =>
+      updateDoc(doc(db, 'userPermissions', ownerUid), { isFounder: true }),
+    )
+
+    await mustDeny('co-owner CANNOT appoint another owner', () =>
+      setDoc(doc(db, 'userPermissions', `would-be-owner-${stamp}`), {
+        uid: `would-be-owner-${stamp}`,
+        status: 'active',
+        isCeo: true,
+        isFounder: false,
+        roleIds: ['cto'],
+        permissions: everyPermission,
+        updatedAt: new Date().toISOString(),
+        updatedBy: ownerUid,
+      }),
+    )
+  }
 } finally {
   /* --- clean up ----------------------------------------------------- */
 
   await signOut(clientAuth).catch(() => {})
 
-  if (testUid) {
-    await adminDb.collection('registrationRequests').doc(testUid).delete().catch(() => {})
-    await adminDb.collection('employees').doc(testUid).delete().catch(() => {})
-    await adminDb.collection('userPermissions').doc(testUid).delete().catch(() => {})
-    await adminAuth.deleteUser(testUid).catch(() => {})
-    console.log('\n  test account and its documents removed')
+  for (const uid of [testUid, ownerUid]) {
+    if (!uid) continue
+    await adminDb.collection('registrationRequests').doc(uid).delete().catch(() => {})
+    await adminDb.collection('employees').doc(uid).delete().catch(() => {})
+    await adminDb.collection('userPermissions').doc(uid).delete().catch(() => {})
+    await adminAuth.deleteUser(uid).catch(() => {})
   }
+  await adminDb.collection('userPermissions').doc(`would-be-owner-${stamp}`).delete().catch(() => {})
+
+  console.log()
+  console.log('  test accounts and their documents removed')
 }
 
-console.log(`\n  ${passed} passed, ${failed} failed\n`)
+console.log()
+console.log(`  ${passed} passed, ${failed} failed`)
+console.log()
 process.exit(failed === 0 ? 0 : 1)

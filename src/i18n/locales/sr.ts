@@ -205,6 +205,11 @@ export default {
     createInSettings: 'Napravi ih u Podešavanjima.',
     saved: 'Izmene su sačuvane.',
     saveFailed: 'Izmene nisu mogle da se sačuvaju.',
+    founderProtected:
+      'Ovo je nalog vlasnika kompanije. Niko ne može da ga menja, ni drugi suvlasnici. To je ono što čini nemogućim da ga neko skloni iz sopstvene firme.',
+    founderOnly:
+      'Samo vlasnik može da postavi ili skine suvlasnika. Suvlasnici imaju punu nadležnost nad svim ostalim, ali ne mogu sami da šire krug vlasnika.',
+    founderBadge: 'Vlasnik',
     selfDemotion:
       'Ne možeš sam sebi da skineš CEO ulogu. Prvo postavi drugog CEO-a, pa on može da menja tvoju — tako firma nikad ne može da ostane bez ikoga ko njome upravlja.',
     selfCeoNotice:

@@ -52,7 +52,13 @@ export const useAuthStore = defineStore('auth', () => {
   const uid = computed(() => firebaseUser.value?.uid ?? null)
   const email = computed(() => firebaseUser.value?.email ?? null)
   const displayName = computed(() => firebaseUser.value?.displayName ?? null)
+  /** Owner: CEO or an appointed co-owner. Full authority. */
   const isCeo = computed(() => access.value?.isCeo === true)
+  /**
+   * The founder. Untouchable by anyone, and the only account that may appoint
+   * or remove a co-owner.
+   */
+  const isFounder = computed(() => access.value?.isFounder === true)
   const status = computed<AccountStatus | null>(() => access.value?.status ?? null)
 
   const state = computed<SessionState>(() => {
@@ -213,6 +219,7 @@ export const useAuthStore = defineStore('auth', () => {
     email,
     displayName,
     isCeo,
+    isFounder,
     status,
     state,
     isSignedIn,

@@ -29,6 +29,8 @@ import {
   fetchUserAccess,
   setAccountStatus,
   updateWorkInformation,
+  FounderOnlyError,
+  FounderProtectedError,
   SelfActionError,
   SelfDemotionError,
   type WorkInformation,
@@ -71,10 +73,17 @@ const canEditWork = computed(() => auth.hasPermission(PERMISSIONS.EMPLOYEES_EDIT
  * which is what stops self-promotion.
  */
 const canAssignRoles = computed(
-  () => auth.hasPermission(PERMISSIONS.ROLES_ASSIGN) && (!isSelf.value || auth.isCeo),
+  () =>
+    auth.hasPermission(PERMISSIONS.ROLES_ASSIGN) &&
+    (!isSelf.value || auth.isCeo) &&
+    // The founder's account is nobody's to reconfigure but their own.
+    (isSelf.value || !targetIsFounder.value),
 )
 const canManageStatus = computed(
-  () => auth.hasPermission(PERMISSIONS.EMPLOYEES_MANAGE_STATUS) && !isSelf.value,
+  () =>
+    auth.hasPermission(PERMISSIONS.EMPLOYEES_MANAGE_STATUS) &&
+    !isSelf.value &&
+    !targetIsFounder.value,
 )
 
 const work = ref<WorkInformation>({
@@ -91,6 +100,9 @@ const colleagues = ref<EmployeePublic[]>([])
 const selectedRoleIds = ref<string[]>([...(props.employee.roleIds ?? [])])
 const accountStatus = ref<AccountStatus>(props.employee.status)
 
+/** Whether the person being viewed owns the company. Read from userPermissions. */
+const targetIsFounder = ref(false)
+
 const savingWork = ref(false)
 const savingRoles = ref(false)
 const statusBusy = ref(false)
@@ -104,11 +116,13 @@ const availablePositions = computed(() => {
 
 const assignableRoles = computed(() =>
   /*
-   * The CEO role is offered only to a CEO. That is how a second administrator
-   * is appointed — and appointing one is the only way anybody can ever manage
-   * the first, since nobody may suspend their own account.
+   * Owner roles (CEO, CTO) appear only for the founder. Appointing a co-owner
+   * is the founder's decision alone — an existing co-owner cannot create
+   * another, which keeps the circle from widening on its own.
    */
-  roles.value.filter((role) => role.status === 'active' && (!role.grantsAll || auth.isCeo)),
+  roles.value.filter(
+    (role) => role.status === 'active' && (!role.grantsAll || auth.isFounder),
+  ),
 )
 
 const pendingStatus = ref<AccountStatus | null>(null)
@@ -139,6 +153,7 @@ async function load(): Promise<void> {
   if (access) {
     selectedRoleIds.value = [...access.roleIds]
     accountStatus.value = access.status
+    targetIsFounder.value = access.isFounder
   }
 }
 
@@ -166,12 +181,15 @@ async function saveRoles(): Promise<void> {
       selectedRoleIds.value,
       roles.value,
       auth.uid,
-      auth.isCeo,
+      { isOwner: auth.isCeo, isFounder: auth.isFounder },
+      targetIsFounder.value,
     )
     ui.notify('ok', t('manage.saved'))
     emit('updated')
   } catch (error) {
     if (error instanceof SelfDemotionError) ui.notify('danger', t('manage.selfDemotion'))
+    else if (error instanceof FounderProtectedError) ui.notify('danger', t('manage.founderProtected'))
+    else if (error instanceof FounderOnlyError) ui.notify('danger', t('manage.founderOnly'))
     else if (error instanceof SelfActionError) ui.notify('danger', t('manage.selfNotice'))
     else ui.notify('danger', t('manage.saveFailed'))
   } finally {
@@ -187,13 +205,21 @@ async function confirmStatus(): Promise<void> {
   if (!pendingStatus.value || !auth.uid) return
   statusBusy.value = true
   try {
-    await setAccountStatus(props.employee.uid, label.value, pendingStatus.value, auth.uid)
+    await setAccountStatus(
+      props.employee.uid,
+      label.value,
+      pendingStatus.value,
+      auth.uid,
+      targetIsFounder.value,
+    )
     accountStatus.value = pendingStatus.value
     ui.notify('ok', t('manage.saved'))
     emit('updated')
     pendingStatus.value = null
   } catch (error) {
-    ui.notify('danger', error instanceof SelfActionError ? t('manage.selfNotice') : t('manage.saveFailed'))
+    if (error instanceof FounderProtectedError) ui.notify('danger', t('manage.founderProtected'))
+    else if (error instanceof SelfActionError) ui.notify('danger', t('manage.selfNotice'))
+    else ui.notify('danger', t('manage.saveFailed'))
   } finally {
     statusBusy.value = false
   }
@@ -292,7 +318,12 @@ onMounted(load)
       </div>
 
       <div class="card-body stack">
-        <div v-if="isSelf" class="alert" :class="auth.isCeo ? 'alert-info' : 'alert-warn'">
+        <div v-if="targetIsFounder && !isSelf" class="alert alert-info">
+          <AppIcon name="shield" :size="16" />
+          <span>{{ t('manage.founderProtected') }}</span>
+        </div>
+
+        <div v-else-if="isSelf" class="alert" :class="auth.isCeo ? 'alert-info' : 'alert-warn'">
           <AppIcon :name="auth.isCeo ? 'shield' : 'lock'" :size="16" />
           <span>{{ auth.isCeo ? t('manage.selfCeoNotice') : t('manage.selfNotice') }}</span>
         </div>
