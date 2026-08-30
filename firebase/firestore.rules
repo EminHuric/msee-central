@@ -1,0 +1,321 @@
+rules_version = '2';
+
+/*
+ * MsEe Central — Firestore Security Rules
+ *
+ * THIS FILE IS THE SECURITY BOUNDARY. Everything in src/ that checks a
+ * permission does so for the user's convenience: to hide a button, to skip a
+ * doomed request. None of it stops anybody. A person with a browser console
+ * talks to Firestore directly, and these rules are what answers them.
+ *
+ * Two habits keep this file trustworthy:
+ *
+ *   1. Deny by default. Firestore already refuses anything not matched below;
+ *      never add a broad `match /{document=**}` to "make it work".
+ *   2. Never trust a field the client sent. `request.resource.data` is
+ *      attacker-controlled. Compare it against `resource.data` (what is
+ *      already stored) or against the caller's own permission document.
+ *
+ * The tests in tests/rules prove the important claims. Run them after every
+ * change to this file:  npm run rules:test
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ------------------------------------------------------------------ *
+     * Identity helpers
+     * ------------------------------------------------------------------ */
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    /*
+     * userPermissions/{uid} is the single source of truth for authority.
+     * Its ABSENCE is meaningful: an account that has registered but has not
+     * been approved has no such document, and therefore no access at all.
+     */
+    function accessPath() {
+      return /databases/$(database)/documents/userPermissions/$(request.auth.uid);
+    }
+
+    function hasAccess() {
+      return signedIn() && exists(accessPath());
+    }
+
+    function access() {
+      return get(accessPath()).data;
+    }
+
+    /* Suspended, deactivated and rejected accounts fail here and read nothing. */
+    function isActive() {
+      return hasAccess() && access().status == 'active';
+    }
+
+    function isCeo() {
+      return isActive() && access().isCeo == true;
+    }
+
+    /*
+     * The CEO role carries grantsAll, so it answers true for permissions that
+     * do not exist yet. Future modules are covered without touching this file.
+     */
+    function can(permission) {
+      return isActive() && (access().isCeo == true || permission in access().permissions);
+    }
+
+    /* Only these keys differ between the stored document and the incoming one. */
+    function changedOnly(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * userPermissions — the crown jewel
+     *
+     * Whoever writes here can grant themselves anything, so:
+     *   - nobody may write their OWN document, not even the CEO;
+     *   - only the CEO may mint another CEO.
+     *
+     * The first CEO document is created by tools/setup-ceo.mjs through the
+     * Admin SDK, which bypasses these rules. That is deliberate: it means
+     * there is no bootstrap hole here for anyone else to climb through.
+     * ------------------------------------------------------------------ */
+
+    match /userPermissions/{uid} {
+      allow read: if isSelf(uid) || can('roles.assign');
+
+      allow create, update: if can('roles.assign')
+        && !isSelf(uid)
+        && request.resource.data.uid == uid
+        && (request.resource.data.isCeo == false || isCeo());
+
+      /* Access is revoked by setting status, never by deleting history. */
+      allow delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * registrationRequests
+     *
+     * Written once by the applicant, thereafter only by a reviewer. The
+     * applicant cannot approve themselves because they cannot update at all.
+     * ------------------------------------------------------------------ */
+
+    match /registrationRequests/{uid} {
+      allow read: if isSelf(uid) || can('registration_requests.view');
+
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.rejectionReason == null
+        && request.resource.data.email == request.auth.token.email;
+
+      allow update: if (can('registration_requests.approve') || can('registration_requests.reject'))
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.submittedAt == resource.data.submittedAt;
+
+      allow delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * employees/{uid} — professional identity
+     *
+     * Per the specification an employee cannot hide these from coworkers:
+     * they describe the job, not the person. What an employee may edit about
+     * themselves is limited to the presentational fields listed below —
+     * never their role, status, department or position.
+     * ------------------------------------------------------------------ */
+
+    match /employees/{uid} {
+      allow read: if isSelf(uid) || can('employees.view');
+
+      allow create: if can('registration_requests.approve')
+        && request.resource.data.uid == uid;
+
+      /*
+       * Four distinct ways this document may change, and no others.
+       *
+       * Note the second branch: holding edit_professional is NOT enough to
+       * change status or roleIds. Editing somebody's job title must never
+       * double as a way to change who they are or what they may do.
+       */
+      allow update: if request.resource.data.uid == resource.data.uid
+        && (
+          (
+            isSelf(uid)
+            && isActive()
+            && changedOnly(['photoUrl', 'bio', 'skills', 'expertise', 'updatedAt'])
+          )
+          || (
+            can('employees.edit_professional')
+            && (
+              request.resource.data.status == resource.data.status
+              || can('employees.manage_status')
+            )
+            && (
+              request.resource.data.roleIds == resource.data.roleIds
+              || can('roles.assign')
+            )
+          )
+          || (can('employees.manage_status') && changedOnly(['status', 'updatedAt']))
+          || (can('roles.assign') && changedOnly(['roleIds', 'updatedAt']))
+        );
+
+      /* Historical employee records are preserved, never deleted. */
+      allow delete: if false;
+
+      /* ---------------------------------------------------------------- *
+       * Privacy tiers.
+       *
+       * Firestore guards a document, never a field — so the three visibility
+       * levels are three documents. Moving a field between them IS the
+       * privacy setting. A mistake in one tier cannot leak the others.
+       * ---------------------------------------------------------------- */
+
+      match /visibility/everyone {
+        allow read: if isSelf(uid) || can('employees.view');
+        allow write: if isSelf(uid) || isCeo();
+      }
+
+      match /visibility/management {
+        allow read: if isSelf(uid) || can('employees.view_private_info');
+        allow write: if isSelf(uid) || isCeo();
+      }
+
+      /*
+       * The CEO is included because company administration must never be
+       * blocked by an employee's privacy choices. No other permission opens
+       * this tier.
+       */
+      match /visibility/private {
+        allow read: if isSelf(uid) || isCeo();
+        allow write: if isSelf(uid) || isCeo();
+      }
+
+      /* ---------------------------------------------------------------- *
+       * CEO notes — never readable by their subject.
+       *
+       * The !isSelf(uid) clause matters: a manager who holds
+       * employee_notes.view must still not read what is written about them.
+       * ---------------------------------------------------------------- */
+
+      match /notes/{noteId} {
+        allow read: if isCeo() || (can('employee_notes.view') && !isSelf(uid));
+
+        allow create: if can('employee_notes.create')
+          && !isSelf(uid)
+          && request.resource.data.authorUid == me()
+          && request.resource.data.employeeUid == uid;
+
+        allow update: if can('employee_notes.edit')
+          && !isSelf(uid)
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.employeeUid == resource.data.employeeUid
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        allow delete: if can('employee_notes.delete') && !isSelf(uid);
+      }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Roles, permission catalogue, departments, positions
+     *
+     * Readable by any active employee: the directory has to render a role
+     * name next to a person. Only the permission list inside a role carries
+     * weight, and changing it is gated below.
+     * ------------------------------------------------------------------ */
+
+    match /roles/{roleId} {
+      allow read: if isActive();
+
+      allow create: if can('roles.create')
+        && (request.resource.data.grantsAll == false || isCeo())
+        && request.resource.data.isSystem == false;
+
+      allow update: if can('roles.edit')
+        && request.resource.data.key == resource.data.key
+        && request.resource.data.isSystem == resource.data.isSystem
+        && (request.resource.data.grantsAll == resource.data.grantsAll || isCeo())
+        && (
+          resource.data.isSystem == false
+          || changedOnly(['name', 'nameSr', 'description', 'descriptionSr', 'updatedAt'])
+        );
+
+      /* Roles are deactivated, never deleted — deleting destroys history. */
+      allow delete: if false;
+    }
+
+    match /permissions/{key} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
+    match /departments/{id} {
+      allow read: if isActive();
+      allow write: if can('departments.manage');
+    }
+
+    match /positions/{id} {
+      allow read: if isActive();
+      allow write: if can('positions.manage');
+    }
+
+    /* ------------------------------------------------------------------ *
+     * auditLogs — append only
+     *
+     * Entries may be created by any active account but never altered or
+     * removed by anyone, and the actor cannot be forged.
+     *
+     * KNOWN LIMIT: because the client writes these, the rules can reject a
+     * forged or tampered entry but cannot force an entry to be written at
+     * all. Someone working directly against the API could perform an action
+     * and skip logging it. Closing that gap requires Cloud Functions (Blaze
+     * plan), which is the intended upgrade path. Everything done through the
+     * application itself is logged.
+     * ------------------------------------------------------------------ */
+
+    match /auditLogs/{entryId} {
+      allow read: if can('audit_log.view');
+
+      allow create: if isActive()
+        && request.resource.data.actorUid == me()
+        && request.resource.data.actorEmail == request.auth.token.email;
+
+      allow update, delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Company settings
+     * ------------------------------------------------------------------ */
+
+    match /companySettings/{key} {
+      allow read: if isActive();
+      allow write: if can('company_settings.edit');
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Prepared for StayBrain. Unused in version 1 and locked to the CEO, so
+     * an unfinished feature cannot become an opening.
+     * ------------------------------------------------------------------ */
+
+    match /externalReferences/{id} {
+      allow read: if isCeo();
+      allow write: if isCeo();
+    }
+
+    /*
+     * Everything else is denied. Firestore refuses anything not matched
+     * above — do not add a catch-all rule here.
+     */
+  }
+}

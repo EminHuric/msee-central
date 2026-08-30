@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(npm install *)",
+      "Bash(rm -f src/main.js src/components/HelloWorld.vue src/assets/vue.svg src/assets/vite.svg src/assets/hero.png src/style.css public/icons.svg)",
+      "Bash(mkdir -p src/i18n/locales src/router src/stores src/layouts src/components/ui src/views/auth src/views/admin src/styles src/lib src/api src/types firebase)",
+      "Bash(npm run *)",
+      "Bash(node -p \"require\\('./node_modules/typescript/package.json'\\).version + ' | vue-tsc ' + require\\('./node_modules/vue-tsc/package.json'\\).version\")",
+      "Bash(node -p \"JSON.stringify\\(require\\('./node_modules/typescript/package.json'\\).exports, null, 1\\)\")",
+      "Bash(node -p \"'typescript ' + require\\('./node_modules/typescript/package.json'\\).version\")",
+      "PowerShell(Stop-Process -Id 4976,8752,19144,2224 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"cleared\")",
+      "Bash(curl -s \"http://localhost:5173/src/main.ts\")",
+      "Bash(curl -s \"http://localhost:5173/src/router/guards.ts\")",
+      "Bash(curl -s -w \"\\\\n[status %{http_code}]\\\\n\" \"http://localhost:5173/src/router/guards.ts\")",
+      "Bash(node --input-type=module -e ' *)"
+    ]
+  }
+}

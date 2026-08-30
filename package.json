@@ -1,0 +1,35 @@
+{
+  "name": "msee-central",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MsEe Central — internal business management system for MsEe.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --build && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --build",
+    "setup:ceo": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/setup-ceo.mjs",
+    "rules:deploy": "firebase deploy --only firestore:rules",
+    "rules:test": "vitest run --dir tests/rules",
+    "emulator": "firebase emulators:start --only auth,firestore",
+    "rules:verify": "node --disable-warning=ExperimentalWarning tools/verify-rules.mjs",
+    "i18n:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/check-i18n.mjs"
+  },
+  "dependencies": {
+    "firebase": "^12.18.0",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.41",
+    "vue-i18n": "^11.1.14",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "firebase-admin": "^14.3.0",
+    "firebase-tools": "^15.28.2",
+    "typescript": "~5.9",
+    "vite": "^8.2.2",
+    "vue-tsc": "^3.2.1"
+  }
+}

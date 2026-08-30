@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 216" fill="none">
+  <!-- Simplified MsEe mark. The coil ticks are dropped because they turn to
+       mush below 32px; the silhouette is what has to read at tab size. -->
+  <g stroke="#ff8a1e" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="M 108 16 H 198 A 10 10 0 0 1 208 26 V 116 A 100 100 0 1 1 108 16 Z"
+      stroke-width="17"
+    />
+    <path
+      d="M 43.3 78.6
+         A 73 73 0 0 1 108 44.6
+         A 70 70 0 0 1 167 81.9
+         A 66 66 0 0 1 164.1 148.4
+         A 63 63 0 0 1 108 177.5
+         A 60 60 0 0 1 57.6 145.1
+         A 56 56 0 0 1 60.5 88.5
+         A 53 53 0 0 1 108 64.4
+         A 50 50 0 0 1 149.8 91.8"
+      stroke-width="16"
+    />
+  </g>
+</svg>

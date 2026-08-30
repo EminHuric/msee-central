@@ -1,0 +1,181 @@
+/*
+ * MsEe Central — design tokens
+ *
+ * Every colour, space and radius in the application comes from this file.
+ * Components must never hardcode a hex value; if a shade is missing, add it
+ * here so both themes stay in sync.
+ *
+ * The palette is derived from the MsEe mark: neon orange on near-black.
+ */
+
+:root {
+  /* ---- Brand ------------------------------------------------------- */
+  --brand-50: #fff4e8;
+  --brand-100: #ffe3c6;
+  --brand-200: #ffc98f;
+  --brand-300: #ffad57;
+  --brand-400: #ff9733;
+  --brand-500: #ff8a1e; /* primary — the logo orange */
+  --brand-600: #ed7307;
+  --brand-700: #c25a05;
+  --brand-800: #94450a;
+  --brand-900: #6d340c;
+  --brand-glow: rgb(255 138 30 / 28%);
+
+  /* ---- Status ------------------------------------------------------ */
+  --ok-500: #22c07a;
+  --ok-bg: rgb(34 192 122 / 12%);
+  --ok-border: rgb(34 192 122 / 30%);
+
+  --warn-500: #f5b93b;
+  --warn-bg: rgb(245 185 59 / 12%);
+  --warn-border: rgb(245 185 59 / 32%);
+
+  --danger-500: #f2545b;
+  --danger-bg: rgb(242 84 91 / 12%);
+  --danger-border: rgb(242 84 91 / 32%);
+
+  --info-500: #4d93f0;
+  --info-bg: rgb(77 147 240 / 12%);
+  --info-border: rgb(77 147 240 / 30%);
+
+  --neutral-500: #8b8b94;
+  --neutral-bg: rgb(139 139 148 / 12%);
+  --neutral-border: rgb(139 139 148 / 28%);
+
+  /* ---- Typography -------------------------------------------------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* ---- Space ------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ---- Radius ------------------------------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 13px;
+  --radius-xl: 18px;
+  --radius-full: 999px;
+
+  /* ---- Layout ------------------------------------------------------ */
+  --sidebar-width: 256px;
+  --topbar-height: 60px;
+  --content-max: 1440px;
+
+  /* ---- Motion ------------------------------------------------------ */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* ---- Dark theme (default) ------------------------------------------ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-base: #08080a;
+  --bg-sunken: #050506;
+  --bg-surface: #101013;
+  --bg-surface-2: #17171b;
+  --bg-surface-3: #1f1f24;
+  --bg-hover: rgb(255 255 255 / 4%);
+  --bg-active: rgb(255 255 255 / 7%);
+  --bg-inset: rgb(0 0 0 / 24%);
+
+  --border-subtle: rgb(255 255 255 / 6%);
+  --border-default: rgb(255 255 255 / 10%);
+  --border-strong: rgb(255 255 255 / 17%);
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #a9a9b3;
+  --text-tertiary: #74747f;
+  --text-inverse: #08080a;
+  --text-brand: var(--brand-400);
+
+  --accent: var(--brand-500);
+  --accent-hover: var(--brand-400);
+  --accent-text: #1a0d00;
+  --accent-soft-bg: rgb(255 138 30 / 12%);
+  --accent-soft-border: rgb(255 138 30 / 26%);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 4px 14px rgb(0 0 0 / 45%);
+  --shadow-lg: 0 16px 42px rgb(0 0 0 / 55%);
+  --shadow-focus: 0 0 0 3px rgb(255 138 30 / 32%);
+
+  --scrim: rgb(0 0 0 / 66%);
+}
+
+/* ---- Light theme ---------------------------------------------------- */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-base: #f7f7f8;
+  --bg-sunken: #efeff1;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #fafafb;
+  --bg-surface-3: #f2f2f4;
+  --bg-hover: rgb(0 0 0 / 3%);
+  --bg-active: rgb(0 0 0 / 6%);
+  --bg-inset: rgb(0 0 0 / 3%);
+
+  --border-subtle: rgb(0 0 0 / 6%);
+  --border-default: rgb(0 0 0 / 11%);
+  --border-strong: rgb(0 0 0 / 18%);
+
+  --text-primary: #17171b;
+  --text-secondary: #5c5c66;
+  --text-tertiary: #8a8a94;
+  --text-inverse: #ffffff;
+  --text-brand: var(--brand-700);
+
+  --accent: var(--brand-600);
+  --accent-hover: var(--brand-700);
+  --accent-text: #ffffff;
+  --accent-soft-bg: rgb(255 138 30 / 12%);
+  --accent-soft-border: rgb(255 138 30 / 34%);
+
+  --ok-500: #12945c;
+  --warn-500: #b07a06;
+  --danger-500: #d13840;
+  --info-500: #2f6fd0;
+  --neutral-500: #6b6b75;
+
+  --shadow-sm: 0 1px 2px rgb(16 16 24 / 6%);
+  --shadow-md: 0 4px 14px rgb(16 16 24 / 9%);
+  --shadow-lg: 0 16px 42px rgb(16 16 24 / 14%);
+  --shadow-focus: 0 0 0 3px rgb(255 138 30 / 30%);
+
+  --scrim: rgb(16 16 24 / 42%);
+}

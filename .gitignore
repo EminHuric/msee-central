@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment. .env holds the public Firebase web config; still not committed
+# so each machine points at its own project.
+.env
+.env.*
+!.env.example
+
+# SECRET. Firebase Admin service account key used by tools/setup scripts.
+# This one grants full access to the project and bypasses all security rules.
+# It must never be committed.
+tools/serviceAccount.json
+**/serviceAccount*.json
+
+# Firebase emulator state
+.firebase
+firebase-export-*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
