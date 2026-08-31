@@ -1,10 +1,13 @@
 /// <reference types="vite/client" />
 
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue'
-  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
-  export default component
-}
+/*
+ * No `declare module '*.vue'` here on purpose.
+ *
+ * That wildcard makes every .vue path resolve to a generic component —
+ * including paths to files that do not exist. It hid a broken import that only
+ * surfaced when the build failed. vue-tsc resolves real .vue files itself, so
+ * the declaration bought nothing and cost a whole class of caught error.
+ */
 
 interface ImportMetaEnv {
   /**

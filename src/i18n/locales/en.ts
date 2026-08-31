@@ -614,6 +614,8 @@ export default {
     requests: 'Registration requests',
     roles: 'Roles & permissions',
     organisation: 'Departments & positions',
+    business: 'Clients & projects',
+    finance: 'Money',
     notes: 'CEO notes',
     audit: 'Audit log',
     settings: 'Company settings',

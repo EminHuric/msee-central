@@ -416,6 +416,65 @@ service cloud.firestore {
     }
 
     /* ------------------------------------------------------------------ *
+     * The business side: clients, projects, services, income, expenses
+     *
+     * All of it is internal. isInternal() comes first on every rule, so an
+     * affiliate partner never reaches a client record, a project or a figure,
+     * whatever permissions their role happens to carry.
+     *
+     * Nothing here is deletable by rule. Records that money was attached to
+     * are the company's history, and a status is the way to retire one.
+     * ------------------------------------------------------------------ */
+
+    match /clients/{clientId} {
+      allow read: if isInternal() && can('clients.view');
+      allow create, update: if isInternal() && can('clients.manage');
+      allow delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow read: if isInternal() && can('projects.view');
+      allow create, update: if isInternal() && can('projects.manage');
+      allow delete: if false;
+    }
+
+    match /services/{serviceId} {
+      allow read: if isInternal() && can('projects.view');
+      allow create, update: if isInternal() && can('services.manage');
+      allow delete: if false;
+    }
+
+    /*
+     * Money is gated separately from the work.
+     *
+     * Somebody can run a client relationship without seeing what the company
+     * makes on it, which is a distinction worth keeping available even in a
+     * small team.
+     */
+    match /income/{entryId} {
+      allow read: if isInternal() && can('finance.view');
+      allow create, update: if isInternal() && can('finance.manage');
+      allow delete: if false;
+    }
+
+    match /expenses/{entryId} {
+      allow read: if isInternal() && can('finance.view');
+      allow create, update: if isInternal() && can('finance.manage');
+      allow delete: if false;
+    }
+
+    /*
+     * Exchange rates, cached from the national bank so a rate is fetched once
+     * per day rather than per record. Readable by anybody inside; written by
+     * whoever is recording money at the time.
+     */
+    match /exchangeRates/{date} {
+      allow read: if isInternal();
+      allow create: if isInternal() && can('finance.manage');
+      allow update, delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
      * auditLogs — append only
      *
      * Entries may be created by any active account but never altered or

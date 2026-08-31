@@ -613,6 +613,8 @@ export default {
     requests: 'Zahtevi za registraciju',
     roles: 'Uloge i dozvole',
     organisation: 'Sektori i pozicije',
+    business: 'Klijenti i projekti',
+    finance: 'Novac',
     notes: 'CEO beleške',
     audit: 'Revizioni dnevnik',
     settings: 'Podešavanja kompanije',

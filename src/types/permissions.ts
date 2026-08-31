@@ -51,6 +51,22 @@ export const PERMISSIONS = {
   NOTES_EDIT: 'employee_notes.edit',
   NOTES_DELETE: 'employee_notes.delete',
 
+  // --- Clients & projects ----------------------------------------------
+  CLIENTS_VIEW: 'clients.view',
+  CLIENTS_MANAGE: 'clients.manage',
+  PROJECTS_VIEW: 'projects.view',
+  PROJECTS_MANAGE: 'projects.manage',
+  SERVICES_MANAGE: 'services.manage',
+
+  // --- Money -----------------------------------------------------------
+  /**
+   * Seeing what the company earns and spends. Separate from managing clients
+   * on purpose: an account manager runs the relationship without needing to
+   * know the margin on it.
+   */
+  FINANCE_VIEW: 'finance.view',
+  FINANCE_MANAGE: 'finance.manage',
+
   // --- Audit -----------------------------------------------------------
   AUDIT_VIEW: 'audit_log.view',
   AUDIT_EXPORT: 'audit_log.export',
@@ -104,6 +120,20 @@ export const PERMISSION_GROUPS = [
     permissions: [PERMISSIONS.DEPARTMENTS_MANAGE, PERMISSIONS.POSITIONS_MANAGE],
   },
   {
+    key: 'business',
+    permissions: [
+      PERMISSIONS.CLIENTS_VIEW,
+      PERMISSIONS.CLIENTS_MANAGE,
+      PERMISSIONS.PROJECTS_VIEW,
+      PERMISSIONS.PROJECTS_MANAGE,
+      PERMISSIONS.SERVICES_MANAGE,
+    ],
+  },
+  {
+    key: 'finance',
+    permissions: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE],
+  },
+  {
     key: 'notes',
     permissions: [
       PERMISSIONS.NOTES_VIEW,
@@ -127,6 +157,8 @@ export const PERMISSION_GROUPS = [
  * warning in the role editor so nobody hands them out by accident.
  */
 export const SENSITIVE_PERMISSIONS: readonly Permission[] = [
+  PERMISSIONS.FINANCE_VIEW,
+  PERMISSIONS.FINANCE_MANAGE,
   PERMISSIONS.ROLES_ASSIGN,
   PERMISSIONS.ROLES_CREATE,
   PERMISSIONS.ROLES_EDIT,
