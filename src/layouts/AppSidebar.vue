@@ -55,19 +55,29 @@ const sections = computed<NavSection[]>(() => {
       items: [
         { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
         { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
+        { labelKey: 'modules.announcements', icon: 'chat', soon: true },
       ],
     },
     {
-      titleKey: 'modules.groupBusiness',
+      titleKey: 'modules.groupClients',
       items: [
         { labelKey: 'modules.clients', icon: 'building', soon: true, internalOnly: true },
         { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
         { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
-        { labelKey: 'modules.sales', icon: 'trending', soon: true, internalOnly: true },
         { labelKey: 'modules.services', icon: 'spark', soon: true, internalOnly: true },
-        { labelKey: 'modules.affiliateProgram', icon: 'users', soon: true, internalOnly: true },
         { labelKey: 'modules.contracts', icon: 'contract', soon: true, internalOnly: true },
-        { labelKey: 'modules.finance', icon: 'wallet', soon: true, internalOnly: true },
+        { labelKey: 'modules.clientAccess', icon: 'lock', soon: true, internalOnly: true },
+        { labelKey: 'modules.support', icon: 'inbox', soon: true, internalOnly: true },
+      ],
+    },
+    {
+      titleKey: 'modules.groupMoney',
+      items: [
+        { labelKey: 'modules.income', icon: 'trending', soon: true, internalOnly: true },
+        { labelKey: 'modules.expenses', icon: 'wallet', soon: true, internalOnly: true },
+        { labelKey: 'modules.subscriptions', icon: 'history', soon: true, internalOnly: true },
+        { labelKey: 'modules.commissions', icon: 'users', soon: true, internalOnly: true },
+        { labelKey: 'modules.offers', icon: 'contract', soon: true, internalOnly: true },
       ],
     },
     {
@@ -80,6 +90,8 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.EMPLOYEES_VIEW,
           internalOnly: true,
         },
+        { labelKey: 'modules.timeTracking', icon: 'clock', soon: true, internalOnly: true },
+        { labelKey: 'modules.timeOff', icon: 'calendar', soon: true, internalOnly: true },
         { labelKey: 'modules.goals', icon: 'target', soon: true, internalOnly: true },
         { labelKey: 'modules.performance', icon: 'chart', soon: true, internalOnly: true },
       ],
@@ -88,7 +100,6 @@ const sections = computed<NavSection[]>(() => {
       titleKey: 'modules.groupTools',
       items: [
         { labelKey: 'modules.calendar', icon: 'calendar', soon: true },
-        { labelKey: 'modules.chat', icon: 'chat', soon: true },
         { labelKey: 'modules.analytics', icon: 'chart', soon: true, internalOnly: true },
       ],
     },

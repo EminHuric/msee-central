@@ -221,17 +221,43 @@ Zaštita i oporavak su jedna te ista moć, i ona je namerno izvan aplikacije.
 
 ## Status razvoja
 
-- [x] **Faza 1** — Postavka projekta, ljuska aplikacije, dvojezični sistem
-- [x] **Faza 2** — Prijavljivanje
-- [x] **Faza 3** — Zahtevi za registraciju
-- [ ] **Faza 4** — CEO centar za odobravanje
-- [x] **Faza 5** — Profili zaposlenih i imenik
-- [x] **Faza 7** — Kontrole privatnosti (po polju)
-- [ ] **Faza 6** — Uloge i dozvole
-- [ ] **Faza 8** — Privatne CEO beleške
-- [ ] **Faza 9** — Revizioni dnevnik
-- [ ] **Faza 10** — CEO kontrolna tabla
+### Gotovo
 
-Moduli koji dolaze kasnije (CRM, klijenti, prodaja, projekti, finansije,
-marketing, dokumenti, analitika, StayBrain integracija) **nisu** deo verzije 1.
-Arhitektura je postavljena tako da se dodaju bez prepravljanja postojećeg.
+- [x] Postavka projekta, ljuska, dvojezičnost (en / sr)
+- [x] Prijavljivanje, registracija, CEO odobravanje
+- [x] Profili zaposlenih + privatnost po polju
+- [x] Imenik sa karticama (aktivni / na čekanju / suspendovani / odbijeni)
+- [x] Uloge i dozvole — CEO sam pravi uloge
+- [x] Vlasnik i suvlasnici, zaštita vlasničkog naloga
+- [x] Zaposleni vs Affiliate partner, sa izolacijom u pravilima
+- [x] Sektori i pozicije
+- [x] Kontrolna tabla koja se menja prema korisniku
+- [x] Pretraga (Ctrl+K)
+- [x] 26 bezbednosnih testova protiv živih pravila
+
+### Sledeće, redom
+
+1. **Revizioni dnevnik** — zapisi već postoje, fali ekran
+2. **Klijenti** — sve visi o njima *(tipovi i pravila postavljeni)*
+3. **Projekti** — vezani za klijenta, sa vrednošću i tipom naplate
+4. **Prihodi i troškovi** — zarada po projektu i po klijentu
+5. **Usluge** — cenovnik
+6. **Obaveštenja** — CEO piše, svi vide
+7. **Pretplate** — mesečni prihod, obnove
+8. **Provizije** — affiliate isplate
+9. **Evidencija vremena** — bez toga zarada po projektu ne računa najveći trošak
+10. **Odsustva**
+11. **Ponude i dokumenti**
+12. **Podrška / tiketi**
+13. **Potencijalni klijenti**, **Ugovori**, **Pristupi klijenata**
+14. **Kalendar**, **Ciljevi i KPI**, **Učinak**, **Analitika**
+
+Chat je namerno izbačen. Announcements pokriva ono što firmi stvarno treba,
+bez toga da pravimo WhatsApp.
+
+### Fakture
+
+Bez registrovane firme dokumenti su samo uredan obračun sa potpisom. Prava
+faktura (numeracija, PDV, SEF) dodaje se nad istim podacima kad firma bude
+registrovana — proveriti sa knjigovođom pre toga.
+
