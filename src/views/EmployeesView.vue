@@ -24,10 +24,9 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import AddEmployeeForm from '@/components/AddEmployeeForm.vue'
-import RequestReviewPanel from '@/components/RequestReviewPanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
-import { fetchRequests, nextEmployeeCode } from '@/api/approval'
+import { nextEmployeeCode } from '@/api/approval'
 import { fetchEmployees } from '@/api/employees'
 import {
   departmentName,
@@ -38,14 +37,12 @@ import {
   positionName,
 } from '@/api/organisation'
 import { fetchRoles, ownerRank, roleName } from '@/api/roles'
-import { formatDate } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_TYPES, type AccountType } from '@/types/domain'
 import type {
   Department,
   EmployeePublic,
   Position,
-  RegistrationRequest,
   Role,
 } from '@/types/domain'
 import { PERMISSIONS } from '@/types/permissions'
@@ -53,14 +50,13 @@ import { PERMISSIONS } from '@/types/permissions'
 const auth = useAuthStore()
 const { t } = useI18n()
 
-type Tab = 'employees' | 'pending' | 'suspended' | 'rejected'
+type Tab = 'employees' | 'suspended'
 
 const tab = ref<Tab>('employees')
 const loading = ref(true)
 const loadError = ref(false)
 
 const employees = ref<EmployeePublic[]>([])
-const requests = ref<RegistrationRequest[]>([])
 const departments = ref<Department[]>([])
 const positions = ref<Position[]>([])
 const roles = ref<Role[]>([])
@@ -68,9 +64,6 @@ const roles = ref<Role[]>([])
 const search = ref('')
 const departmentFilter = ref('')
 const typeFilter = ref<AccountType | ''>('')
-const reviewing = ref<RegistrationRequest | null>(null)
-
-const canSeeRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
 
 /*
  * Creating an account outright touches both the employee profile and the
@@ -124,26 +117,15 @@ const inactiveEmployees = computed(() =>
   employees.value.filter((e) => e.status === 'suspended' || e.status === 'deactivated'),
 )
 
-const pendingRequests = computed(() => requests.value.filter((r) => r.status === 'pending'))
-const rejectedRequests = computed(() => requests.value.filter((r) => r.status === 'rejected'))
-
-const tabs = computed(() => {
-  const list: { key: Tab; label: string; count: number }[] = [
-    { key: 'employees', label: t('tabs.employees'), count: activeEmployees.value.length },
-  ]
-
-  if (canSeeRequests.value) {
-    list.push({ key: 'pending', label: t('tabs.pending'), count: pendingRequests.value.length })
-  }
-
-  list.push({ key: 'suspended', label: t('tabs.suspended'), count: inactiveEmployees.value.length })
-
-  if (canSeeRequests.value) {
-    list.push({ key: 'rejected', label: t('tabs.rejected'), count: rejectedRequests.value.length })
-  }
-
-  return list
-})
+/*
+ * Only people who are actually employed. Deciding who gets an account is a
+ * different job and lives on its own page, so this list stays what its name
+ * says it is.
+ */
+const tabs = computed(() => [
+  { key: 'employees' as Tab, label: t('tabs.employees'), count: activeEmployees.value.length },
+  { key: 'suspended' as Tab, label: t('tabs.suspended'), count: inactiveEmployees.value.length },
+])
 
 /** People shown in the current tab, after search and department filter. */
 const visiblePeople = computed(() => {
@@ -172,21 +154,6 @@ const visiblePeople = computed(() => {
     .sort(byRank)
 })
 
-const visibleRequests = computed(() => {
-  const source = tab.value === 'pending' ? pendingRequests.value : rejectedRequests.value
-  const term = search.value.trim().toLowerCase()
-  if (!term) return source
-
-  return source.filter((r) =>
-    [r.firstName, r.lastName, r.email, r.desiredPosition, r.city, r.country]
-      .join(' ')
-      .toLowerCase()
-      .includes(term),
-  )
-})
-
-const showingRequests = computed(() => tab.value === 'pending' || tab.value === 'rejected')
-
 async function load(): Promise<void> {
   loading.value = true
   loadError.value = false
@@ -194,19 +161,17 @@ async function load(): Promise<void> {
   try {
     // Reference data and requests are optional: a viewer without permission
     // simply gets fewer tabs rather than an error page.
-    const [people, deps, pos, allRoles, reqs] = await Promise.all([
+    const [people, deps, pos, allRoles] = await Promise.all([
       fetchEmployees(),
       fetchDepartments().catch(() => []),
       fetchPositions().catch(() => []),
       fetchRoles().catch(() => []),
-      canSeeRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
     ])
 
     employees.value = people
     departments.value = deps
     positions.value = pos
     roles.value = allRoles
-    requests.value = reqs
   } catch {
     loadError.value = true
   } finally {
@@ -214,14 +179,8 @@ async function load(): Promise<void> {
   }
 }
 
-async function onDecided(): Promise<void> {
-  reviewing.value = null
-  await load()
-}
-
 function switchTab(next: Tab): void {
   tab.value = next
-  reviewing.value = null
   showAdd.value = false
   search.value = ''
 }
@@ -239,7 +198,7 @@ onMounted(load)
       <button
         v-if="canCreateAccounts && !showAdd"
         class="btn btn-primary"
-        @click="showAdd = true; reviewing = null"
+        @click="showAdd = true"
       >
         <AppIcon name="plus" :size="16" />
         {{ t('newEmployee.open') }}
@@ -269,7 +228,7 @@ onMounted(load)
         @click="switchTab(item.key)"
       >
         {{ item.label }}
-        <span v-if="item.count > 0" class="tab-count" :class="{ 'is-alert': item.key === 'pending' }">
+        <span v-if="item.count > 0" class="tab-count">
           {{ item.count }}
         </span>
       </button>
@@ -288,7 +247,7 @@ onMounted(load)
         />
       </div>
 
-      <select v-if="!showingRequests" v-model="typeFilter" class="select" :aria-label="t('accountType.label')">
+      <select v-model="typeFilter" class="select" :aria-label="t('accountType.label')">
         <option value="">{{ t('accountType.filterAll') }}</option>
         <option v-for="type in ACCOUNT_TYPES" :key="type" :value="type">
           {{ t(`accountType.${type}`) }}
@@ -296,7 +255,7 @@ onMounted(load)
       </select>
 
       <select
-        v-if="!showingRequests && departments.length"
+        v-if="departments.length"
         v-model="departmentFilter"
         class="select"
         :aria-label="t('employees.filterDepartment')"
@@ -305,18 +264,6 @@ onMounted(load)
         <option v-for="d in departments" :key="d.id" :value="d.id">{{ departmentName(d) }}</option>
       </select>
     </div>
-
-    <!-- Review panel --------------------------------------------------- -->
-    <RequestReviewPanel
-      v-if="reviewing"
-      :request="reviewing"
-      :roles="roles"
-      :departments="departments"
-      :positions="positions"
-      :employee-code="nextEmployeeCode(employees.length)"
-      @decided="onDecided"
-      @close="reviewing = null"
-    />
 
     <!-- Loading / error ------------------------------------------------ -->
     <div v-if="loading" class="card">
@@ -330,62 +277,6 @@ onMounted(load)
         <span class="empty-icon"><AppIcon name="alert" :size="20" /></span>
         <p class="empty-title">{{ t('errors.generic') }}</p>
         <button class="btn btn-secondary" @click="load">{{ t('common.retry') }}</button>
-      </div>
-    </div>
-
-    <!-- Requests ------------------------------------------------------- -->
-    <div v-else-if="showingRequests" class="card">
-      <div v-if="visibleRequests.length === 0" class="empty">
-        <span class="empty-icon"><AppIcon name="inbox" :size="20" /></span>
-        <p class="empty-title">
-          {{ tab === 'pending' ? t('approval.emptyPending') : t('approval.emptyRejected') }}
-        </p>
-        <p class="empty-text">
-          {{ tab === 'pending' ? t('approval.emptyPendingHint') : t('approval.emptyRejectedHint') }}
-        </p>
-      </div>
-
-      <div v-else class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>{{ t('table.name') }}</th>
-              <th>{{ t('table.requestedPosition') }}</th>
-              <th>{{ t('table.location') }}</th>
-              <th>{{ t('table.submitted') }}</th>
-              <th v-if="tab === 'rejected'">{{ t('table.reason') }}</th>
-              <th class="col-actions" />
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="request in visibleRequests" :key="request.uid">
-              <td>
-                <div class="person-cell">
-                  <UserAvatar
-                    :name="`${request.firstName} ${request.lastName}`"
-                    :photo-url="request.photoUrl"
-                    :size="34"
-                  />
-                  <div class="person-text">
-                    <span class="person-name">{{ request.firstName }} {{ request.lastName }}</span>
-                    <span class="person-sub truncate">{{ request.email }}</span>
-                  </div>
-                </div>
-              </td>
-              <td>{{ request.desiredPosition || '—' }}</td>
-              <td class="muted">{{ request.city }}, {{ request.country }}</td>
-              <td class="muted">{{ formatDate(request.submittedAt) }}</td>
-              <td v-if="tab === 'rejected'" class="muted truncate">
-                {{ request.rejectionReason || '—' }}
-              </td>
-              <td class="col-actions">
-                <button class="btn btn-secondary btn-sm" @click="reviewing = request">
-                  {{ t('approval.review') }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
 
