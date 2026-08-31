@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'modules.workspace' },
       },
       {
+        path: 'clients',
+        name: 'clients',
+        component: () => import('@/views/business/ClientsView.vue'),
+        meta: { permission: PERMISSIONS.CLIENTS_VIEW, titleKey: 'clients.title' },
+      },
+      {
         path: 'employees',
         name: 'employees',
         component: () => import('@/views/EmployeesView.vue'),

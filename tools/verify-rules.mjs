@@ -252,6 +252,12 @@ try {
     updateDoc(doc(db, 'companySettings', 'general'), { registrationOpen: false }),
   )
 
+  await mustDeny('applicant CANNOT read clients', () => getDoc(doc(db, 'clients', 'any-client')))
+
+  await mustDeny('applicant CANNOT create a client', () =>
+    setDoc(doc(db, 'clients', `forged-${stamp}`), { id: 'forged', name: 'Forged', status: 'active' }),
+  )
+
   /* ------------------------------------------------------------------ *
    * Phase two — a real co-owner, and what they still cannot do
    *
@@ -456,6 +462,15 @@ try {
     getDoc(doc(db, 'companySettings', 'general')),
   )
 
+  /* The business side is internal too, whatever permissions they hold. */
+  await mustDeny('affiliate CANNOT read clients', () => getDoc(doc(db, 'clients', 'any-client')))
+
+  await mustDeny('affiliate CANNOT read projects', () => getDoc(doc(db, 'projects', 'any-project')))
+
+  await mustDeny('affiliate CANNOT read income', () => getDoc(doc(db, 'income', 'any-entry')))
+
+  await mustDeny('affiliate CANNOT read expenses', () => getDoc(doc(db, 'expenses', 'any-entry')))
+
 } finally {
   /* --- clean up ----------------------------------------------------- */
 
@@ -469,6 +484,7 @@ try {
     await adminAuth.deleteUser(uid).catch(() => {})
   }
   await adminDb.collection('userPermissions').doc(`would-be-owner-${stamp}`).delete().catch(() => {})
+  await adminDb.collection('clients').doc(`forged-${stamp}`).delete().catch(() => {})
 
   /* Put the founder back exactly as it was, whatever the tests managed to do. */
   if (founderSnapshot) {

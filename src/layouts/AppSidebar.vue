@@ -59,7 +59,13 @@ const sections = computed<NavSection[]>(() => {
     {
       titleKey: 'modules.groupBusiness',
       items: [
-        { labelKey: 'modules.clients', icon: 'building', soon: true, internalOnly: true },
+        {
+          to: '/clients',
+          labelKey: 'modules.clients',
+          icon: 'building',
+          permission: PERMISSIONS.CLIENTS_VIEW,
+          internalOnly: true,
+        },
         { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
         { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
         { labelKey: 'modules.tasks', icon: 'check', soon: true },

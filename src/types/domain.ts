@@ -353,6 +353,12 @@ export const AUDIT_ACTIONS = [
   'note.deleted',
   'auth.login',
   'auth.login_failed',
+  'client.created',
+  'client.updated',
+  'project.created',
+  'project.updated',
+  'income.recorded',
+  'expense.recorded',
   'settings.updated',
   'data.exported',
 ] as const
@@ -366,6 +372,10 @@ export type AuditTargetType =
   | 'registration_request'
   | 'department'
   | 'position'
+  | 'client'
+  | 'project'
+  | 'income'
+  | 'expense'
   | 'settings'
 
 export interface AuditLogEntry {

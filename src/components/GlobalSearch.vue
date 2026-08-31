@@ -51,6 +51,13 @@ const PAGES: PageEntry[] = [
   { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
   { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
   {
+    to: '/clients',
+    labelKey: 'modules.clients',
+    icon: 'building',
+    permission: PERMISSIONS.CLIENTS_VIEW,
+    internalOnly: true,
+  },
+  {
     to: '/employees',
     labelKey: 'nav.employees',
     icon: 'users',
