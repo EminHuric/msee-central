@@ -233,15 +233,15 @@ Zaštita i oporavak su jedna te ista moć, i ona je namerno izvan aplikacije.
 - [x] Sektori i pozicije
 - [x] Kontrolna tabla koja se menja prema korisniku
 - [x] Pretraga (Ctrl+K)
+- [x] Revizioni dnevnik — ko je šta uradio, nepromenljivo
 - [x] 26 bezbednosnih testova protiv živih pravila
 
 ### Sledeće, redom
 
-1. **Revizioni dnevnik** — zapisi već postoje, fali ekran
-2. **Klijenti** — sve visi o njima *(tipovi i pravila postavljeni)*
-3. **Projekti** — vezani za klijenta, sa vrednošću i tipom naplate
-4. **Prihodi i troškovi** — zarada po projektu i po klijentu
-5. **Usluge** — cenovnik
+1. **Klijenti** — sve visi o njima *(tipovi i pravila postavljeni)*
+2. **Projekti** — vezani za klijenta, sa vrednošću i tipom naplate
+3. **Prihodi i troškovi** — zarada po projektu i po klijentu
+4. **Usluge** — cenovnik
 6. **Obaveštenja** — CEO piše, svi vide
 7. **Pretplate** — mesečni prihod, obnove
 8. **Provizije** — affiliate isplate

@@ -2,12 +2,12 @@
 /**
  * Primary navigation.
  *
- * Grouped by what somebody is doing rather than by which module built it:
- * running the company, doing business, managing people, administering the
- * system, and their own work.
+ * Deliberately short. Only what exists, plus the four modules being built
+ * next — a menu of twenty greyed entries is a roadmap, not navigation, and
+ * the roadmap belongs in the README where it does not get in the way daily.
  *
- * Modules that are planned but not built appear greyed with a "Soon" tag
- * rather than being hidden. That is a deliberate choice: the shape of the
+ * The four planned ones appear greyed with a "Soon" tag rather than being
+ * hidden. That is a deliberate choice: the shape of the
  * system is easier to hold in your head when you can see where things will
  * go, and an item that visibly does nothing is more honest than one that
  * looks ready and disappoints.
@@ -55,29 +55,15 @@ const sections = computed<NavSection[]>(() => {
       items: [
         { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
         { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
-        { labelKey: 'modules.announcements', icon: 'chat', soon: true },
       ],
     },
     {
-      titleKey: 'modules.groupClients',
+      titleKey: 'modules.groupBusiness',
       items: [
         { labelKey: 'modules.clients', icon: 'building', soon: true, internalOnly: true },
-        { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
         { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
         { labelKey: 'modules.services', icon: 'spark', soon: true, internalOnly: true },
-        { labelKey: 'modules.contracts', icon: 'contract', soon: true, internalOnly: true },
-        { labelKey: 'modules.clientAccess', icon: 'lock', soon: true, internalOnly: true },
-        { labelKey: 'modules.support', icon: 'inbox', soon: true, internalOnly: true },
-      ],
-    },
-    {
-      titleKey: 'modules.groupMoney',
-      items: [
-        { labelKey: 'modules.income', icon: 'trending', soon: true, internalOnly: true },
-        { labelKey: 'modules.expenses', icon: 'wallet', soon: true, internalOnly: true },
-        { labelKey: 'modules.subscriptions', icon: 'history', soon: true, internalOnly: true },
-        { labelKey: 'modules.commissions', icon: 'users', soon: true, internalOnly: true },
-        { labelKey: 'modules.offers', icon: 'contract', soon: true, internalOnly: true },
+        { labelKey: 'modules.finance', icon: 'wallet', soon: true, internalOnly: true },
       ],
     },
     {
@@ -90,17 +76,6 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.EMPLOYEES_VIEW,
           internalOnly: true,
         },
-        { labelKey: 'modules.timeTracking', icon: 'clock', soon: true, internalOnly: true },
-        { labelKey: 'modules.timeOff', icon: 'calendar', soon: true, internalOnly: true },
-        { labelKey: 'modules.goals', icon: 'target', soon: true, internalOnly: true },
-        { labelKey: 'modules.performance', icon: 'chart', soon: true, internalOnly: true },
-      ],
-    },
-    {
-      titleKey: 'modules.groupTools',
-      items: [
-        { labelKey: 'modules.calendar', icon: 'calendar', soon: true },
-        { labelKey: 'modules.analytics', icon: 'chart', soon: true, internalOnly: true },
       ],
     },
     {

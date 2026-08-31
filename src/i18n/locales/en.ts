@@ -547,6 +547,30 @@ export default {
     auditDesc: 'Who did what, and when.',
   },
 
+  audit: {
+    title: 'Audit Log',
+    subtitle: 'Who did what, and when. Nobody can change or remove an entry.',
+    filterAction: 'Action',
+    allActions: 'All actions',
+    filterActor: 'Person',
+    allActors: 'Everyone',
+    searchPlaceholder: 'Search by person or target',
+    actor: 'Who',
+    action: 'What',
+    target: 'On whom',
+    when: 'When',
+    details: 'Details',
+    empty: 'Nothing recorded yet',
+    emptyHint: 'Approvals, role changes and suspensions appear here as they happen.',
+    noMatch: 'No entries match',
+    noMatchHint: 'Try a different search or clear the filters.',
+    immutable: 'Append-only',
+    immutableHint:
+      'Entries can be created but never edited or deleted — not by anybody, including the owner. That is what makes this worth reading.',
+    loadMore: 'Load more',
+    showing: 'Showing {n}',
+  },
+
   nav: {
     dashboard: 'Dashboard',
     employees: 'Employees',

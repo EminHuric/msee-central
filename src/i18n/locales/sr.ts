@@ -546,6 +546,30 @@ export default {
     auditDesc: 'Ko je šta uradio i kada.',
   },
 
+  audit: {
+    title: 'Revizioni dnevnik',
+    subtitle: 'Ko je šta uradio i kada. Niko ne može da izmeni ni obriše zapis.',
+    filterAction: 'Radnja',
+    allActions: 'Sve radnje',
+    filterActor: 'Osoba',
+    allActors: 'Svi',
+    searchPlaceholder: 'Pretraga po osobi ili predmetu',
+    actor: 'Ko',
+    action: 'Šta',
+    target: 'Nad kim',
+    when: 'Kada',
+    details: 'Detalji',
+    empty: 'Još ništa nije zabeleženo',
+    emptyHint: 'Odobrenja, promene uloga i suspenzije pojavljuju se ovde kako se dešavaju.',
+    noMatch: 'Nema zapisa koji odgovaraju',
+    noMatchHint: 'Probaj drugu pretragu ili poništi filtere.',
+    immutable: 'Samo dodavanje',
+    immutableHint:
+      'Zapisi mogu da se stvore ali nikad da se izmene ni obrišu — ni od koga, ni od vlasnika. To je ono što ih čini vrednim čitanja.',
+    loadMore: 'Učitaj još',
+    showing: 'Prikazano {n}',
+  },
+
   nav: {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',
