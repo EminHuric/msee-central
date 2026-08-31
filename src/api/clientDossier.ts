@@ -12,9 +12,11 @@
 
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocs,
+  limit as limitTo,
   orderBy,
   query,
   setDoc,
@@ -102,6 +104,20 @@ export async function fetchDossier(clientId: string): Promise<Dossier> {
     notes: notes ?? [],
     hiddenMoney: work === null,
   }
+}
+
+/**
+ * Every work item across every client, newest first.
+ *
+ * A collection group query rather than one read per client: the main Clients
+ * page shows a single ledger of everything the company has done, and fetching
+ * each client's subcollection separately would be one round trip per client.
+ */
+export async function fetchAllWork(max = 300): Promise<WorkItem[]> {
+  const snap = await getDocs(
+    query(collectionGroup(getDb(), 'work'), orderBy('date', 'desc'), limitTo(max)),
+  )
+  return snap.docs.map((d) => ({ ...(d.data() as WorkItem), id: d.id }))
 }
 
 /* ------------------------------------------------------------------ *

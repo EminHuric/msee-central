@@ -426,6 +426,20 @@ service cloud.firestore {
      * are the company's history, and a status is the way to retire one.
      * ------------------------------------------------------------------ */
 
+    /*
+     * Collection group over every client's ledger.
+     *
+     * The Clients page shows one table of all work across all clients, which
+     * is a query spanning subcollections rather than a read inside one. That
+     * needs its own rule: a nested match only covers a path that already names
+     * its client, never a query across them.
+     *
+     * Same permission as the per-client ledger, so this opens nothing extra.
+     */
+    match /{path=**}/work/{itemId} {
+      allow read: if isInternal() && can('finance.view');
+    }
+
     match /clients/{clientId} {
       allow read: if isInternal() && can('clients.view');
       allow create, update: if isInternal() && can('clients.manage');

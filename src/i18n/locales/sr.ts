@@ -589,6 +589,12 @@ export default {
   clients: {
     title: 'Klijenti',
     subtitle: 'Svi za koje firma radi.',
+    tabWork: 'Poslovi',
+    tabList: 'Klijenti',
+    clientColumn: 'Klijent',
+    noWorkAll: 'Još ništa nije upisano',
+    noWorkAllHint: 'Otvori klijenta i dodaj prvu stavku. Pojaviće se i ovde.',
+    openClient: 'Otvori klijenta',
     newClient: 'Novi klijent',
     editClient: 'Izmeni klijenta',
     name: 'Naziv klijenta',

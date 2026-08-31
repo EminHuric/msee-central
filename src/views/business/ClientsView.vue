@@ -16,6 +16,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import { dueStateOf, fetchAllWork, totalsFor } from '@/api/clientDossier'
+import { formatDate } from '@/i18n'
 import {
   EMPTY_CLIENT,
   fetchClients,
@@ -25,17 +27,27 @@ import {
 import { isEmail, LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { CLIENT_STATUSES, type Client, type ClientStatus } from '@/types/business'
+import { CLIENT_STATUSES, type Client, type ClientStatus, type WorkItem } from '@/types/business'
+import { BASE_CURRENCY, formatMoney } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
 
 const auth = useAuthStore()
 const ui = useUiStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const loadError = ref(false)
 const saving = ref(false)
 const clients = ref<Client[]>([])
+const work = ref<WorkItem[]>([])
+
+/*
+ * Two views of the same business. The ledger answers "what have we done and
+ * what did it earn"; the list answers "who do we work for". They were one
+ * table at first and it served neither question well.
+ */
+type Tab = 'work' | 'list'
+const tab = ref<Tab>('work')
 
 const search = ref('')
 const statusFilter = ref<ClientStatus | ''>('')
@@ -44,6 +56,27 @@ const draft = ref<ClientInput | null>(null)
 const editingExisting = ref(false)
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_MANAGE))
+const canMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
+
+/** Client names by id, so the ledger can show who each row belongs to. */
+const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])))
+
+const visibleWork = computed(() => {
+  const term = search.value.trim().toLowerCase()
+  if (!term) return work.value
+  return work.value.filter((item) =>
+    [item.title, item.serviceName, item.note, clientNames.value.get(item.clientId) ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(term),
+  )
+})
+
+const workTotals = computed(() => totalsFor(visibleWork.value))
+
+function money(minor: number): string {
+  return formatMoney(minor, BASE_CURRENCY, locale.value)
+}
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
@@ -79,7 +112,14 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = false
   try {
-    clients.value = await fetchClients()
+    // The ledger is optional: somebody with clients.view but not finance.view
+    // gets the client list and no figures, rather than an error page.
+    const [list, ledger] = await Promise.all([
+      fetchClients(),
+      canMoney.value ? fetchAllWork().catch(() => []) : Promise.resolve([]),
+    ])
+    clients.value = list
+    work.value = ledger
   } catch {
     loadError.value = true
   } finally {
@@ -272,6 +312,33 @@ onMounted(load)
       </div>
     </section>
 
+    <!-- Tabs ----------------------------------------------------------- -->
+    <div class="tabs" role="tablist">
+      <button
+        v-if="canMoney"
+        type="button"
+        role="tab"
+        class="tab"
+        :class="{ 'is-active': tab === 'work' }"
+        :aria-selected="tab === 'work'"
+        @click="tab = 'work'"
+      >
+        {{ t('clients.tabWork') }}
+        <span v-if="work.length" class="tab-count">{{ work.length }}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        :class="{ 'is-active': tab === 'list' || !canMoney }"
+        :aria-selected="tab === 'list'"
+        @click="tab = 'list'"
+      >
+        {{ t('clients.tabList') }}
+        <span v-if="clients.length" class="tab-count">{{ clients.length }}</span>
+      </button>
+    </div>
+
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">
       <div class="search toolbar-grow">
@@ -285,7 +352,12 @@ onMounted(load)
         />
       </div>
 
-      <select v-model="statusFilter" class="select" :aria-label="t('clients.filterStatus')">
+      <select
+        v-if="tab === 'list' || !canMoney"
+        v-model="statusFilter"
+        class="select"
+        :aria-label="t('clients.filterStatus')"
+      >
         <option value="">{{ t('clients.allStatuses') }}</option>
         <option v-for="status in CLIENT_STATUSES" :key="status" :value="status">
           {{ t(`clientStatus.${status}`) }} ({{ counts[status] }})
@@ -311,6 +383,85 @@ onMounted(load)
         <button class="btn btn-secondary" @click="load">{{ t('common.retry') }}</button>
       </div>
     </div>
+
+    <!-- The ledger ----------------------------------------------------- -->
+    <template v-else-if="tab === 'work' && canMoney">
+      <div v-if="visibleWork.length === 0" class="card">
+        <div class="empty">
+          <span class="empty-icon"><AppIcon name="trending" :size="20" /></span>
+          <p class="empty-title">{{ t('clients.noWorkAll') }}</p>
+          <p class="empty-text">{{ t('clients.noWorkAllHint') }}</p>
+        </div>
+      </div>
+
+      <div v-else class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('table.submitted') }}</th>
+                <th>{{ t('dossier.itemTitle') }}</th>
+                <th>{{ t('clients.clientColumn') }}</th>
+                <th>{{ t('dossier.cost') }}</th>
+                <th>{{ t('dossier.revenue') }}</th>
+                <th>{{ t('dossier.profit') }}</th>
+                <th>{{ t('clients.notes') }}</th>
+                <th>{{ t('table.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in visibleWork" :key="item.id">
+                <td class="muted nowrap">{{ formatDate(item.date) }}</td>
+                <td>
+                  <div class="stacked">
+                    <span class="strong">{{ item.title }}</span>
+                    <span v-if="item.serviceName" class="tertiary small">{{ item.serviceName }}</span>
+                  </div>
+                </td>
+                <td>
+                  <RouterLink :to="`/clients/${item.clientId}`" class="client-link">
+                    {{ clientNames.get(item.clientId) ?? '—' }}
+                  </RouterLink>
+                </td>
+                <td class="muted nowrap">{{ money(item.cost.baseMinor) }}</td>
+                <td class="nowrap">{{ money(item.revenue.baseMinor) }}</td>
+                <td class="nowrap strong" :class="{ 'is-negative': item.profitBaseMinor < 0 }">
+                  {{ money(item.profitBaseMinor) }}
+                </td>
+                <td class="muted truncate note-cell">{{ item.note || '—' }}</td>
+                <td>
+                  <span
+                    class="badge badge-plain"
+                    :class="`due-${dueStateOf(item.dueDate, item.paymentStatus)}`"
+                  >
+                    {{ t(`paymentStatus.${item.paymentStatus}`) }}
+                  </span>
+                  <div v-if="item.dueDate && item.paymentStatus !== 'paid'" class="tertiary small">
+                    {{ formatDate(item.dueDate) }}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="totals">
+                <td colspan="3">
+                  {{ t('common.results', workTotals.itemCount, { named: { n: workTotals.itemCount } }) }}
+                </td>
+                <td class="nowrap">{{ money(workTotals.costMinor) }}</td>
+                <td class="nowrap">{{ money(workTotals.revenueMinor) }}</td>
+                <td class="nowrap strong">{{ money(workTotals.profitMinor) }}</td>
+                <td />
+                <td class="nowrap">
+                  <span v-if="workTotals.outstandingMinor > 0" class="owed">
+                    {{ money(workTotals.outstandingMinor) }}
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </template>
 
     <div v-else-if="filtered.length === 0" class="card">
       <div class="empty">
@@ -481,6 +632,93 @@ onMounted(load)
 
 .foot-note {
   font-size: var(--text-xs);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid transparent;
+  font-size: var(--text-base);
+  font-weight: 550;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.is-active {
+  color: var(--text-brand);
+  border-bottom-color: var(--accent);
+}
+
+.tab-count {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-3);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  color: var(--text-tertiary);
+}
+
+.client-link {
+  font-weight: 550;
+  color: var(--text-brand);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.is-negative {
+  color: var(--danger-500);
+}
+
+.note-cell {
+  max-width: 180px;
+}
+
+.totals td {
+  background: var(--bg-surface-2);
+  font-weight: 600;
+  border-top: 1px solid var(--border-default);
+}
+
+.owed {
+  color: var(--warn-500);
+}
+
+.due-overdue {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger-500);
+}
+
+.due-today,
+.due-soon {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn-500);
+}
+
+.due-paid {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-500);
 }
 
 /* Client statuses reuse the account badge palette. */

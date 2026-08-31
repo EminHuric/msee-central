@@ -590,6 +590,12 @@ export default {
   clients: {
     title: 'Clients',
     subtitle: 'Everyone the company works for.',
+    tabWork: 'Work',
+    tabList: 'Clients',
+    clientColumn: 'Client',
+    noWorkAll: 'Nothing recorded yet',
+    noWorkAllHint: 'Open a client and add the first item. It appears here too.',
+    openClient: 'Open client',
     newClient: 'New client',
     editClient: 'Edit client',
     name: 'Client name',
