@@ -2,12 +2,11 @@
 /**
  * Primary navigation.
  *
- * Deliberately short. Only what exists, plus the four modules being built
- * next — a menu of twenty greyed entries is a roadmap, not navigation, and
- * the roadmap belongs in the README where it does not get in the way daily.
+ * The full map of the system, grouped by what somebody is doing rather than
+ * by which module built it.
  *
- * The four planned ones appear greyed with a "Soon" tag rather than being
- * hidden. That is a deliberate choice: the shape of the
+ * Modules that are planned but not built appear greyed with a "Soon" tag
+ * rather than being hidden. That is a deliberate choice: the shape of the
  * system is easier to hold in your head when you can see where things will
  * go, and an item that visibly does nothing is more honest than one that
  * looks ready and disappoints.
@@ -61,8 +60,13 @@ const sections = computed<NavSection[]>(() => {
       titleKey: 'modules.groupBusiness',
       items: [
         { labelKey: 'modules.clients', icon: 'building', soon: true, internalOnly: true },
+        { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
         { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
+        { labelKey: 'modules.tasks', icon: 'check', soon: true },
+        { labelKey: 'modules.sales', icon: 'trending', soon: true, internalOnly: true },
         { labelKey: 'modules.services', icon: 'spark', soon: true, internalOnly: true },
+        { labelKey: 'modules.affiliateProgram', icon: 'users', soon: true, internalOnly: true },
+        { labelKey: 'modules.contracts', icon: 'contract', soon: true, internalOnly: true },
         { labelKey: 'modules.finance', icon: 'wallet', soon: true, internalOnly: true },
       ],
     },
@@ -76,6 +80,15 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.EMPLOYEES_VIEW,
           internalOnly: true,
         },
+        { labelKey: 'modules.goals', icon: 'target', soon: true, internalOnly: true },
+        { labelKey: 'modules.performance', icon: 'chart', soon: true, internalOnly: true },
+      ],
+    },
+    {
+      titleKey: 'modules.groupTools',
+      items: [
+        { labelKey: 'modules.calendar', icon: 'calendar', soon: true },
+        { labelKey: 'modules.analytics', icon: 'chart', soon: true, internalOnly: true },
       ],
     },
     {

@@ -13,6 +13,8 @@
  *   npm run i18n:check
  */
 
+import { readFileSync } from 'node:fs'
+
 import en from '../src/i18n/locales/en.ts'
 import sr from '../src/i18n/locales/sr.ts'
 
@@ -40,6 +42,43 @@ function at(root, path) {
   return path.split('.').reduce((node, key) => (node == null ? undefined : node[key]), root)
 }
 
+/**
+ * Duplicate keys in the source text.
+ *
+ * A repeated key is legal JavaScript — the last one silently wins — so the
+ * flattened object above can never reveal it. TypeScript does complain, but
+ * only after a build, pointing at a line number rather than a name. This has
+ * bitten twice while adding navigation labels, so it is checked here where the
+ * report is readable.
+ */
+function duplicateKeys(source) {
+  const found = []
+  const seen = new Map()
+  const lines = source.split(/\r?\n/)
+  let section = ''
+
+  for (const line of lines) {
+    const opening = /^ {2}([A-Za-z][\w]*): \{/.exec(line)
+    if (opening) {
+      section = opening[1]
+      seen.set(section, new Set())
+      continue
+    }
+
+    const entry = /^ {4}'?([A-Za-z][\w]*)'?:/.exec(line)
+    if (entry && section) {
+      const keys = seen.get(section)
+      if (keys.has(entry[1])) found.push(`${section}.${entry[1]}`)
+      else keys.add(entry[1])
+    }
+  }
+
+  return found
+}
+
+const enSource = readFileSync(new URL('../src/i18n/locales/en.ts', import.meta.url), 'utf8')
+const srSource = readFileSync(new URL('../src/i18n/locales/sr.ts', import.meta.url), 'utf8')
+
 const enPaths = paths(en)
 const srPaths = paths(sr)
 const enSet = new Set(enPaths)
@@ -66,6 +105,8 @@ function report(title, rows, format) {
 }
 
 let problems = 0
+problems += report('duplicate keys in en.ts', duplicateKeys(enSource), (k) => k)
+problems += report('duplicate keys in sr.ts', duplicateKeys(srSource), (k) => k)
 problems += report('missing in sr.ts', missingInSr, (p) => p)
 problems += report('missing in en.ts', missingInEn, (p) => p)
 problems += report(
