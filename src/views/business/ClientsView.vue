@@ -346,15 +346,18 @@ onMounted(load)
           <tbody>
             <tr v-for="client in filtered" :key="client.id">
               <td>
-                <div class="client-cell">
-                  <span class="client-mark">{{ client.name.slice(0, 1).toUpperCase() }}</span>
+                <RouterLink :to="`/clients/${client.id}`" class="client-cell">
+                  <span class="client-mark">
+                    <img v-if="client.logoUrl" :src="client.logoUrl" :alt="client.name" />
+                    <span v-else>{{ client.name.slice(0, 1).toUpperCase() }}</span>
+                  </span>
                   <div class="client-text">
                     <span class="client-name">{{ client.name }}</span>
                     <span v-if="client.website" class="client-sub truncate">
                       {{ client.website }}
                     </span>
                   </div>
-                </div>
+                </RouterLink>
               </td>
               <td>
                 <div class="stacked">
@@ -419,6 +422,22 @@ onMounted(load)
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.client-cell:hover {
+  text-decoration: none;
+}
+
+.client-cell:hover .client-name {
+  color: var(--text-brand);
+}
+
+.client-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* Initial rather than a photo: a client is a company, not a face. */
@@ -433,6 +452,7 @@ onMounted(load)
   color: var(--text-brand);
   font-weight: 650;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .client-text {
