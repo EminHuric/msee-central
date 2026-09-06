@@ -44,6 +44,7 @@ import {
   nextInvoiceNumber,
   saveInvoice,
   savePayment,
+  setInvoiceStatus,
 } from '@/api/revenue'
 import {
   EMPTY_SNAPSHOT,
@@ -72,10 +73,12 @@ import {
 } from '@/types/business'
 import {
   INCOME_TYPES,
+  INVOICE_STATUSES,
   TRANSACTION_TYPES,
   type Affiliate,
   type Contract,
   type Invoice,
+  type InvoiceStatus,
   type Payment,
   type Sale,
   type TransactionType,
@@ -299,7 +302,9 @@ function newInvoice(): void {
 const billable = computed(() => {
   const d = invoiceDraft.value
   if (!d?.clientId) return []
-  const billed = new Set(invoices.value.flatMap((i) => i.workItemIds ?? []))
+  const billed = new Set(
+    invoices.value.filter((i) => i.status !== 'cancelled').flatMap((i) => i.workItemIds ?? []),
+  )
   return work.value.filter(
     (w) => w.clientId === d.clientId && w.paymentStatus !== 'paid' && !billed.has(w.id),
   )
@@ -481,6 +486,22 @@ async function commitPayment(): Promise<void> {
     ui.notify('danger', t('payments.saveFailed'))
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * Change an invoice's status.
+ *
+ * Cancelling releases the work it billed: those items become billable again,
+ * because the alternative is work that can never be invoiced by anybody.
+ */
+async function changeInvoiceStatus(invoice: Invoice, status: InvoiceStatus): Promise<void> {
+  try {
+    await setInvoiceStatus(invoice, status)
+    ui.notify('ok', t('invoices.saved'))
+    await load()
+  } catch {
+    ui.notify('danger', t('invoices.saveFailed'))
   }
 }
 
@@ -871,7 +892,19 @@ onMounted(load)
                     {{ money(invoiceOutstanding(inv)) }}
                   </td>
                   <td>
-                    <span class="badge" :class="`iv-${inv.status}`">
+                    <select
+                      v-if="canManage"
+                      class="select tiny"
+                      :class="`iv-${inv.status}`"
+                      :value="inv.status"
+                      :aria-label="t('table.status')"
+                      @change="changeInvoiceStatus(inv, ($event.target as HTMLSelectElement).value as InvoiceStatus)"
+                    >
+                      <option v-for="st in INVOICE_STATUSES" :key="st" :value="st">
+                        {{ t(`invoiceStatus.${st}`) }}
+                      </option>
+                    </select>
+                    <span v-else class="badge" :class="`iv-${inv.status}`">
                       {{ t(`invoiceStatus.${inv.status}`) }}
                     </span>
                   </td>

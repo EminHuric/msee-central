@@ -38,6 +38,7 @@ import {
   type Contract,
   type ContractStatus,
   type Invoice,
+  type InvoiceStatus,
   type Payment,
   type Sale,
   type SaleStage,
@@ -245,6 +246,26 @@ export async function saveInvoice(input: Invoice): Promise<string> {
   }
 
   return id
+}
+
+/**
+ * Change an invoice's status.
+ *
+ * An issued invoice is a document that was sent, so its lines and amount are
+ * never edited — a mistake is cancelled and reissued. That is the whole reason
+ * this exists instead of a general "edit invoice": cancelling leaves the
+ * original standing, which is what makes the books explicable later.
+ */
+export async function setInvoiceStatus(invoice: Invoice, status: InvoiceStatus): Promise<void> {
+  await write('invoices', { ...invoice, status })
+
+  await logAudit({
+    action: status === 'cancelled' ? 'invoice.cancelled' : 'invoice.issued',
+    targetType: 'invoice',
+    targetId: invoice.id,
+    targetLabel: invoice.number,
+    metadata: { from: invoice.status, to: status, amount: invoice.amount.baseMinor },
+  })
 }
 
 /** What an invoice still owes, after the payments recorded against it. */
