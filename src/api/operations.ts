@@ -114,6 +114,37 @@ export async function saveProject(input: Project): Promise<string> {
 
 export const fetchTasks = () => readAll<Task>('tasks', 'createdAt')
 
+/**
+ * A blank task with every field present.
+ *
+ * Exists so no screen has to cast a half-built object into a Task: a missing
+ * field is not a type error you catch, it is a document written without it and
+ * a `undefined` somewhere three screens away.
+ */
+export function blankTask(assigneeUid: string | null, assigneeName: string): Task {
+  return {
+    id: '',
+    title: '',
+    description: '',
+    clientId: null,
+    projectId: null,
+    assigneeUid,
+    assigneeName,
+    status: 'todo',
+    priority: 'normal',
+    dueDate: null,
+    completedAt: null,
+    estimatedMinutes: 0,
+    actualMinutes: 0,
+    checklist: [],
+    repeat: '',
+    createdAt: '',
+    createdBy: '',
+    createdByName: '',
+    updatedAt: '',
+  }
+}
+
 export async function saveTask(input: Task, previousAssignee?: string | null): Promise<string> {
   const isNew = !input.id
   const me = actor()

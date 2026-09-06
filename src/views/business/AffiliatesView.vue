@@ -18,7 +18,14 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchEmployees } from '@/api/employees'
 import { fetchLeads, fetchServiceCatalogue } from '@/api/operations'
-import { fetchAffiliates, makeCode, referralLink, resultFor, saveAffiliate } from '@/api/affiliates'
+import {
+  fetchAffiliates,
+  fetchClickCounts,
+  makeCode,
+  referralLink,
+  resultFor,
+  saveAffiliate,
+} from '@/api/affiliates'
 import { fetchCommissions, fetchSales, setCommissionStatus } from '@/api/revenue'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
@@ -55,6 +62,7 @@ const leads = ref<Lead[]>([])
 const sales = ref<Sale[]>([])
 const services = ref<Service[]>([])
 const people = ref<EmployeePublic[]>([])
+const clicks = ref<Record<string, number>>({})
 
 const search = ref('')
 const statusFilter = ref<Commission['status'] | ''>('')
@@ -92,7 +100,13 @@ const visible = computed(() => {
 })
 
 const results = computed(
-  () => new Map(affiliates.value.map((a) => [a.id, resultFor(a, leads.value, sales.value, commissions.value)])),
+  () =>
+    new Map(
+      affiliates.value.map((a) => [
+        a.id,
+        resultFor(a, leads.value, sales.value, commissions.value, clicks.value),
+      ]),
+    ),
 )
 
 const visibleCommissions = computed(() => {
@@ -124,13 +138,14 @@ function isMine(commission: Commission): boolean {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [a, c, l, s, sv, e] = await Promise.all([
+  const [a, c, l, s, sv, e, ck] = await Promise.all([
     fetchAffiliates(),
     fetchCommissions().catch(() => []),
     fetchLeads().catch(() => []),
     fetchSales().catch(() => []),
     fetchServiceCatalogue().catch(() => []),
     fetchEmployees().catch(() => []),
+    fetchClickCounts().catch(() => ({})),
   ])
   affiliates.value = a
   commissions.value = c
@@ -138,6 +153,7 @@ async function load(): Promise<void> {
   sales.value = s
   services.value = sv
   people.value = e
+  clicks.value = ck
   loading.value = false
 }
 
@@ -234,7 +250,6 @@ async function commit(): Promise<void> {
         note: r.note.trim(),
       })),
       notes: d.notes.trim(),
-      clicks: affiliates.value.find((a) => a.id === d.id)?.clicks ?? 0,
     } as Affiliate)
 
     ui.notify('ok', t('affiliates.saved'))

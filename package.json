@@ -16,6 +16,7 @@
     "rules:verify": "node --disable-warning=ExperimentalWarning tools/verify-rules.mjs",
     "i18n:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/check-i18n.mjs",
     "recover": "node --disable-warning=ExperimentalWarning tools/recover-founder.mjs",
+    "links:check": "node --disable-warning=ExperimentalWarning tools/check-links.mjs",
     "permissions:sync": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/sync-permissions.mjs",
     "rules:publish": "node --disable-warning=ExperimentalWarning tools/publish-rules.mjs",
     "purge-logins": "node --disable-warning=ExperimentalWarning tools/purge-logins.mjs"

@@ -246,8 +246,6 @@ export interface Affiliate {
   status: 'active' | 'paused' | 'ended'
   rules: CommissionRule[]
   notes: string
-  /** Bumped by the public referral endpoint. Interest, not earnings. */
-  clicks: number
   createdAt: string
   createdBy: string
   updatedAt: string

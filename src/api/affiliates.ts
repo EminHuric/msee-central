@@ -11,8 +11,11 @@
  * what they produced.
  */
 
+import { collection, getDocs, query, setDoc, doc, where as fbWhere } from 'firebase/firestore'
+
 import { logAudit } from './audit'
-import { readAll, readOne, readWhere, where, write } from './store'
+import { getDb } from '@/lib/firebase'
+import { newId, readAll, readOne, readWhere, where, write } from './store'
 import type { Lead } from '@/types/business'
 import type { Affiliate, Commission, Sale } from '@/types/revenue'
 
@@ -96,6 +99,7 @@ export function resultFor(
   leads: Lead[],
   sales: Sale[],
   commissions: Commission[],
+  clicks: Record<string, number> = {},
 ): AffiliateResult {
   const mySales = sales.filter((s) => s.affiliateId === affiliate.id)
   const won = mySales.filter((s) => s.stage === 'won')
@@ -105,7 +109,7 @@ export function resultFor(
 
   return {
     affiliateId: affiliate.id,
-    clicks: affiliate.clicks ?? 0,
+    clicks: clicks[affiliate.code] ?? 0,
     leads: leads.filter((l) => l.sourceDetail === affiliate.code).length,
     sales: mySales.length,
     wonSales: won.length,
@@ -120,9 +124,51 @@ export function resultFor(
 /**
  * Record a click on a referral link.
  *
- * Deliberately the only thing the public entry point may do, and deliberately
- * the only number in this module with no record behind it.
+ * Written by a stranger with no account, so it goes to its own collection
+ * rather than onto the affiliate: the public page must not be able to read an
+ * affiliate's name, contacts or commission rules in order to count a visit.
+ *
+ * The rules accept a document of exactly {code, at} and refuse to read, change
+ * or delete it afterwards. Nothing here earns anybody anything, which is
+ * precisely why it can afford to be public.
  */
-export async function recordClick(affiliate: Affiliate): Promise<void> {
-  await write('affiliates', { ...affiliate, clicks: (affiliate.clicks ?? 0) + 1 })
+export async function recordReferralClick(code: string): Promise<void> {
+  const clean = code.trim().slice(0, 40)
+  if (!clean) return
+
+  try {
+    await setDoc(doc(collection(getDb(), 'referralClicks'), newId()), {
+      code: clean,
+      at: new Date().toISOString(),
+    })
+  } catch {
+    /* A blocked or offline visitor still reaches the page; the visit is lost. */
+  }
+}
+
+/** How many times each code has been opened. Counted, never stored. */
+export async function fetchClickCounts(): Promise<Record<string, number>> {
+  try {
+    const snap = await getDocs(query(collection(getDb(), 'referralClicks')))
+    const out: Record<string, number> = {}
+    for (const d of snap.docs) {
+      const code = (d.data() as { code?: string }).code
+      if (code) out[code] = (out[code] ?? 0) + 1
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** Clicks for one code, for the affiliate's own view of their link. */
+export async function countClicksFor(code: string): Promise<number> {
+  try {
+    const snap = await getDocs(
+      query(collection(getDb(), 'referralClicks'), fbWhere('code', '==', code)),
+    )
+    return snap.size
+  } catch {
+    return 0
+  }
 }

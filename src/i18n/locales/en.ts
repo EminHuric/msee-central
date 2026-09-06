@@ -524,8 +524,6 @@ export default {
     tasks: 'My Tasks',
     earnings: 'My Earnings',
 
-    soon: 'Soon',
-    soonTitle: 'Not built yet',
   },
 
   search: {
@@ -715,6 +713,7 @@ export default {
   dossier: {
     tabOverview: 'Overview',
     tabWork: 'Work',
+    tabBusiness: 'Business',
     tabPayments: 'Payments',
     tabActivity: 'Activity',
     tabNotes: 'Notes',
@@ -953,6 +952,16 @@ export default {
   },
 
   tasks: {
+    repeat: 'Repeats',
+    noRepeat: 'Does not repeat',
+    repeatHint: 'Completing it opens the next one. The finished record stays.',
+    estimated: 'Estimated (min)',
+    actual: 'Actual (min)',
+    checklist: 'Checklist',
+    addChecklistItem: 'Add a step',
+    comments: 'Comments',
+    writeComment: 'Write a comment',
+    noComments: 'No comments yet',
     title: 'Tasks',
     subtitle: 'Who is doing what, and by when.',
     newTask: 'New task',
@@ -1496,6 +1505,20 @@ export default {
     monthly: 'Per month',
     commission: 'Commission',
     custom: 'Agreed per client',
+  },
+
+  referral: {
+    title: 'You were referred to MsEe',
+    text: 'Thanks for following the link. Quote the code below when you get in touch and it will be credited to whoever sent you.',
+    yourCode: 'Referral code',
+    hint: 'Nothing has been shared about you. Only the visit was recorded.',
+    continue: 'Continue',
+  },
+
+  taskRepeat: {
+    daily: 'Every day',
+    weekly: 'Every week',
+    monthly: 'Every month',
   },
 
   saleStage: {

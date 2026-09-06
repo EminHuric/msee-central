@@ -26,14 +26,25 @@ import {
   lookupLabel,
   positionName,
 } from '@/api/organisation'
+import {
+  EMPTY_SNAPSHOT,
+  goalProgress,
+  kpisFor,
+  loadSnapshot,
+  periodOf,
+  type Snapshot,
+} from '@/api/metrics'
 import { formatDate } from '@/i18n'
+import { BASE_CURRENCY, formatMoney } from '@/types/money'
+import { DEFAULT_KPIS, MONEY_KPIS, type KpiMetric } from '@/types/company'
+import { OPEN_STAGES } from '@/types/business'
 import { useAuthStore } from '@/stores/auth'
 import type { Department, Position } from '@/types/domain'
 import { PERMISSIONS } from '@/types/permissions'
 
 const route = useRoute()
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const notFound = ref(false)
@@ -93,6 +104,69 @@ const contactRows = computed(() => {
  */
 const partial = computed(() => detail.value !== null && !detail.value.sawEverything)
 
+/**
+ * Their work, from the same snapshot every other derived screen uses.
+ *
+ * Loaded here rather than passed in, because this page is reachable directly
+ * from a link. Each read returns empty when the rules refuse it, so a viewer
+ * who may not see deals simply sees no deals section.
+ */
+const snapshot = ref<Snapshot>(EMPTY_SNAPSHOT)
+
+const myTasks = computed(() =>
+  snapshot.value.tasks
+    .filter((task) => task.assigneeUid === uid.value && task.status !== 'cancelled')
+    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')),
+)
+
+const openTasks = computed(() => myTasks.value.filter((task) => task.status !== 'done'))
+
+const myLeads = computed(() =>
+  snapshot.value.leads.filter(
+    (l) => l.assigneeUid === uid.value && OPEN_STAGES.includes(l.stage),
+  ),
+)
+
+const mySales = computed(() =>
+  snapshot.value.sales.filter((x) => x.ownerUid === uid.value && x.stage !== 'lost'),
+)
+
+const myProjects = computed(() =>
+  snapshot.value.projects.filter(
+    (pr) =>
+      (pr.ownerUid === uid.value || pr.teamUids?.includes(uid.value)) && pr.status === 'active',
+  ),
+)
+
+const myGoals = computed(() =>
+  snapshot.value.goals
+    .filter((g) => g.status === 'active' && g.ownerUid === uid.value)
+    .map((g) => goalProgress(g, snapshot.value)),
+)
+
+const kpis = computed(() => kpisFor(uid.value, snapshot.value, periodOf('month')))
+
+const canSeeWork = computed(
+  () => auth.uid === uid.value || auth.hasPermission(PERMISSIONS.PERFORMANCE_VIEW_ALL),
+)
+
+const hasWork = computed(
+  () =>
+    myTasks.value.length > 0 ||
+    myLeads.value.length > 0 ||
+    mySales.value.length > 0 ||
+    myProjects.value.length > 0 ||
+    myGoals.value.length > 0,
+)
+
+function money(minor: number): string {
+  return formatMoney(minor, BASE_CURRENCY, locale.value)
+}
+
+function kpiValue(metric: KpiMetric): string {
+  return MONEY_KPIS.includes(metric) ? money(kpis.value[metric]) : String(kpis.value[metric])
+}
+
 async function load(): Promise<void> {
   if (!uid.value) return
   loading.value = true
@@ -100,10 +174,11 @@ async function load(): Promise<void> {
   detail.value = null
 
   try {
-    const [found, deps, pos] = await Promise.all([
+    const [found, deps, pos, snap] = await Promise.all([
       fetchEmployee(uid.value),
       fetchDepartments().catch(() => []),
       fetchPositions().catch(() => []),
+      loadSnapshot(),
     ])
 
     if (!found) {
@@ -114,6 +189,7 @@ async function load(): Promise<void> {
     detail.value = found
     departments.value = deps
     positions.value = pos
+    snapshot.value = snap
   } catch {
     notFound.value = true
   } finally {
@@ -301,6 +377,78 @@ watch(uid, load)
               </dl>
             </div>
           </section>
+
+          <!-- What they are actually doing --------------------------- -->
+          <section v-if="canSeeWork" class="card">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('workspace.myTasks') }}</h2>
+              <span class="badge badge-plain">{{ openTasks.length }}</span>
+            </div>
+
+            <div class="card-body">
+              <dl class="kpis">
+                <div v-for="metric in DEFAULT_KPIS" :key="metric">
+                  <dt>{{ t(`kpi.${metric}`) }}</dt>
+                  <dd :class="{ neg: metric === 'tasks_overdue' && kpis[metric] > 0 }">
+                    {{ kpiValue(metric) }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <p v-if="!hasWork" class="card-body tertiary small">{{ t('workspace.noTasks') }}</p>
+
+            <template v-else>
+              <template v-if="openTasks.length">
+                <p class="group-title">{{ t('workspace.myTasks') }}</p>
+                <ul class="work-list">
+                  <li v-for="task in openTasks.slice(0, 6)" :key="task.id">
+                    <span class="work-main">{{ task.title }}</span>
+                    <span v-if="task.dueDate" class="tertiary">{{ formatDate(task.dueDate) }}</span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-if="myProjects.length">
+                <p class="group-title">{{ t('workspace.myProjects') }}</p>
+                <ul class="work-list">
+                  <li v-for="pr in myProjects.slice(0, 5)" :key="pr.id">
+                    <span class="work-main">{{ pr.name }}</span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-if="myLeads.length">
+                <p class="group-title">{{ t('workspace.myLeads') }}</p>
+                <ul class="work-list">
+                  <li v-for="l in myLeads.slice(0, 5)" :key="l.id">
+                    <span class="work-main">{{ l.company || l.name }}</span>
+                    <span class="tertiary">{{ t(`leadStage.${l.stage}`) }}</span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-if="mySales.length">
+                <p class="group-title">{{ t('workspace.mySales') }}</p>
+                <ul class="work-list">
+                  <li v-for="d in mySales.slice(0, 5)" :key="d.id">
+                    <span class="work-main">{{ d.title }}</span>
+                    <span class="work-value">{{ money(d.value.baseMinor) }}</span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-if="myGoals.length">
+                <p class="group-title">{{ t('workspace.myGoals') }}</p>
+                <ul class="work-list">
+                  <li v-for="row in myGoals" :key="row.goal.id">
+                    <span class="work-main">{{ row.goal.title }}</span>
+                    <span :class="row.onTrack ? 'pos' : 'warn'">{{ row.percent }}%</span>
+                  </li>
+                </ul>
+              </template>
+            </template>
+          </section>
         </div>
       </div>
     </template>
@@ -450,4 +598,18 @@ watch(uid, load)
     grid-template-columns: 1fr;
   }
 }
+
+.kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin: 0; }
+.kpis dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); margin-bottom: 2px; }
+.kpis dd { margin: 0; font-size: var(--text-md); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.group-title { padding: var(--space-3) var(--space-5) var(--space-1); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
+.work-list { list-style: none; margin: 0; padding: 0; }
+.work-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); }
+.work-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.pos { color: var(--ok-500); }
+.neg { color: var(--danger-500); }
+.warn { color: var(--warn-500); }
+.small { font-size: var(--text-xs); }
 </style>

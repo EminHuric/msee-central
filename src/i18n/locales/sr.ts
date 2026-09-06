@@ -523,8 +523,6 @@ export default {
     tasks: 'Moji zadaci',
     earnings: 'Moja zarada',
 
-    soon: 'Uskoro',
-    soonTitle: 'Još nije napravljeno',
   },
 
   search: {
@@ -714,6 +712,7 @@ export default {
   dossier: {
     tabOverview: 'Pregled',
     tabWork: 'Saradnja',
+    tabBusiness: 'Poslovanje',
     tabPayments: 'Plaćanja',
     tabActivity: 'Aktivnosti',
     tabNotes: 'Beleške',
@@ -952,6 +951,16 @@ export default {
   },
 
   tasks: {
+    repeat: 'Ponavlja se',
+    noRepeat: 'Ne ponavlja se',
+    repeatHint: 'Kad ga završiš otvara se sledeći. Završeni zapis ostaje.',
+    estimated: 'Procena (min)',
+    actual: 'Stvarno (min)',
+    checklist: 'Čeklista',
+    addChecklistItem: 'Dodaj korak',
+    comments: 'Komentari',
+    writeComment: 'Napiši komentar',
+    noComments: 'Još nema komentara',
     title: 'Zadaci',
     subtitle: 'Ko šta radi i do kada.',
     newTask: 'Novi zadatak',
@@ -1495,6 +1504,20 @@ export default {
     monthly: 'Mesečno',
     commission: 'Provizija',
     custom: 'Dogovor po klijentu',
+  },
+
+  referral: {
+    title: 'Neko te je uputio na MsEe',
+    text: 'Hvala što si otvorio link. Navedi kod ispod kad nas kontaktiraš i biće pripisan onome ko te je poslao.',
+    yourCode: 'Kod preporuke',
+    hint: 'Ništa o tebi nije podeljeno. Zabeležena je samo poseta.',
+    continue: 'Nastavi',
+  },
+
+  taskRepeat: {
+    daily: 'Svaki dan',
+    weekly: 'Svake nedelje',
+    monthly: 'Svakog meseca',
   },
 
   saleStage: {

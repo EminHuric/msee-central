@@ -282,6 +282,30 @@ try {
     getDoc(doc(db, 'chatThreads', 'any-thread')),
   )
 
+  /*
+   * The one public write in the system, and the checks that keep it narrow.
+   * A referral click may be created by anybody; it may not carry anything
+   * beyond a code and a time, and it may never be read back.
+   */
+  await mustAllow('anybody CAN record a referral click', () =>
+    setDoc(doc(db, 'referralClicks', `rules-click-${stamp}`), {
+      code: 'rules-test',
+      at: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('a referral click CANNOT carry extra fields', () =>
+    setDoc(doc(db, 'referralClicks', `rules-click-payload-${stamp}`), {
+      code: 'rules-test',
+      at: new Date().toISOString(),
+      smuggled: 'anything at all',
+    }),
+  )
+
+  await mustDeny('a referral click CANNOT be read back', () =>
+    getDoc(doc(db, 'referralClicks', `rules-click-${stamp}`)),
+  )
+
   await mustDeny('applicant CANNOT create a client', () =>
     setDoc(doc(db, 'clients', `forged-${stamp}`), { id: 'forged', name: 'Forged', status: 'active' }),
   )

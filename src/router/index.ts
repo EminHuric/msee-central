@@ -215,6 +215,17 @@ const routes: RouteRecordRaw[] = [
     ],
   },
 
+  /*
+   * The public end of a referral link. No account, no layout, and no reads —
+   * see ReferralView for why that constraint shapes the whole page.
+   */
+  {
+    path: '/ref/:code/:service?',
+    name: 'referral',
+    component: () => import('@/views/ReferralView.vue'),
+    meta: { titleKey: 'referral.title' },
+  },
+
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

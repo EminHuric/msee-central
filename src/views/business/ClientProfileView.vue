@@ -18,7 +18,17 @@ import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-import { fetchProjectsFor, fetchServiceCatalogue } from '@/api/operations'
+import { fetchProjectsFor, fetchServiceCatalogue, fetchTasksFor } from '@/api/operations'
+import {
+  fetchContractsFor,
+  fetchInvoicesFor,
+  fetchPaymentsFor,
+  fetchSalesFor,
+  invoiceOutstanding,
+} from '@/api/revenue'
+import { projectProgress } from '@/api/metrics'
+import { INCOME_TYPES } from '@/types/revenue'
+import type { Contract, Invoice, Payment, Sale } from '@/types/revenue'
 import { fetchClient } from '@/api/clients'
 import {
   commissionFor,
@@ -46,6 +56,7 @@ import {
   type WorkItem,
   type Project,
   type Service,
+  type Task,
 } from '@/types/business'
 import {
   BASE_CURRENCY,
@@ -70,8 +81,13 @@ const client = ref<Client | null>(null)
 const dossier = ref<Dossier | null>(null)
 const projects = ref<Project[]>([])
 const catalogue = ref<Service[]>([])
+const contracts = ref<Contract[]>([])
+const deals = ref<Sale[]>([])
+const invoices = ref<Invoice[]>([])
+const payments = ref<Payment[]>([])
+const clientTasks = ref<Task[]>([])
 
-type Tab = 'overview' | 'work' | 'payments' | 'activity' | 'notes'
+type Tab = 'overview' | 'work' | 'business' | 'payments' | 'activity' | 'notes'
 const tab = ref<Tab>('overview')
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_MANAGE))
@@ -109,6 +125,31 @@ function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
 }
 
+/**
+ * Agreed, invoiced and paid for this client.
+ *
+ * Three separate records answering three separate questions. A single
+ * "balance" would hide which of them is the problem: work not billed, or
+ * bills not paid.
+ */
+const relationship = computed(() => ({
+  agreed: contracts.value
+    .filter((c) => c.status === 'active' || c.status === 'renewal')
+    .reduce((n, c) => n + c.value.baseMinor, 0),
+  invoiced: invoices.value.reduce((n, i) => n + i.amount.baseMinor, 0),
+  paid: payments.value
+    .filter((p) => INCOME_TYPES.includes(p.type))
+    .reduce((n, p) => n + p.amount.baseMinor, 0),
+  openDeals: deals.value.filter((d) => d.stage !== 'won' && d.stage !== 'lost').length,
+  pipeline: deals.value
+    .filter((d) => d.stage !== 'won' && d.stage !== 'lost')
+    .reduce((n, d) => n + d.value.baseMinor, 0),
+}))
+
+function progressOf(project: Project): number | null {
+  return projectProgress(project, clientTasks.value)
+}
+
 /* ---- Loading -------------------------------------------------------- */
 
 async function load(): Promise<void> {
@@ -117,11 +158,16 @@ async function load(): Promise<void> {
   notFound.value = false
 
   try {
-    const [found, file, projs, cat] = await Promise.all([
+    const [found, file, projs, cat, cons, sls, invs, pays, tks] = await Promise.all([
       fetchClient(clientId.value),
       fetchDossier(clientId.value),
       fetchProjectsFor(clientId.value),
       fetchServiceCatalogue(),
+      fetchContractsFor(clientId.value).catch(() => []),
+      fetchSalesFor(clientId.value).catch(() => []),
+      fetchInvoicesFor(clientId.value).catch(() => []),
+      fetchPaymentsFor(clientId.value).catch(() => []),
+      fetchTasksFor('clientId', clientId.value).catch(() => []),
     ])
     if (!found) {
       notFound.value = true
@@ -131,6 +177,11 @@ async function load(): Promise<void> {
     dossier.value = file
     projects.value = projs
     catalogue.value = cat
+    contracts.value = cons
+    deals.value = sls
+    invoices.value = invs
+    payments.value = pays
+    clientTasks.value = tks
   } catch {
     notFound.value = true
   } finally {
@@ -411,7 +462,7 @@ watch(clientId, load)
       <!-- Tabs --------------------------------------------------------- -->
       <div class="tabs" role="tablist">
         <button
-          v-for="key in (['overview', 'work', 'payments', 'activity', 'notes'] as Tab[])"
+          v-for="key in (['overview', 'work', 'business', 'payments', 'activity', 'notes'] as Tab[])"
           :key="key"
           type="button"
           role="tab"
@@ -684,6 +735,114 @@ watch(clientId, load)
               </tfoot>
             </table>
           </div>
+        </section>
+      </template>
+
+      <!-- Business ----------------------------------------------------- -->
+      <template v-if="tab === 'business'">
+        <div class="figures">
+          <article class="card figure">
+            <span class="figure-label">{{ t('contracts.agreed') }}</span>
+            <span class="figure-value">{{ money(relationship.agreed) }}</span>
+          </article>
+          <article class="card figure">
+            <span class="figure-label">{{ t('contracts.invoiced') }}</span>
+            <span class="figure-value">{{ money(relationship.invoiced) }}</span>
+          </article>
+          <article class="card figure">
+            <span class="figure-label">{{ t('contracts.paid') }}</span>
+            <span class="figure-value pos">{{ money(relationship.paid) }}</span>
+          </article>
+          <article class="card figure">
+            <span class="figure-label">{{ t('sales.pipeline') }}</span>
+            <span class="figure-value">{{ money(relationship.pipeline) }}</span>
+          </article>
+        </div>
+
+        <section class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('projects.title') }}</h2>
+            <RouterLink to="/projects" class="btn btn-ghost btn-sm">
+              {{ t('dashboard.seeAll') }}
+            </RouterLink>
+          </div>
+
+          <p v-if="projects.length === 0" class="card-body tertiary small">
+            {{ t('projects.empty') }}
+          </p>
+
+          <ul v-else class="linked">
+            <li v-for="p in projects" :key="p.id">
+              <span class="linked-main">{{ p.name }}</span>
+              <span class="badge badge-plain">{{ t(`projectStatus.${p.status}`) }}</span>
+              <span v-if="progressOf(p) !== null" class="tertiary">{{ progressOf(p) }}%</span>
+              <span v-if="p.endDate" class="tertiary">{{ formatDate(p.endDate) }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('contracts.title') }}</h2>
+            <RouterLink to="/contracts" class="btn btn-ghost btn-sm">
+              {{ t('dashboard.seeAll') }}
+            </RouterLink>
+          </div>
+
+          <p v-if="contracts.length === 0" class="card-body tertiary small">
+            {{ t('contracts.empty') }}
+          </p>
+
+          <ul v-else class="linked">
+            <li v-for="c in contracts" :key="c.id">
+              <span class="linked-main">{{ c.number }}</span>
+              <span class="tertiary">{{ c.serviceName || '—' }}</span>
+              <span class="badge badge-plain">{{ t(`contractStatus.${c.status}`) }}</span>
+              <span class="linked-value">{{ money(c.value.baseMinor) }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('sales.title') }}</h2>
+            <RouterLink to="/sales" class="btn btn-ghost btn-sm">
+              {{ t('dashboard.seeAll') }}
+            </RouterLink>
+          </div>
+
+          <p v-if="deals.length === 0" class="card-body tertiary small">{{ t('sales.empty') }}</p>
+
+          <ul v-else class="linked">
+            <li v-for="d in deals" :key="d.id">
+              <span class="linked-main">{{ d.title }}</span>
+              <span class="badge badge-plain">{{ t(`saleStage.${d.stage}`) }}</span>
+              <span class="tertiary">{{ d.ownerName }}</span>
+              <span class="linked-value">{{ money(d.value.baseMinor) }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="canMoney" class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('invoices.title') }}</h2>
+            <RouterLink to="/finance" class="btn btn-ghost btn-sm">
+              {{ t('dashboard.seeAll') }}
+            </RouterLink>
+          </div>
+
+          <p v-if="invoices.length === 0" class="card-body tertiary small">
+            {{ t('invoices.empty') }}
+          </p>
+
+          <ul v-else class="linked">
+            <li v-for="i in invoices" :key="i.id">
+              <span class="linked-main">{{ i.number }}</span>
+              <span class="tertiary">{{ formatDate(i.dueDate) }}</span>
+              <span class="badge badge-plain">{{ t(`invoiceStatus.${i.status}`) }}</span>
+              <span class="linked-value">{{ money(invoiceOutstanding(i)) }}</span>
+            </li>
+          </ul>
         </section>
       </template>
 
@@ -987,4 +1146,20 @@ watch(clientId, load)
 @media (max-width: 900px) {
   .columns { grid-template-columns: 1fr; }
 }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
+.figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.linked { list-style: none; margin: 0; padding: 0; }
+.linked li {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+.linked-main { flex: 1; min-width: 0; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linked-value { font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.small { font-size: var(--text-xs); }
 </style>

@@ -29,13 +29,19 @@ const auth = useAuthStore()
 const ui = useUiStore()
 const { t } = useI18n()
 
+/**
+ * A menu entry.
+ *
+ * `to` is required. There used to be an optional `soon` flag that rendered an
+ * entry flat and unclickable, and every module it marked is now built — so the
+ * flag is gone rather than left available. A menu that can contain a dead
+ * entry will eventually contain one.
+ */
 interface NavItem {
-  to?: string
+  to: string
   labelKey: string
   icon: string
   permission?: Permission
-  /** Planned, not built. Rendered flat and unclickable. */
-  soon?: boolean
   /** Hidden from affiliates, who are outside the company. */
   internalOnly?: boolean
 }
@@ -228,7 +234,6 @@ const sections = computed<NavSection[]>(() => {
 
         <template v-for="item in section.items" :key="item.labelKey">
           <RouterLink
-            v-if="item.to"
             :to="item.to"
             class="nav-item"
             active-class="is-active"
@@ -237,12 +242,6 @@ const sections = computed<NavSection[]>(() => {
             <AppIcon :name="item.icon" :size="17" />
             <span class="nav-label">{{ t(item.labelKey) }}</span>
           </RouterLink>
-
-          <span v-else class="nav-item is-soon" :title="t('nav2.soonTitle')">
-            <AppIcon :name="item.icon" :size="17" />
-            <span class="nav-label">{{ t(item.labelKey) }}</span>
-            <span class="soon-tag">{{ t('nav2.soon') }}</span>
-          </span>
         </template>
       </div>
     </nav>
@@ -348,21 +347,7 @@ a.nav-item:hover {
 }
 
 /* Planned, not built. Visible so the shape of the system is legible. */
-.nav-item.is-soon {
-  color: var(--text-tertiary);
-  cursor: default;
-  opacity: 0.75;
-}
 
-.soon-tag {
-  margin-left: auto;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--bg-surface-3);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
 
 .nav-label {
   overflow: hidden;

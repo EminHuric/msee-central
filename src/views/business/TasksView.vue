@@ -18,9 +18,12 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import {
+  addTaskComment,
+  blankTask,
   bucketOf,
   deleteTask,
   fetchProjects,
+  fetchTaskComments,
   fetchTasks,
   saveTask,
   setTaskStatus,
@@ -28,16 +31,19 @@ import {
 } from '@/api/operations'
 import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
-import { formatDate } from '@/i18n'
+import { formatDate, formatRelative } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
   TASK_PRIORITIES,
+  TASK_REPEATS,
   TASK_STATUSES,
+  type ChecklistItem,
   type Client,
   type Project,
   type Task,
+  type TaskComment,
 } from '@/types/business'
 import type { EmployeePublic } from '@/types/domain'
 
@@ -57,6 +63,12 @@ const onlyMine = ref(false)
 const showDone = ref(false)
 const draft = ref<Task | null>(null)
 const pendingDelete = ref<Task | null>(null)
+
+/* Comments live under the task, so they are fetched when one is opened. */
+const comments = ref<TaskComment[]>([])
+const newComment = ref('')
+const newChecklistItem = ref('')
+const loadingComments = ref(false)
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -111,23 +123,57 @@ async function load(): Promise<void> {
 }
 
 function startNew(): void {
-  draft.value = {
-    id: '',
-    title: '',
-    description: '',
-    clientId: null,
-    projectId: null,
-    assigneeUid: auth.uid,
-    assigneeName: auth.displayName ?? '',
-    status: 'todo',
-    priority: 'normal',
-    dueDate: null,
-    completedAt: null,
-  } as Task
+  draft.value = blankTask(auth.uid, auth.displayName ?? '')
 }
 
-function startEdit(task: Task): void {
-  draft.value = { ...task }
+async function startEdit(task: Task): Promise<void> {
+  draft.value = {
+    ...task,
+    checklist: [...(task.checklist ?? [])],
+  }
+
+  comments.value = []
+  if (!task.id) return
+
+  loadingComments.value = true
+  comments.value = await fetchTaskComments(task.id)
+  loadingComments.value = false
+}
+
+/* ---- Checklist ------------------------------------------------------ */
+
+function addChecklistItem(): void {
+  const text = newChecklistItem.value.trim()
+  if (!text || !draft.value) return
+
+  const list = draft.value.checklist ?? (draft.value.checklist = [])
+  list.push({ id: Math.random().toString(36).slice(2, 10), text, done: false })
+  newChecklistItem.value = ''
+}
+
+function removeChecklistItem(item: ChecklistItem): void {
+  const list = draft.value?.checklist
+  if (!list) return
+  const i = list.findIndex((x) => x.id === item.id)
+  if (i >= 0) list.splice(i, 1)
+}
+
+/** Done sub-items as a share of the whole, shown on the row. */
+function checklistProgress(task: Task): string | null {
+  const list = task.checklist ?? []
+  if (list.length === 0) return null
+  return `${list.filter((c) => c.done).length}/${list.length}`
+}
+
+/* ---- Comments -------------------------------------------------------- */
+
+async function postComment(): Promise<void> {
+  const task = draft.value
+  if (!task?.id || !newComment.value.trim()) return
+
+  await addTaskComment(task.id, newComment.value)
+  newComment.value = ''
+  comments.value = await fetchTaskComments(task.id)
 }
 
 /** Projects narrow to the chosen client, so the pair cannot contradict. */
@@ -151,11 +197,14 @@ async function commit(): Promise<void> {
     return
   }
 
+  const previous = tasks.value.find((x) => x.id === d.id)?.assigneeUid ?? null
+
   saving.value = true
   try {
-    await saveTask(d)
+    await saveTask(d, previous)
     ui.notify('ok', t('tasks.saved'))
     draft.value = null
+    comments.value = []
     await load()
   } catch {
     ui.notify('danger', t('tasks.saveFailed'))
@@ -267,11 +316,100 @@ onMounted(load)
               <option v-for="p in availableProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
+
+          <div class="field">
+            <label class="field-label" for="t-repeat">{{ t('tasks.repeat') }}</label>
+            <select id="t-repeat" v-model="draft.repeat" class="select">
+              <option v-for="r in TASK_REPEATS" :key="r || 'none'" :value="r">
+                {{ r ? t(`taskRepeat.${r}`) : t('tasks.noRepeat') }}
+              </option>
+            </select>
+            <p class="field-hint">{{ t('tasks.repeatHint') }}</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="t-est">{{ t('tasks.estimated') }}</label>
+            <input id="t-est" v-model.number="draft.estimatedMinutes" class="input" type="number" min="0" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="t-act">{{ t('tasks.actual') }}</label>
+            <input id="t-act" v-model.number="draft.actualMinutes" class="input" type="number" min="0" />
+          </div>
         </div>
 
         <div class="field">
           <label class="field-label" for="t-desc">{{ t('projects.description') }}</label>
           <textarea id="t-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
+        </div>
+
+        <!-- Checklist ------------------------------------------------- -->
+        <div class="field">
+          <span class="field-label">{{ t('tasks.checklist') }}</span>
+
+          <ul v-if="(draft.checklist ?? []).length" class="checklist">
+            <li v-for="item in draft.checklist" :key="item.id">
+              <label class="check">
+                <input v-model="item.done" type="checkbox" />
+                <span class="check-text" :class="{ 'is-done': item.done }">{{ item.text }}</span>
+              </label>
+              <button
+                class="btn btn-ghost btn-sm danger"
+                :aria-label="t('common.delete')"
+                @click="removeChecklistItem(item)"
+              >
+                <AppIcon name="close" :size="13" />
+              </button>
+            </li>
+          </ul>
+
+          <form class="add-row" @submit.prevent="addChecklistItem">
+            <input
+              v-model="newChecklistItem"
+              class="input"
+              :placeholder="t('tasks.addChecklistItem')"
+              :maxlength="LIMITS.position"
+            />
+            <button class="btn btn-secondary" type="submit">
+              <AppIcon name="plus" :size="15" />
+            </button>
+          </form>
+        </div>
+
+        <!-- Comments -------------------------------------------------- -->
+        <div v-if="draft.id" class="field">
+          <span class="field-label">{{ t('tasks.comments') }}</span>
+
+          <p v-if="loadingComments" class="tertiary small">{{ t('common.loading') }}</p>
+
+          <p v-else-if="comments.length === 0" class="tertiary small">
+            {{ t('tasks.noComments') }}
+          </p>
+
+          <ul v-else class="comments">
+            <li v-for="c in comments" :key="c.id">
+              <UserAvatar :name="c.authorName" :size="26" />
+              <span class="comment-body">
+                <span class="comment-head">
+                  <strong>{{ c.authorName }}</strong>
+                  <span class="tertiary">{{ formatRelative(c.createdAt) }}</span>
+                </span>
+                <span class="comment-text">{{ c.body }}</span>
+              </span>
+            </li>
+          </ul>
+
+          <form class="add-row" @submit.prevent="postComment">
+            <input
+              v-model="newComment"
+              class="input"
+              :placeholder="t('tasks.writeComment')"
+              :maxlength="LIMITS.longText"
+            />
+            <button class="btn btn-secondary" type="submit" :disabled="!newComment.trim()">
+              <AppIcon name="send" :size="15" />
+            </button>
+          </form>
         </div>
       </div>
 
@@ -359,6 +497,11 @@ onMounted(load)
                 · {{ projectNames.get(task.projectId) }}
               </span>
               <span v-if="task.dueDate" class="tertiary">· {{ formatDate(task.dueDate) }}</span>
+              <span v-if="checklistProgress(task)" class="tertiary">
+                · <AppIcon name="check" :size="11" /> {{ checklistProgress(task) }}
+              </span>
+              <span v-if="task.actualMinutes" class="tertiary">· {{ task.actualMinutes }}m</span>
+              <span v-if="task.repeat" class="tertiary">· {{ t(`taskRepeat.${task.repeat}`) }}</span>
               <span v-if="task.status !== 'todo' && task.status !== 'done'" class="badge badge-plain">
                 {{ t(`taskStatus.${task.status}`) }}
               </span>
@@ -400,6 +543,19 @@ onMounted(load)
 .segmented button.is-on { background: var(--bg-surface-3); color: var(--text-primary); box-shadow: var(--shadow-sm); }
 
 .check.inline { align-items: center; }
+
+.checklist { list-style: none; margin: var(--space-2) 0; padding: 0; }
+.checklist li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 2px 0; }
+.checklist .is-done { text-decoration: line-through; color: var(--text-tertiary); }
+
+.add-row { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.add-row .input { flex: 1; }
+
+.comments { list-style: none; margin: var(--space-2) 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.comments li { display: flex; gap: var(--space-3); }
+.comment-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.comment-head { display: flex; align-items: baseline; gap: var(--space-2); font-size: var(--text-xs); }
+.comment-text { font-size: var(--text-sm); line-height: var(--leading-relaxed); white-space: pre-wrap; }
 
 .tasks { list-style: none; padding: 0; margin: 0; }
 .task { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border-subtle); }

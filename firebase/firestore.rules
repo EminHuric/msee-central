@@ -792,6 +792,37 @@ service cloud.firestore {
     }
 
     /* ------------------------------------------------------------------ *
+     * Referral clicks
+     *
+     * The one collection anybody may write to without an account, because a
+     * referral link has to work for a stranger. It is deliberately the
+     * narrowest possible opening:
+     *
+     *   - create only. Nothing here can be read back, changed or deleted by
+     *     the person who wrote it, so it cannot be used as storage.
+     *   - the document must be exactly {code, at} and nothing else, so it
+     *     cannot carry a payload.
+     *   - a click earns nobody anything. Commission follows a payment that
+     *     arrived, which is why this counter can afford to be public: the
+     *     worst an abuser achieves is inflating a vanity number.
+     *
+     * Affiliate names, contact details and commission rules stay private —
+     * the public page never reads this collection or the affiliates one.
+     * ------------------------------------------------------------------ */
+
+    match /referralClicks/{clickId} {
+      allow read: if isInternal() && can('affiliates.view');
+
+      allow create: if request.resource.data.keys().hasOnly(['code', 'at'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() > 0
+        && request.resource.data.code.size() <= 40
+        && request.resource.data.at is string;
+
+      allow update, delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
      * auditLogs — append only
      *
      * Entries may be created by any active account but never altered or

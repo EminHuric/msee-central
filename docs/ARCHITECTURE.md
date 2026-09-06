@@ -4,175 +4,201 @@ Dokument odluka. Piše **šta** i **zašto**, ne kako — kako stoji u kodu.
 
 ---
 
-## 1. Audit zatečenog stanja
-
-63 fajla, ~16.400 linija, 588 linija sigurnosnih pravila, 31 dozvola, 32 testa
-protiv živih pravila.
-
-**Radi i povezano je:** prijavljivanje · registracija · odobravanje ·
-profili zaposlenih sa privatnošću po polju · imenik · uloge i dozvole ·
-vlasnik i suvlasnici · zaposleni vs affiliate · sektori i pozicije ·
-revizioni dnevnik · pretraga · klijenti sa dosijeom i knjigom poslova.
-
-### Tri stvarna problema
-
-**a) `/requests` je vodio na prazan ekran.** Odobravanje je bilo napravljeno
-kao kartica unutar Zaposlenih. Meni i kontrolna tabla su vodili na vrata koja
-ne postoje. *Popravljeno: Zahtevi imaju svoju stranicu, Zaposleni sadrže samo
-zaposlene.*
-
-**b) Novac se vodi na dva mesta.** Postoje kolekcije `income` i `expenses`, i
-istovremeno `clients/{id}/work` gde jedna stavka nosi i uloženo i prihod. To je
-moje dupliranje — dva načina da se upiše isti podatak znače da će se pre ili
-kasnije razići.
-
-**c) `projects` i `services` imaju tipove, kolekcije i pravila — ali nemaju ni
-API ni ekran.** Mrtva struktura koja izgleda kao funkcija.
-
----
-
-## 2. Centralna ideja
+## 1. Centralna ideja
 
 Agencija se ne vodi po modulima nego po **angažmanu**: šta radimo, za koga, po
 kojoj ceni, da li je naplaćeno i da li se isplatilo.
 
-Zato je centar sistema **knjiga poslova** (`work`), a ne „Finansije" kao
-zaseban modul. Svaka stavka nosi klijenta, uloženo, prihod, rok i status. Iz
-nje se izvode i profit, i potraživanja, i provizija, i izveštaji.
+Zato sistem ima jednu kičmu, a ne dvanaest nezavisnih stranica:
 
-Sve ostalo je kontekst oko te knjige.
+```
+Kontakt  →  Posao  →  Ugovor  →  Faktura  →  Uplata  →  Provizija
+(lead)     (sale)    (contract) (invoice)   (payment)  (commission)
+```
 
----
+Svaka karika odgovara na **drugo pitanje**, i zato se ne spajaju:
 
-## 3. Model podataka
-
-### Rešenje dupliranja
-
-| Odluka | Razlog |
+| Karika | Odgovara na |
 | --- | --- |
-| `clients/{id}/work` je **jedini** zapis novca vezanog za klijenta | Jedan red nosi i trošak i prihod; profit se izvodi, ne kuca |
-| `expenses` ostaje, ali **samo za režijske troškove** | Alat, plata, kancelarija — trošak koji nije ničiji projekat |
-| `income` se **briše** | Potpuno pokriveno knjigom poslova |
+| Posao | šta očekujemo da dobijemo i koliko je verovatno |
+| Ugovor | šta je dogovoreno i do kada |
+| Faktura | šta smo stvarno tražili da nam se plati |
+| Uplata | šta je stvarno stiglo |
 
-### Entiteti
-
-```
-users / employees / userPermissions      ✅ postoji
-roles / permissions                       ✅ postoji
-departments / positions                   ✅ postoji
-registrationRequests                      ✅ postoji
-auditLogs                                 ✅ postoji
-
-clients                                   ✅ postoji
-  ├── work          knjiga poslova        ✅ postoji
-  ├── services      šta klijent koristi   ✅ model, ✅ pravila
-  ├── instalments   rate                  ✅ model, ✅ pravila
-  ├── offers        posebni uslovi        ✅ model, ✅ pravila
-  ├── activities    komunikacija          ✅ postoji
-  └── notes         interne beleške       ✅ postoji
-
-leads                                     ⬜ novo
-projects                                  🟡 tip + pravila, bez ekrana
-tasks                                     ⬜ novo
-services (katalog)                        🟡 tip + pravila, bez ekrana
-expenses (režija)                         🟡 pravila, bez ekrana
-notifications/{uid}/items                 ⬜ novo
-documents                                 ⬜ traži Firebase Storage (Blaze)
-```
-
-### Veze
-
-```
-Lead ──(won)──▶ Client ──▶ Project ──▶ Task ──▶ Employee
-                  │           │
-                  ├──▶ Work ──┘        novac uvek visi o klijentu
-                  ├──▶ Service
-                  ├──▶ Instalment
-                  └──▶ Activity / Note
-```
-
-Pravilo bez izuzetka: **novac se vezuje za klijenta.** Projekat i usluga su
-oznake na stavci, ne zasebne knjige.
+Ugovor od 18.000 € sa 1.500 € fakturisano i 0 € plaćeno su **tri različita
+broja**. Sistem koji čuva samo jedan od njih — nagađa.
 
 ---
 
-## 4. Navigacija
+## 2. Pravilo koje sve drži: izvedeno se ne čuva
 
-```
-Kontrolna tabla
+`src/api/metrics.ts` učita **jedan snimak** podataka i iz njega izvede sve:
+kontrolnu tablu, analitiku, napredak ciljeva, KPI po čoveku, brojke projekta.
 
-RAD
-  Potencijalni klijenti     lead pipeline
-  Klijenti                  dosije + knjiga poslova
-  Projekti                  veći poslovi
-  Zadaci                    ko šta radi
+Zbog toga četiri ekrana nikad ne mogu da se ne slože oko prihoda. Ako je broj
+pogrešan, ispravka je u zapisu iz kog je došao — nema keša koji se briše ni
+noćnog posla koji se ponovo pokreće.
 
-NOVAC
-  Finansije                 prihod, režija, potraživanja
-  Usluge                    cenovnik
+Iz istog razloga:
 
-TIM
-  Zaposleni
-  Zahtevi
+- profit se ne kuca — `prihod − trošak`
+- provizija se ne kuca — izvodi se iz uplate i pravila partnera
+- napredak projekta se ne kuca — broji se iz miljokaza ili zadataka
+- napredak cilja se ne kuca — broji se iz živih zapisa
 
-SISTEM
-  Uloge i dozvole · Organizacija · Revizioni dnevnik · Podešavanja
-```
-
-Obaveštenja su u gornjoj traci sa brojačem, plus svoja stranica.
-
-### Šta bih izbacio
-
-**Chat** — već izbačen, i to je bila dobra odluka. **Analitika** kao zasebna
-stavka — to su Izveštaji. **Affiliate program** kao modul — provizija je već u
-dosijeu klijenta, zaseban ekran bi dupirao isti podatak. **Ugovori** — to je
-dokument, ide u Dokumente kad Storage bude dostupan.
+Izuzeci su svesni i zapisani: **faktura** čuva svoj iznos (dokument koji je
+poslat ne sme da se promeni kad neko kasnije izmeni stavku), a **cilj tipa
+„ručno"** ima vrednost koju čovek unosi jer sistem nema šta da broji.
 
 ---
 
-## 5. Automatizacije koje se isplate
+## 3. Novac visi o klijentu
 
-Samo one koje sistem može da izvede iz podataka koje već ima:
-
-- rok prošao, nije plaćeno → obaveštenje
-- rok za 3 dana → podsetnik
-- lead bez kontakta 7 dana → zadatak
-- lead „dobijen" → predlog da se otvori klijent sa već unetim podacima
-- zadatak kasni → obaveštenje izvršiocu i njegovom nadređenom
-
-Ne pravim automatizacije koje traže da korisnik prvo podesi pravila. To je
-proizvod za kasnije, ne za V1.
-
----
-
-## 6. Plan do V1
-
-| Faza | Sadržaj |
+| Zapis | Šta je |
 | --- | --- |
-| **1** ✅ | Zahtevi razdvojeni od Zaposlenih |
-| **2** | Uklanjanje dupliranja: `income` gasim, knjiga poslova ostaje jedina |
-| **3** | Usluge — katalog sa cenama, veže se na stavke |
-| **4** | Projekti — ekran, vezani za klijenta, sa knjigom i zadacima |
-| **5** | Zadaci — moji / danas / kasne, vezani za klijenta i projekat |
-| **6** | Finansije — prihod, režija, potraživanja, filteri |
-| **7** | Leads — pipeline i prelazak u klijenta |
-| **8** | Obaveštenja — izvedena iz rokova i zadataka |
-| **9** | Kontrolna tabla kao komandni centar |
-| **10** | Izveštaji — po mesecu, klijentu, usluzi |
-| **11** | Pretraga proširena na sve entitete |
-| **12** | Završni pregled: prazni ekrani, mrtve veze, mobilni |
+| `clients/{id}/work` | knjiga poslova — jedan red nosi i trošak i prihod |
+| `invoices` | šta je fakturisano, sastavljeno od stavki iz knjige |
+| `payments` | novac koji se stvarno pomerio, sa tipom |
+| `expenses` | režija — trošak koji nije ničiji projekat |
 
-Dokumenti i materijali čekaju Firebase Storage, koji traži Blaze plan. To je
-odluka o novcu, ne o kodu — ostavljam je za kad se sistem koristi.
+`payments.type` postoji jer **nije svaki priliv prihod**. Povraćaj odlazi,
+prenos ide između naših računa, i računati bilo šta od toga kao prihod znači
+lagati sebe o zaradi.
+
+Kolekcija `income` je obrisana. Dva mesta za isti podatak su dva mesta da se
+raziđu.
 
 ---
 
-## 7. Pravila koja se ne krše
+## 4. Provizija ide za novcem koji je stigao
 
-1. **Sigurnost je u `firestore.rules`,** nikad u interfejsu. Provera u `src/`
-   postoji radi udobnosti.
+```
+Preporuka → Kontakt → Posao → Uplata stigla → Provizija odobrena → Isplata
+```
+
+- **Klik ne donosi ništa.** Zato klik i sme da bude javan.
+- Provizija se pravi tek kad se upiše uplata, i to u statusu `pending`.
+- Odobravanje je **odvojena dozvola** (`commissions.approve`).
+- **Niko ne odobrava svoju** — pravilo u bazi to odbija, ne interfejs.
+
+Javni link `/ref/:code` piše jedan dokument oblika `{code, at}` u
+`referralClicks`. Ne čita ništa: ime partnera, kontakt i pravila provizije
+ostaju privatni.
+
+---
+
+## 5. Učinak nema jedinstvenu ocenu
+
+Programer i prodavac se ne mere istom osom. Prosek ta dva broja je precizan i
+besmislen, i ljudi brzo nauče da rade za broj umesto za posao.
+
+Umesto toga: **uloga nosi svoj skup KPI-jeva** (`roleKpis/{roleId}`), a svaki
+čovek se prikazuje uz te pokazatelje. Sve se broji iz zapisa koje sistem već
+ima — niko se ne ocenjuje podacima koje je neko o njemu ukucao.
+
+---
+
+## 6. Sigurnost je u pravilima, ne u interfejsu
+
+`firebase/firestore.rules` je granica. Sve u `src/` što proverava dozvolu radi
+to radi udobnosti: da sakrije dugme, da preskoči zahtev koji bi svakako pao.
+
+**Dokazano, ne tvrđeno:** `npm run rules:verify` napada živa pravila pravim
+klijentom kroz tri faze — neodobreni nalog, suvlasnik sa svim dozvolama,
+affiliate sa svim dozvolama. **60 provera, 0 padova.**
+
+Ono što se time dokazuje:
+
+- osnivač je nedodirljiv čak i za suvlasnika sa svim dozvolama
+- affiliate sa **svim** dozvolama i dalje ne vidi nijedan interni podatak
+- provizija se ne može napraviti već odobrena
+- ugovor se ne može obrisati
+- klik na preporuku ne može da ponese ništa osim koda i vremena, i ne može da
+  se pročita nazad
+
+### Poznato ograničenje
+
+Klijent piše revizioni dnevnik i obaveštenja. Pravila mogu da odbiju
+falsifikovan zapis, ali ne mogu da **nateraju** da zapis bude napisan. Neko ko
+radi direktno protiv API-ja mogao bi da uradi nešto i preskoči beleženje. Sve
+kroz aplikaciju se beleži. Rupa se zatvara Cloud Functions-om, što je predviđen
+sledeći korak.
+
+---
+
+## 7. Navigacija
+
+```
+PREGLED     Kontrolna tabla · Moj prostor
+POSLOVANJE  Klijenti · Kontakti · Projekti · Zadaci · Prodaja · Usluge ·
+            Partnerski program · Ugovori · Finansije
+TIM         Zaposleni · Ciljevi i KPI · Učinak
+ALATI       Kalendar · Poruke · Analitika
+SISTEM      Zahtevi · Podešavanja
+```
+
+Obaveštenja su na zvoncu u gornjoj traci, ne kao stavka menija.
+
+Administracija (uloge, organizacija, revizioni dnevnik) živi **unutar
+Podešavanja**. To su stvari koje se podese jednom; pored svakodnevnog posla
+samo su produžavale meni.
+
+---
+
+## 8. Automatizacije
+
+Rade same, iz podataka koje sistem već ima. Nema šta da se podešava i nema šta
+da tiho prestane da radi:
+
+- dodela zadatka → obaveštenje izvršiocu
+- predaja kontakta → obaveštenje novom vlasniku
+- rok plaćanja prošao → upozorenje dok se ne naplati
+- ugovor pred istek → pojavi se 45 dana unapred
+- upisana uplata → provizija partneru, na čekanju
+- završen ponavljajući zadatak → otvara se sledeći, završeni ostaje
+- obaveštenje → stiže svima kojima je poslato
+
+Obaveštenja izvedena iz datuma se **ne čuvaju**. Pojave se kad postanu tačna,
+nestanu kad se stvar reši, i ne mogu da se nagomilaju kao ustajali redovi o
+roku koji je odavno ispoštovan.
+
+---
+
+## 9. Alati koji čuvaju sistem
+
+| Komanda | Šta hvata |
+| --- | --- |
+| `npm run type-check` | tipove |
+| `npm run build` | greške u šablonu — **type-check ih ne hvata** |
+| `npm run i18n:check` | razliku između kataloga, duple ključeve, ključ koji se koristi a ne postoji, dozvolu bez objašnjenja |
+| `npm run links:check` | vezu koja vodi na rutu koja ne postoji |
+| `npm run rules:verify` | 60 tvrdnji o sigurnosti, protiv živih pravila |
+| `npm run permissions:sync` | katalog dozvola u bazi |
+| `npm run rules:publish` | objavljivanje pravila |
+
+Svaka od ovih provera postoji jer je odgovarajuća greška **već napravljena**
+bar jednom. Nijedna nije dodata preventivno.
+
+---
+
+## 10. Pravila koja se ne krše
+
+1. **Sigurnost je u `firestore.rules`,** nikad u interfejsu.
 2. **Svaka nova kolekcija dobija pravilo i test** pre nego što dobije ekran.
-3. **Novac su celi minor jedinici,** nikad decimale.
-4. **Izvedeni broj se nikad ne kuca** — profit, provizija, zbirovi.
-5. **Ništa se ne briše ako nosi istoriju.** Status, arhiva, ne brisanje.
+3. **Novac su celi minor jedinici,** nikad decimale. Kurs se zamrzava po datumu.
+4. **Izvedeni broj se nikad ne kuca.**
+5. **Ništa se ne briše ako nosi istoriju.** Status, arhiva, otkazivanje.
 6. **Nijedan tekst u komponenti** — sve kroz i18n, oba jezika.
+7. **Nijedna stavka menija bez odredišta.**
+
+---
+
+## 11. Šta namerno nije napravljeno
+
+**Dokumenti i materijali** traže Firebase Storage, koji traži Blaze plan. To je
+odluka o novcu, ne o kodu. Ugovor za sada nosi link na potpisan dokument.
+
+**Motor za pravila automatizacije** koji korisnik sam podešava. Automatizacija
+koju niko nije podesio gora je od nikakve; ovih sedam gore rade bez podešavanja.
+
+**Jedinstvena ocena učinka.** Vidi sekciju 5.
