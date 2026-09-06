@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import GlobalSearch from '@/components/GlobalSearch.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -64,6 +65,8 @@ async function handleSignOut(): Promise<void> {
     <div class="topbar-spacer" />
 
     <div class="topbar-actions">
+      <NotificationBell />
+
       <LanguageSwitcher />
 
       <button

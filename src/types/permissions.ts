@@ -56,6 +56,7 @@ export const PERMISSIONS = {
   CLIENTS_MANAGE: 'clients.manage',
   PROJECTS_VIEW: 'projects.view',
   PROJECTS_MANAGE: 'projects.manage',
+  SERVICES_VIEW: 'services.view',
   SERVICES_MANAGE: 'services.manage',
 
   // --- Money -----------------------------------------------------------
@@ -66,6 +67,55 @@ export const PERMISSIONS = {
    */
   FINANCE_VIEW: 'finance.view',
   FINANCE_MANAGE: 'finance.manage',
+  FINANCE_EXPORT: 'finance.export',
+
+  // --- Sales pipeline ---------------------------------------------------
+  LEADS_VIEW: 'leads.view',
+  /** Read every lead, not only the ones assigned to you. */
+  LEADS_VIEW_ALL: 'leads.view_all',
+  LEADS_MANAGE: 'leads.manage',
+
+  SALES_VIEW: 'sales.view',
+  SALES_VIEW_ALL: 'sales.view_all',
+  SALES_MANAGE: 'sales.manage',
+
+  // --- Contracts --------------------------------------------------------
+  CONTRACTS_VIEW: 'contracts.view',
+  CONTRACTS_MANAGE: 'contracts.manage',
+
+  // --- Tasks ------------------------------------------------------------
+  /** Everybody sees their own; this is the manager's wider view. */
+  TASKS_VIEW_ALL: 'tasks.view_all',
+  TASKS_MANAGE: 'tasks.manage',
+
+  // --- Affiliate programme ----------------------------------------------
+  AFFILIATES_VIEW: 'affiliates.view',
+  AFFILIATES_MANAGE: 'affiliates.manage',
+  /**
+   * Turn an earned commission into one that will be paid. Kept apart from
+   * managing affiliates because approving money is not the same job as
+   * maintaining a record.
+   */
+  COMMISSIONS_APPROVE: 'commissions.approve',
+
+  // --- Goals & performance ----------------------------------------------
+  GOALS_VIEW: 'goals.view',
+  GOALS_MANAGE: 'goals.manage',
+  PERFORMANCE_VIEW: 'performance.view',
+  /** See other people's numbers. Without it you see only your own. */
+  PERFORMANCE_VIEW_ALL: 'performance.view_all',
+
+  // --- Analytics ---------------------------------------------------------
+  ANALYTICS_VIEW: 'analytics.view',
+
+  // --- Calendar ----------------------------------------------------------
+  CALENDAR_VIEW: 'calendar.view',
+  CALENDAR_MANAGE: 'calendar.manage',
+
+  // --- Internal communication --------------------------------------------
+  CHAT_USE: 'chat.use',
+  CHAT_MANAGE_GROUPS: 'chat.manage_groups',
+  ANNOUNCEMENTS_SEND: 'announcements.send',
 
   // --- Audit -----------------------------------------------------------
   AUDIT_VIEW: 'audit_log.view',
@@ -126,12 +176,64 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.CLIENTS_MANAGE,
       PERMISSIONS.PROJECTS_VIEW,
       PERMISSIONS.PROJECTS_MANAGE,
+      PERMISSIONS.SERVICES_VIEW,
       PERMISSIONS.SERVICES_MANAGE,
     ],
   },
   {
+    key: 'pipeline',
+    permissions: [
+      PERMISSIONS.LEADS_VIEW,
+      PERMISSIONS.LEADS_VIEW_ALL,
+      PERMISSIONS.LEADS_MANAGE,
+      PERMISSIONS.SALES_VIEW,
+      PERMISSIONS.SALES_VIEW_ALL,
+      PERMISSIONS.SALES_MANAGE,
+    ],
+  },
+  {
+    key: 'contracts',
+    permissions: [PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE],
+  },
+  {
+    key: 'tasks',
+    permissions: [PERMISSIONS.TASKS_VIEW_ALL, PERMISSIONS.TASKS_MANAGE],
+  },
+  {
+    key: 'affiliates',
+    permissions: [
+      PERMISSIONS.AFFILIATES_VIEW,
+      PERMISSIONS.AFFILIATES_MANAGE,
+      PERMISSIONS.COMMISSIONS_APPROVE,
+    ],
+  },
+  {
+    key: 'goals',
+    permissions: [
+      PERMISSIONS.GOALS_VIEW,
+      PERMISSIONS.GOALS_MANAGE,
+      PERMISSIONS.PERFORMANCE_VIEW,
+      PERMISSIONS.PERFORMANCE_VIEW_ALL,
+    ],
+  },
+  {
+    key: 'tools',
+    permissions: [
+      PERMISSIONS.ANALYTICS_VIEW,
+      PERMISSIONS.CALENDAR_VIEW,
+      PERMISSIONS.CALENDAR_MANAGE,
+      PERMISSIONS.CHAT_USE,
+      PERMISSIONS.CHAT_MANAGE_GROUPS,
+      PERMISSIONS.ANNOUNCEMENTS_SEND,
+    ],
+  },
+  {
     key: 'finance',
-    permissions: [PERMISSIONS.FINANCE_VIEW, PERMISSIONS.FINANCE_MANAGE],
+    permissions: [
+      PERMISSIONS.FINANCE_VIEW,
+      PERMISSIONS.FINANCE_MANAGE,
+      PERMISSIONS.FINANCE_EXPORT,
+    ],
   },
   {
     key: 'notes',
@@ -166,9 +268,17 @@ export const SENSITIVE_PERMISSIONS: readonly Permission[] = [
   PERMISSIONS.NOTES_DELETE,
   PERMISSIONS.EMPLOYEES_VIEW_PRIVATE_INFO,
   PERMISSIONS.SETTINGS_EDIT,
+  PERMISSIONS.COMMISSIONS_APPROVE,
+  PERMISSIONS.PERFORMANCE_VIEW_ALL,
+  PERMISSIONS.ANNOUNCEMENTS_SEND,
 ]
 
 /** Sensible starting point for a plain employee with no management duties. */
 export const DEFAULT_EMPLOYEE_PERMISSIONS: readonly Permission[] = [
   PERMISSIONS.EMPLOYEES_VIEW,
+  PERMISSIONS.SERVICES_VIEW,
+  PERMISSIONS.CALENDAR_VIEW,
+  PERMISSIONS.CHAT_USE,
+  PERMISSIONS.PERFORMANCE_VIEW,
+  PERMISSIONS.GOALS_VIEW,
 ]

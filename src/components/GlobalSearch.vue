@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * Search across people and pages.
+ * Search across everything the viewer may reach.
  *
- * The directory is loaded once on first use rather than on every keystroke:
- * a company has tens of employees, not thousands, so filtering in memory is
- * instant and costs one read instead of one per letter typed.
+ * Loaded once on first use rather than on every keystroke: an agency has tens
+ * of clients and hundreds of records, not millions, so filtering in memory is
+ * instant and costs one round of reads instead of one per letter typed.
  *
- * Only what the viewer may reach is searchable. Pages are filtered by the same
- * permissions that build the sidebar, and people are simply absent for anybody
- * the rules would refuse — an affiliate searching finds only pages.
+ * Nothing is filtered here for security. Every read returns empty when the
+ * rules refuse it, so a person who may not see leads simply has no leads to
+ * match — the boundary is the rules, and this is only how a refusal looks.
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -17,10 +17,23 @@ import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
+import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
+import { fetchLeads, fetchProjects, fetchServiceCatalogue, fetchTasks } from '@/api/operations'
+import { fetchContracts, fetchSales } from '@/api/revenue'
 import { useAuthStore } from '@/stores/auth'
 import type { EmployeePublic } from '@/types/domain'
 import { PERMISSIONS, type Permission } from '@/types/permissions'
+
+/** One shape for every kind of record, so the list stays one list. */
+interface Hit {
+  id: string
+  to: string
+  icon: string
+  label: string
+  sub: string
+  groupKey: string
+}
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -30,6 +43,7 @@ const term = ref('')
 const open = ref(false)
 const loaded = ref(false)
 const people = ref<EmployeePublic[]>([])
+const records = ref<Hit[]>([])
 const root = ref<HTMLElement | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const highlighted = ref(0)
@@ -92,6 +106,91 @@ const PAGES: PageEntry[] = [
     permission: PERMISSIONS.AUDIT_VIEW,
     internalOnly: true,
   },
+  {
+    to: '/leads',
+    labelKey: 'modules.leads',
+    icon: 'target',
+    permission: PERMISSIONS.LEADS_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/sales',
+    labelKey: 'modules.sales',
+    icon: 'trending',
+    permission: PERMISSIONS.SALES_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/projects',
+    labelKey: 'modules.projects',
+    icon: 'layers',
+    permission: PERMISSIONS.PROJECTS_VIEW,
+    internalOnly: true,
+  },
+  { to: '/tasks', labelKey: 'modules.tasks', icon: 'check', internalOnly: true },
+  {
+    to: '/services',
+    labelKey: 'modules.services',
+    icon: 'spark',
+    permission: PERMISSIONS.SERVICES_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/contracts',
+    labelKey: 'modules.contracts',
+    icon: 'contract',
+    permission: PERMISSIONS.CONTRACTS_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/affiliates',
+    labelKey: 'modules.affiliateProgram',
+    icon: 'gift',
+    permission: PERMISSIONS.AFFILIATES_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/finance',
+    labelKey: 'modules.finance',
+    icon: 'wallet',
+    permission: PERMISSIONS.FINANCE_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/goals',
+    labelKey: 'modules.goals',
+    icon: 'flag',
+    permission: PERMISSIONS.GOALS_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/performance',
+    labelKey: 'modules.performance',
+    icon: 'gauge',
+    permission: PERMISSIONS.PERFORMANCE_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/calendar',
+    labelKey: 'modules.calendar',
+    icon: 'calendar',
+    permission: PERMISSIONS.CALENDAR_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/chat',
+    labelKey: 'chat.title',
+    icon: 'chat',
+    permission: PERMISSIONS.CHAT_USE,
+    internalOnly: true,
+  },
+  {
+    to: '/analytics',
+    labelKey: 'modules.analytics',
+    icon: 'chart',
+    permission: PERMISSIONS.ANALYTICS_VIEW,
+    internalOnly: true,
+  },
   { to: '/profile', labelKey: 'nav.profile', icon: 'user' },
   { to: '/settings', labelKey: 'nav.settings', icon: 'settings' },
 ]
@@ -124,20 +223,108 @@ const peopleResults = computed(() => {
     .slice(0, 6)
 })
 
+const recordResults = computed(() => {
+  if (!query.value) return []
+  return records.value
+    .filter((r) => `${r.label} ${r.sub}`.toLowerCase().includes(query.value))
+    .slice(0, 8)
+})
+
 /** One flat list, so the arrow keys walk everything in the order shown. */
 const flat = computed(() => [
-  ...peopleResults.value.map((p) => ({ kind: 'person' as const, to: `/employees/${p.uid}`, person: p })),
-  ...pageResults.value.map((p) => ({ kind: 'page' as const, to: p.to, page: p })),
+  ...recordResults.value.map((r) => ({ to: r.to })),
+  ...peopleResults.value.map((p) => ({ to: `/employees/${p.uid}` })),
+  ...pageResults.value.map((p) => ({ to: p.to })),
 ])
 
 watch(query, () => {
   highlighted.value = 0
 })
 
+/**
+ * Load everything searchable, once.
+ *
+ * Each read already returns empty when the rules refuse it, so this is safe to
+ * fire for anybody: an affiliate ends up with an empty record list and finds
+ * only the pages they can open.
+ */
 async function ensureLoaded(): Promise<void> {
-  if (loaded.value || !canSeePeople.value) return
+  if (loaded.value) return
   loaded.value = true
-  people.value = await fetchEmployees().catch(() => [])
+
+  const [staff, clients, leads, sales, projects, tasks, contracts, services] = await Promise.all([
+    canSeePeople.value ? fetchEmployees().catch(() => []) : Promise.resolve([]),
+    fetchClients().catch(() => []),
+    fetchLeads().catch(() => []),
+    fetchSales().catch(() => []),
+    fetchProjects().catch(() => []),
+    fetchTasks().catch(() => []),
+    fetchContracts().catch(() => []),
+    fetchServiceCatalogue().catch(() => []),
+  ])
+
+  people.value = staff
+
+  records.value = [
+    ...clients.map((c) => ({
+      id: `client-${c.id}`,
+      to: `/clients/${c.id}`,
+      icon: 'building',
+      label: c.name,
+      sub: [c.contactName, c.city].filter(Boolean).join(' · '),
+      groupKey: 'modules.clients',
+    })),
+    ...leads.map((l) => ({
+      id: `lead-${l.id}`,
+      to: '/leads',
+      icon: 'target',
+      label: l.company || l.name,
+      sub: l.serviceInterest || l.email,
+      groupKey: 'modules.leads',
+    })),
+    ...sales.map((x) => ({
+      id: `sale-${x.id}`,
+      to: '/sales',
+      icon: 'trending',
+      label: x.title,
+      sub: x.clientName,
+      groupKey: 'modules.sales',
+    })),
+    ...projects.map((pr) => ({
+      id: `project-${pr.id}`,
+      to: '/projects',
+      icon: 'layers',
+      label: pr.name,
+      sub: pr.description,
+      groupKey: 'modules.projects',
+    })),
+    ...tasks
+      .filter((tk) => tk.status !== 'done' && tk.status !== 'cancelled')
+      .map((tk) => ({
+        id: `task-${tk.id}`,
+        to: '/tasks',
+        icon: 'check',
+        label: tk.title,
+        sub: tk.assigneeName ?? '',
+        groupKey: 'modules.tasks',
+      })),
+    ...contracts.map((c) => ({
+      id: `contract-${c.id}`,
+      to: '/contracts',
+      icon: 'contract',
+      label: `${c.number} · ${c.clientName}`,
+      sub: c.serviceName,
+      groupKey: 'modules.contracts',
+    })),
+    ...services.map((sv) => ({
+      id: `service-${sv.id}`,
+      to: '/services',
+      icon: 'spark',
+      label: sv.name,
+      sub: sv.category ?? '',
+      groupKey: 'modules.services',
+    })),
+  ]
 }
 
 function focusSearch(): void {
@@ -240,6 +427,25 @@ onBeforeUnmount(() => {
         </p>
 
         <div v-else class="panel-results">
+          <template v-if="recordResults.length">
+            <p class="eyebrow group-label">{{ t('search.records') }}</p>
+            <button
+              v-for="(hit, index) in recordResults"
+              :key="hit.id"
+              type="button"
+              class="result"
+              :class="{ 'is-active': highlighted === index }"
+              @click="go(hit.to)"
+              @mouseenter="highlighted = index"
+            >
+              <span class="result-icon"><AppIcon :name="hit.icon" :size="15" /></span>
+              <span class="result-text">
+                <span class="result-name">{{ hit.label }}</span>
+                <span class="result-sub">{{ t(hit.groupKey) }}{{ hit.sub ? ` · ${hit.sub}` : '' }}</span>
+              </span>
+            </button>
+          </template>
+
           <template v-if="peopleResults.length">
             <p class="eyebrow group-label">{{ t('search.people') }}</p>
             <button
@@ -247,9 +453,9 @@ onBeforeUnmount(() => {
               :key="person.uid"
               type="button"
               class="result"
-              :class="{ 'is-active': highlighted === index }"
+              :class="{ 'is-active': highlighted === recordResults.length + index }"
               @click="go(`/employees/${person.uid}`)"
-              @mouseenter="highlighted = index"
+              @mouseenter="highlighted = recordResults.length + index"
             >
               <UserAvatar
                 :name="`${person.firstName} ${person.lastName}`"
@@ -270,9 +476,11 @@ onBeforeUnmount(() => {
               :key="page.to"
               type="button"
               class="result"
-              :class="{ 'is-active': highlighted === peopleResults.length + index }"
+              :class="{
+                'is-active': highlighted === recordResults.length + peopleResults.length + index,
+              }"
               @click="go(page.to)"
-              @mouseenter="highlighted = peopleResults.length + index"
+              @mouseenter="highlighted = recordResults.length + peopleResults.length + index"
             >
               <span class="result-icon"><AppIcon :name="page.icon" :size="15" /></span>
               <span class="result-text">

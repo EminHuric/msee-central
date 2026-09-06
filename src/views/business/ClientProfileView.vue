@@ -18,6 +18,7 @@ import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import { fetchProjectsFor, fetchServiceCatalogue } from '@/api/operations'
 import { fetchClient } from '@/api/clients'
 import {
   commissionFor,
@@ -43,6 +44,8 @@ import {
   type Client,
   type PaymentStatus,
   type WorkItem,
+  type Project,
+  type Service,
 } from '@/types/business'
 import {
   BASE_CURRENCY,
@@ -65,6 +68,8 @@ const loading = ref(true)
 const notFound = ref(false)
 const client = ref<Client | null>(null)
 const dossier = ref<Dossier | null>(null)
+const projects = ref<Project[]>([])
+const catalogue = ref<Service[]>([])
 
 type Tab = 'overview' | 'work' | 'payments' | 'activity' | 'notes'
 const tab = ref<Tab>('overview')
@@ -112,9 +117,11 @@ async function load(): Promise<void> {
   notFound.value = false
 
   try {
-    const [found, file] = await Promise.all([
+    const [found, file, projs, cat] = await Promise.all([
       fetchClient(clientId.value),
       fetchDossier(clientId.value),
+      fetchProjectsFor(clientId.value),
+      fetchServiceCatalogue(),
     ])
     if (!found) {
       notFound.value = true
@@ -122,6 +129,8 @@ async function load(): Promise<void> {
     }
     client.value = found
     dossier.value = file
+    projects.value = projs
+    catalogue.value = cat
   } catch {
     notFound.value = true
   } finally {
@@ -136,6 +145,8 @@ interface WorkDraft {
   date: string
   title: string
   serviceName: string
+  serviceId: string | null
+  projectId: string | null
   costAmount: number
   revenueAmount: number
   currency: CurrencyCode
@@ -156,6 +167,8 @@ function newWork(): void {
     date: today,
     title: '',
     serviceName: '',
+    serviceId: null,
+    projectId: null,
     costAmount: 0,
     revenueAmount: 0,
     currency: BASE_CURRENCY,
@@ -172,6 +185,8 @@ function editWork(item: WorkItem): void {
     date: item.date,
     title: item.title,
     serviceName: item.serviceName ?? '',
+    serviceId: item.serviceId ?? null,
+    projectId: item.projectId ?? null,
     costAmount: fromMinor(item.cost.minor, item.cost.currency),
     revenueAmount: fromMinor(item.revenue.minor, item.revenue.currency),
     currency: item.revenue.currency,
@@ -179,6 +194,24 @@ function editWork(item: WorkItem): void {
     dueDate: item.dueDate ?? '',
     paymentStatus: item.paymentStatus,
     note: item.note ?? '',
+  }
+}
+
+/**
+ * Picking from the price list fills the name and suggests the price. It is a
+ * suggestion, not a rule: what a client agreed to is what gets charged, and
+ * that is often not the list price.
+ */
+function pickService(id: string): void {
+  const d = workDraft.value
+  if (!d) return
+  const service = catalogue.value.find((c) => c.id === id)
+  d.serviceId = id || null
+  if (!service) return
+  d.serviceName = service.name
+  if (d.revenueAmount === 0) {
+    d.revenueAmount = fromMinor(service.defaultPrice.minor, service.defaultPrice.currency)
+    d.currency = service.defaultPrice.currency
   }
 }
 
@@ -203,8 +236,9 @@ async function commitWork(): Promise<void> {
       id: d.id,
       date: d.date,
       title: d.title,
-      serviceId: null,
+      serviceId: d.serviceId,
       serviceName: d.serviceName,
+      projectId: d.projectId,
       cost: makeMoney(d.costAmount, d.currency, d.rate, d.date),
       revenue: makeMoney(d.revenueAmount, d.currency, d.rate, d.date),
       dueDate: d.dueDate || null,
@@ -245,6 +279,7 @@ async function markPaid(item: WorkItem): Promise<void> {
       title: item.title,
       serviceId: item.serviceId,
       serviceName: item.serviceName,
+      projectId: item.projectId ?? null,
       cost: item.cost,
       revenue: item.revenue,
       dueDate: item.dueDate,
@@ -494,7 +529,38 @@ watch(clientId, load)
               </div>
               <div class="field">
                 <label class="field-label" for="w-service">{{ t('dossier.serviceName') }}</label>
-                <input id="w-service" v-model="workDraft.serviceName" class="input" :maxlength="LIMITS.position" />
+                <input
+                  id="w-service"
+                  v-model="workDraft.serviceName"
+                  class="input"
+                  list="w-catalogue"
+                  :maxlength="LIMITS.position"
+                />
+                <datalist id="w-catalogue">
+                  <option v-for="c in catalogue" :key="c.id" :value="c.name" />
+                </datalist>
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <div v-if="catalogue.length" class="field">
+                <label class="field-label" for="w-cat">{{ t('dossier.pickService') }}</label>
+                <select
+                  id="w-cat"
+                  :value="workDraft.serviceId ?? ''"
+                  class="select"
+                  @change="pickService(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option v-for="c in catalogue" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-proj">{{ t('dossier.project') }}</label>
+                <select id="w-proj" v-model="workDraft.projectId" class="select">
+                  <option :value="null">{{ t('dossier.noProject') }}</option>
+                  <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
               </div>
             </div>
 
@@ -506,7 +572,7 @@ watch(clientId, load)
                 </select>
               </div>
               <div v-if="workDraft.currency !== BASE_CURRENCY" class="field">
-                <label class="field-label" for="w-rate">Kurs</label>
+                <label class="field-label" for="w-rate">{{ t('dossier.exchangeRate') }}</label>
                 <input id="w-rate" v-model.number="workDraft.rate" class="input" type="number" step="0.0001" />
               </div>
               <div class="field">

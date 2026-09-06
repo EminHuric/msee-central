@@ -130,6 +130,7 @@ export interface WorkItemInput {
   title: string
   serviceId: string | null
   serviceName: string
+  projectId: string | null
   cost: Money
   revenue: Money
   dueDate: string | null
@@ -157,6 +158,7 @@ export async function saveWorkItem(
       title: input.title.trim(),
       serviceId: input.serviceId,
       serviceName: input.serviceName.trim(),
+      projectId: input.projectId ?? null,
       cost: input.cost,
       revenue: input.revenue,
       // Derived here and nowhere else, so it can never disagree with its parts.

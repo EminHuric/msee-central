@@ -44,7 +44,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth'
-import { doc, getDoc, getFirestore, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, getFirestore, setDoc, updateDoc } from 'firebase/firestore'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
@@ -254,6 +254,34 @@ try {
 
   await mustDeny('applicant CANNOT read clients', () => getDoc(doc(db, 'clients', 'any-client')))
 
+  /*
+   * The modules added after the first release. An account with no permission
+   * document reaches none of them — the absence of that document is the whole
+   * check, and it has to keep holding as collections are added.
+   */
+  for (const [label, path] of [
+    ['sales', 'sales'],
+    ['contracts', 'contracts'],
+    ['invoices', 'invoices'],
+    ['payments', 'payments'],
+    ['affiliates', 'affiliates'],
+    ['commissions', 'commissions'],
+    ['goals', 'goals'],
+    ['leads', 'leads'],
+    ['tasks', 'tasks'],
+    ['calendar entries', 'calendarEvents'],
+  ]) {
+    await mustDeny(`applicant CANNOT read ${label}`, () => getDoc(doc(db, path, 'any-record')))
+  }
+
+  await mustDeny("applicant CANNOT read somebody else's notifications", () =>
+    getDoc(doc(db, 'notifications', 'someone-else', 'items', 'any-item')),
+  )
+
+  await mustDeny('applicant CANNOT read a chat thread', () =>
+    getDoc(doc(db, 'chatThreads', 'any-thread')),
+  )
+
   await mustDeny('applicant CANNOT create a client', () =>
     setDoc(doc(db, 'clients', `forged-${stamp}`), { id: 'forged', name: 'Forged', status: 'active' }),
   )
@@ -359,7 +387,48 @@ try {
       updateDoc(doc(db, 'userPermissions', ownerUid), { isFounder: true }),
     )
 
-    await mustDeny('co-owner CANNOT appoint another owner', () =>
+    /*
+   * Commission is money owed to a person, so the rules are stricter here than
+   * anywhere else in the business side. A commission may only be created in
+   * the pending state: creating one already approved would let whoever records
+   * a payment also sign off the payout on it.
+   */
+  await mustDeny('co-owner CANNOT create a pre-approved commission', () =>
+    setDoc(doc(db, 'commissions', `rules-commission-${stamp}`), {
+      id: `rules-commission-${stamp}`,
+      affiliateId: 'nobody',
+      affiliateName: 'Nobody',
+      affiliateEmployeeUid: '',
+      paymentId: 'none',
+      clientId: null,
+      clientName: '',
+      serviceId: null,
+      saleId: null,
+      baseAmountBaseMinor: 100000,
+      ruleDescription: 'forged',
+      amountBaseMinor: 100000,
+      status: 'approved',
+      earnedDate: '2026-01-01',
+      approvedBy: null,
+      approvedAt: null,
+      paidAt: null,
+      note: '',
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  /* A contract is history. Cancel it; the rules refuse to erase it. */
+  await mustDeny('co-owner CANNOT delete a contract', () =>
+    deleteDoc(doc(db, 'contracts', 'any-contract')),
+  )
+
+  await mustDeny('co-owner CANNOT read a chat thread they are not in', () =>
+    getDoc(doc(db, 'chatThreads', 'a-thread-they-are-not-in')),
+  )
+
+  await mustDeny('co-owner CANNOT appoint another owner', () =>
       setDoc(doc(db, 'userPermissions', `would-be-owner-${stamp}`), {
         uid: `would-be-owner-${stamp}`,
         status: 'active',
@@ -470,6 +539,33 @@ try {
   await mustDeny('affiliate CANNOT read income', () => getDoc(doc(db, 'income', 'any-entry')))
 
   await mustDeny('affiliate CANNOT read expenses', () => getDoc(doc(db, 'expenses', 'any-entry')))
+
+  /*
+   * The whole business side is internal, whatever permissions an affiliate
+   * happens to hold. This account holds every one of them and still reaches
+   * none of it — which is the claim worth proving, because a permission can be
+   * granted by mistake and this line should not be crossable by mistake.
+   */
+  for (const [label, path] of [
+    ['sales', 'sales'],
+    ['contracts', 'contracts'],
+    ['invoices', 'invoices'],
+    ['payments', 'payments'],
+    ['leads', 'leads'],
+    ['tasks', 'tasks'],
+    ['goals', 'goals'],
+    ['calendar entries', 'calendarEvents'],
+  ]) {
+    await mustDeny(`affiliate CANNOT read ${label}`, () => getDoc(doc(db, path, 'any-record')))
+  }
+
+  await mustDeny("affiliate CANNOT read another person's notifications", () =>
+    getDoc(doc(db, 'notifications', 'someone-else', 'items', 'any-item')),
+  )
+
+  await mustDeny('affiliate CANNOT read an affiliate record that is not theirs', () =>
+    getDoc(doc(db, 'affiliates', 'somebody-elses-affiliate-record')),
+  )
 
 } finally {
   /* --- clean up ----------------------------------------------------- */

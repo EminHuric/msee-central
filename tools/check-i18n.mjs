@@ -13,8 +13,11 @@
  *   npm run i18n:check
  */
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
+import { ALL_PERMISSIONS } from '../src/types/permissions.ts'
 import en from '../src/i18n/locales/en.ts'
 import sr from '../src/i18n/locales/sr.ts'
 
@@ -76,6 +79,66 @@ function duplicateKeys(source) {
   return found
 }
 
+/**
+ * Keys the application asks for that the catalogue does not have.
+ *
+ * vue-i18n does not fail on a missing key — it prints the key itself, so the
+ * screen reads `tasks.showDone` where a label should be. Nothing catches that
+ * except opening the page, which is exactly the check nobody performs on the
+ * screen they did not touch.
+ *
+ * Only literal keys are collected. A key built at runtime — `taskStatus.${s}`
+ * — is skipped, because its prefix is checked instead: if `taskStatus` exists
+ * at all, the enum values under it are covered by the parity check above.
+ */
+function sourceFiles(dir) {
+  return readdirSync(dir).flatMap((entry) => {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) return sourceFiles(full)
+    return /\.(vue|ts)$/.test(entry) && !full.includes('locales') ? [full] : []
+  })
+}
+
+function usedKeys() {
+  const found = new Map()
+
+  for (const file of sourceFiles(fileURLToPath(new URL('../src', import.meta.url)))) {
+    const text = readFileSync(file, 'utf8')
+    for (const m of text.matchAll(/\bt\(\s*'([a-zA-Z][\w.]*)'/g)) {
+      if (!found.has(m[1])) found.set(m[1], file)
+    }
+    // Interpolated keys: check the fixed prefix only.
+    for (const m of text.matchAll(/\bt\(\s*`([a-zA-Z][\w.]*)\.\$\{/g)) {
+      if (!found.has(m[1])) found.set(m[1], file)
+    }
+  }
+
+  return found
+}
+
+const used = usedKeys()
+const unknownKeys = [...used]
+  .filter(([key]) => at(en, key) === undefined)
+  .map(([key, file]) => `${key}   ${file.replace(/^.*[/\\]src[/\\]/, '')}`)
+
+
+/**
+ * Every permission needs a label and a description.
+ *
+ * The role editor renders `permission.<key>.label`, and vue-i18n prints the
+ * key itself when it is missing — so a permission added without text shows up
+ * in the CEO's role editor as `permission.sales.view_all.label`, which tells
+ * whoever is handing out access precisely nothing. That happened once already.
+ */
+const permissionText = ALL_PERMISSIONS.flatMap((key) => {
+  const missing = []
+  if (at(en, `permission.${key}.label`) === undefined) missing.push(`permission.${key}.label`)
+  if (at(en, `permission.${key}.description`) === undefined) {
+    missing.push(`permission.${key}.description`)
+  }
+  return missing
+})
+
 const enSource = readFileSync(new URL('../src/i18n/locales/en.ts', import.meta.url), 'utf8')
 const srSource = readFileSync(new URL('../src/i18n/locales/sr.ts', import.meta.url), 'utf8')
 
@@ -93,7 +156,7 @@ const placeholderMismatch = enPaths
   .filter((row) => row.en.join() !== row.sr.join())
 
 console.log('\n  Translation parity')
-console.log(`  en: ${enPaths.length} keys    sr: ${srPaths.length} keys\n`)
+console.log(`  en: ${enPaths.length} keys    sr: ${srPaths.length} keys    used in src: ${used.size}\n`)
 
 function report(title, rows, format) {
   if (rows.length === 0) return 0
@@ -109,6 +172,8 @@ problems += report('duplicate keys in en.ts', duplicateKeys(enSource), (k) => k)
 problems += report('duplicate keys in sr.ts', duplicateKeys(srSource), (k) => k)
 problems += report('missing in sr.ts', missingInSr, (p) => p)
 problems += report('missing in en.ts', missingInEn, (p) => p)
+problems += report('used in src but missing from the catalogue', unknownKeys, (r) => r)
+problems += report('permission with no plain-language text', permissionText, (r) => r)
 problems += report(
   'placeholder mismatch',
   placeholderMismatch,

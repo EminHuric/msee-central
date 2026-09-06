@@ -50,6 +50,10 @@ export interface Client {
   nextChargeDate: string | null
   paymentNote: string
 
+  /** What business they are in, for grouping and reporting. */
+  industry: string
+  tags: string[]
+
   referral: Referral
   customFields: CustomField[]
 
@@ -102,6 +106,8 @@ export interface WorkItem {
   title: string
   serviceId: string | null
   serviceName: string
+  /** Optional label. Money still belongs to the client; this groups it. */
+  projectId: string | null
   cost: Money
   revenue: Money
   /** revenue.baseMinor - cost.baseMinor. Derived, never typed in. */
@@ -295,56 +301,51 @@ export interface Project {
   endDate: string | null
   /** Which employee runs it. */
   ownerUid: string | null
+  ownerName: string
+  /** Everyone working on it, so it can appear in their workspace. */
+  teamUids: string[]
+  priority: TaskPriority
+  serviceId: string | null
+  serviceName: string
+  contractId: string | null
+  milestones: Milestone[]
   createdAt: string
   createdBy: string
   updatedAt: string
+}
+
+/**
+ * A checkpoint inside a project.
+ *
+ * Progress is counted from these and from the project's tasks rather than
+ * typed in, so "80% done" always means something specific.
+ */
+export interface Milestone {
+  id: string
+  title: string
+  dueDate: string | null
+  done: boolean
 }
 
 /* ------------------------------------------------------------------ *
  * Services — the price list
  * ------------------------------------------------------------------ */
 
+export const PRICING_MODELS = ['fixed', 'hourly', 'monthly', 'commission', 'custom'] as const
+export type PricingModel = (typeof PRICING_MODELS)[number]
+
 export interface Service {
   id: string
   name: string
   description: string
+  /** Free text so a new line of business does not need a code change. */
+  category: string
+  pricingModel: PricingModel
   defaultPrice: Money
   /** "per month", "per page", "per hour" — free text, it only ever prints. */
   unit: string
   status: 'active' | 'inactive'
   createdAt: string
-  updatedAt: string
-}
-
-/* ------------------------------------------------------------------ *
- * Money in
- * ------------------------------------------------------------------ */
-
-/**
- * Where an amount stands.
- *
- * `planned` is expected but not asked for yet, `issued` has been sent to the
- * client, `paid` has arrived. Keeping the three apart is what separates "we
- * earned this" from "we have this", which are not the same number and are
- * confused constantly.
- */
-export const INCOME_STATUSES = ['planned', 'issued', 'paid'] as const
-export type IncomeStatus = (typeof INCOME_STATUSES)[number]
-
-export interface IncomeEntry {
-  id: string
-  clientId: string
-  projectId: string | null
-  description: string
-  amount: Money
-  /** When the work was delivered or the charge applies. */
-  date: string
-  status: IncomeStatus
-  paidDate: string | null
-  /** Set once documents are generated; the number printed on it. */
-  documentNumber: string | null
-  createdAt: string
-  createdBy: string
   updatedAt: string
 }
 
@@ -377,6 +378,134 @@ export interface ExpenseEntry {
   createdAt: string
   createdBy: string
   updatedAt: string
+}
+
+/* ------------------------------------------------------------------ *
+ * Leads
+ *
+ * Kept apart from clients on purpose. A lead is a conversation that may go
+ * nowhere; a client is a relationship with money in it. Mixing them fills the
+ * client list with people who never bought anything, and makes every figure
+ * about "our clients" quietly wrong.
+ *
+ * Winning a lead copies its details into a new client rather than converting
+ * the record, so the pipeline keeps its own history of what was tried.
+ * ------------------------------------------------------------------ */
+
+export const LEAD_STAGES = [
+  'new',
+  'contacted',
+  'interested',
+  'offer_sent',
+  'negotiation',
+  'won',
+  'lost',
+] as const
+export type LeadStage = (typeof LEAD_STAGES)[number]
+
+/** Stages that are still live, for the pipeline view and the counts. */
+export const OPEN_STAGES: readonly LeadStage[] = [
+  'new',
+  'contacted',
+  'interested',
+  'offer_sent',
+  'negotiation',
+]
+
+export interface Lead {
+  id: string
+  name: string
+  company: string
+  email: string
+  phone: string
+  city: string
+  country: string
+  source: ClientSource
+  sourceDetail: string
+  /** What the work would be worth if it lands. */
+  estimatedValue: Money | null
+  serviceInterest: string
+  stage: LeadStage
+  /** Who is working it. Performance and "my leads" both read this. */
+  assigneeUid: string | null
+  assigneeName: string
+  priority: TaskPriority
+  /** The one thing to do next. A pipeline without this is just a list. */
+  nextStep: string
+  nextContactDate: string | null
+  notes: string
+  lostReason: string
+  /** Set when the lead was won and a client was created from it. */
+  clientId: string | null
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+}
+
+/* ------------------------------------------------------------------ *
+ * Tasks
+ * ------------------------------------------------------------------ */
+
+export const TASK_STATUSES = ['todo', 'doing', 'review', 'blocked', 'done', 'cancelled'] as const
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
+export type TaskPriority = (typeof TASK_PRIORITIES)[number]
+
+/**
+ * A piece of work assigned to somebody.
+ *
+ * Client and project are both optional. Plenty of real work belongs to nobody
+ * in particular — fix the website, chase an invoice — and forcing every task
+ * under a project is how task lists start being avoided.
+ */
+export interface Task {
+  id: string
+  title: string
+  description: string
+  clientId: string | null
+  projectId: string | null
+  assigneeUid: string | null
+  assigneeName: string
+  status: TaskStatus
+  priority: TaskPriority
+  dueDate: string | null
+  completedAt: string | null
+  /** Planned and actual effort, in minutes. Zero means not tracked. */
+  estimatedMinutes: number
+  actualMinutes: number
+  checklist: ChecklistItem[]
+  /** Repeats after completion; blank when it does not. */
+  repeat: TaskRepeat
+  createdAt: string
+  createdBy: string
+  createdByName: string
+  updatedAt: string
+}
+
+export const TASK_REPEATS = ['', 'daily', 'weekly', 'monthly'] as const
+export type TaskRepeat = (typeof TASK_REPEATS)[number]
+
+/** Days added when a repeating task is completed and re-opened. */
+export const REPEAT_DAYS: Record<Exclude<TaskRepeat, ''>, number> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+}
+
+export interface ChecklistItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+/** A comment on a task, stored under `tasks/{id}/comments`. */
+export interface TaskComment {
+  id: string
+  body: string
+  authorUid: string
+  authorName: string
+  createdAt: string
 }
 
 /* ------------------------------------------------------------------ *

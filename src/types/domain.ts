@@ -359,6 +359,36 @@ export const AUDIT_ACTIONS = [
   'project.updated',
   'income.recorded',
   'expense.recorded',
+  'lead.created',
+  'lead.updated',
+  'lead.converted',
+  'sale.created',
+  'sale.updated',
+  'sale.won',
+  'sale.lost',
+  'contract.created',
+  'contract.updated',
+  'contract.status_changed',
+  'invoice.issued',
+  'invoice.cancelled',
+  'payment.recorded',
+  'payment.deleted',
+  'affiliate.created',
+  'affiliate.updated',
+  'commission.earned',
+  'commission.approved',
+  'commission.paid',
+  'commission.rejected',
+  'goal.created',
+  'goal.updated',
+  'goal.deleted',
+  'task.created',
+  'task.updated',
+  'task.deleted',
+  'event.created',
+  'event.deleted',
+  'announcement.sent',
+  'auth.logout',
   'settings.updated',
   'data.exported',
 ] as const
@@ -373,6 +403,16 @@ export type AuditTargetType =
   | 'department'
   | 'position'
   | 'client'
+  | 'lead'
+  | 'sale'
+  | 'contract'
+  | 'invoice'
+  | 'payment'
+  | 'affiliate'
+  | 'commission'
+  | 'goal'
+  | 'task'
+  | 'event'
   | 'project'
   | 'income'
   | 'expense'

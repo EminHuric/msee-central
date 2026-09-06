@@ -66,14 +66,56 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.CLIENTS_VIEW,
           internalOnly: true,
         },
-        { labelKey: 'modules.leads', icon: 'target', soon: true, internalOnly: true },
-        { labelKey: 'modules.projects', icon: 'layers', soon: true, internalOnly: true },
-        { labelKey: 'modules.tasks', icon: 'check', soon: true },
-        { labelKey: 'modules.sales', icon: 'trending', soon: true, internalOnly: true },
-        { labelKey: 'modules.services', icon: 'spark', soon: true, internalOnly: true },
-        { labelKey: 'modules.affiliateProgram', icon: 'users', soon: true, internalOnly: true },
-        { labelKey: 'modules.contracts', icon: 'contract', soon: true, internalOnly: true },
-        { labelKey: 'modules.finance', icon: 'wallet', soon: true, internalOnly: true },
+        {
+          to: '/leads',
+          labelKey: 'modules.leads',
+          icon: 'target',
+          permission: PERMISSIONS.LEADS_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/projects',
+          labelKey: 'modules.projects',
+          icon: 'layers',
+          permission: PERMISSIONS.PROJECTS_VIEW,
+          internalOnly: true,
+        },
+        { to: '/tasks', labelKey: 'modules.tasks', icon: 'check', internalOnly: true },
+        {
+          to: '/sales',
+          labelKey: 'modules.sales',
+          icon: 'trending',
+          permission: PERMISSIONS.SALES_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/services',
+          labelKey: 'modules.services',
+          icon: 'spark',
+          permission: PERMISSIONS.SERVICES_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/affiliates',
+          labelKey: 'modules.affiliateProgram',
+          icon: 'gift',
+          permission: PERMISSIONS.AFFILIATES_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/contracts',
+          labelKey: 'modules.contracts',
+          icon: 'contract',
+          permission: PERMISSIONS.CONTRACTS_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/finance',
+          labelKey: 'modules.finance',
+          icon: 'wallet',
+          permission: PERMISSIONS.FINANCE_VIEW,
+          internalOnly: true,
+        },
       ],
     },
     {
@@ -86,17 +128,56 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.EMPLOYEES_VIEW,
           internalOnly: true,
         },
-        { labelKey: 'modules.goals', icon: 'target', soon: true, internalOnly: true },
-        { labelKey: 'modules.performance', icon: 'chart', soon: true, internalOnly: true },
+        {
+          to: '/goals',
+          labelKey: 'modules.goals',
+          icon: 'flag',
+          permission: PERMISSIONS.GOALS_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/performance',
+          labelKey: 'modules.performance',
+          icon: 'gauge',
+          permission: PERMISSIONS.PERFORMANCE_VIEW,
+          internalOnly: true,
+        },
       ],
     },
     {
       titleKey: 'modules.groupTools',
       items: [
-        { labelKey: 'modules.calendar', icon: 'calendar', soon: true },
-        { labelKey: 'modules.analytics', icon: 'chart', soon: true, internalOnly: true },
+        {
+          to: '/calendar',
+          labelKey: 'modules.calendar',
+          icon: 'calendar',
+          permission: PERMISSIONS.CALENDAR_VIEW,
+          internalOnly: true,
+        },
+        {
+          to: '/chat',
+          labelKey: 'chat.title',
+          icon: 'chat',
+          permission: PERMISSIONS.CHAT_USE,
+          internalOnly: true,
+        },
+        {
+          to: '/analytics',
+          labelKey: 'modules.analytics',
+          icon: 'chart',
+          permission: PERMISSIONS.ANALYTICS_VIEW,
+          internalOnly: true,
+        },
       ],
     },
+    /*
+     * Administration lives inside Settings rather than as its own group.
+     * Roles, the organisation chart, registration requests and the audit log
+     * are all things you configure once and then leave alone; putting them
+     * beside the work somebody does every day made the menu longer without
+     * making anything easier to find. Their routes still exist and are still
+     * permission-gated — Settings is a hub over them, not a replacement.
+     */
     {
       titleKey: 'modules.groupSystem',
       items: [
@@ -107,27 +188,7 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.REQUESTS_VIEW,
           internalOnly: true,
         },
-        {
-          to: '/roles',
-          labelKey: 'nav.roles',
-          icon: 'shield',
-          permission: PERMISSIONS.ROLES_VIEW,
-          internalOnly: true,
-        },
-        {
-          to: '/organization',
-          labelKey: 'nav2.organization',
-          icon: 'building',
-          permission: PERMISSIONS.DEPARTMENTS_MANAGE,
-          internalOnly: true,
-        },
-        {
-          to: '/audit',
-          labelKey: 'nav.audit',
-          icon: 'scroll',
-          permission: PERMISSIONS.AUDIT_VIEW,
-          internalOnly: true,
-        },
+        { to: '/settings', labelKey: 'nav.settings', icon: 'settings' },
       ],
     },
   ]
