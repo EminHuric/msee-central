@@ -463,6 +463,7 @@ export function invoiceFromWork(
     serviceId: items[0]?.serviceId ?? null,
     saleId: null,
     description: items.map((w) => w.title).join(', '),
+    workItemIds: items.map((w) => w.id),
     amount,
     paidBaseMinor: 0,
     issueDate: base.issueDate,

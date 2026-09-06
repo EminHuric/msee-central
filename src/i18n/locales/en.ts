@@ -471,11 +471,6 @@ export default {
     profileComplete: 'Your profile is complete.',
     completeProfile: 'Finish it',
 
-    comingSoon: 'Coming soon',
-    earningsSoon:
-      'Your earnings, bonuses and tasks will appear here once those parts of the system are built.',
-    commissionSoon:
-      'Your sales, commission and payouts will appear here once that part of the system is built.',
   },
 
   auditAction: {
@@ -597,14 +592,7 @@ export default {
     thisWeek: 'This week',
     title: 'My Workspace',
     subtitle: 'Everything that is yours.',
-    profileCard: 'Your profile',
-    tasksCard: 'Your tasks',
-    earningsCard: 'Your earnings',
-    notificationsCard: 'Notifications',
-    tasksSoon: 'Tasks assigned to you will appear here.',
     earningsSoon: 'Your salary, bonuses and rewards will appear here.',
-    notificationsSoon: 'Messages and reminders for you will appear here.',
-    openProfile: 'Open profile',
   },
 
   settingsHub: {

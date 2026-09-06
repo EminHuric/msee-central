@@ -299,7 +299,7 @@ function newInvoice(): void {
 const billable = computed(() => {
   const d = invoiceDraft.value
   if (!d?.clientId) return []
-  const billed = new Set(invoices.value.flatMap((i) => (i as { workItemIds?: string[] }).workItemIds ?? []))
+  const billed = new Set(invoices.value.flatMap((i) => i.workItemIds ?? []))
   return work.value.filter(
     (w) => w.clientId === d.clientId && w.paymentStatus !== 'paid' && !billed.has(w.id),
   )
@@ -345,12 +345,7 @@ async function commitInvoice(): Promise<void> {
       dueDate: d.dueDate,
     })
 
-    await saveInvoice({
-      ...invoice,
-      contractId: d.contractId,
-      /* Stored so the same work cannot be billed twice. */
-      workItemIds: items.map((w) => w.id),
-    } as Invoice & { workItemIds: string[] })
+    await saveInvoice({ ...invoice, contractId: d.contractId })
 
     /* The work items take the invoice's due date, so one date governs both. */
     for (const item of items) {

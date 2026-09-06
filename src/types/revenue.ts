@@ -148,6 +148,15 @@ export interface Invoice {
   serviceId: string | null
   saleId: string | null
   description: string
+  /**
+   * The work items this invoice bills.
+   *
+   * Kept so the same work cannot be billed twice, and so an invoice can be
+   * traced back to what it was for. The amount below is the sum of these at
+   * the moment it was issued — stored rather than recomputed, because an
+   * invoice that was sent must not change when somebody later edits a line.
+   */
+  workItemIds: string[]
   amount: Money
   /** Sum of the payments recorded against it. Derived, never typed in. */
   paidBaseMinor: number

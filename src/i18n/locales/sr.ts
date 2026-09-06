@@ -470,11 +470,6 @@ export default {
     profileComplete: 'Tvoj profil je kompletan.',
     completeProfile: 'Dovrši ga',
 
-    comingSoon: 'Uskoro',
-    earningsSoon:
-      'Tvoja zarada, bonusi i zadaci pojaviće se ovde kad ti delovi sistema budu napravljeni.',
-    commissionSoon:
-      'Tvoja prodaja, provizija i isplate pojaviće se ovde kad taj deo sistema bude napravljen.',
   },
 
   auditAction: {
@@ -596,14 +591,7 @@ export default {
     thisWeek: 'Ove nedelje',
     title: 'Moj prostor',
     subtitle: 'Sve što je tvoje.',
-    profileCard: 'Tvoj profil',
-    tasksCard: 'Tvoji zadaci',
-    earningsCard: 'Tvoja zarada',
-    notificationsCard: 'Obaveštenja',
-    tasksSoon: 'Zadaci koji su ti dodeljeni pojaviće se ovde.',
     earningsSoon: 'Tvoja plata, bonusi i nagrade pojaviće se ovde.',
-    notificationsSoon: 'Poruke i podsetnici za tebe pojaviće se ovde.',
-    openProfile: 'Otvori profil',
   },
 
   settingsHub: {
