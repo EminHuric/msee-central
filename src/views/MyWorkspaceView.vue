@@ -225,15 +225,20 @@ async function commitSubmit(): Promise<void> {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [s, n, a] = await Promise.all([
-    loadSnapshot(),
-    fetchDatedNotes().catch(() => []),
-    uid.value ? fetchActivityBy(uid.value, 15).catch(() => []) : Promise.resolve([]),
-  ])
-  snap.value = s
-  notes.value = n
-  activity.value = a
-  loading.value = false
+  try {
+    const [s, n, a] = await Promise.all([
+      loadSnapshot(),
+      fetchDatedNotes().catch(() => []),
+      uid.value ? fetchActivityBy(uid.value, 15).catch(() => []) : Promise.resolve([]),
+    ])
+    snap.value = s
+    notes.value = n
+    activity.value = a
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)

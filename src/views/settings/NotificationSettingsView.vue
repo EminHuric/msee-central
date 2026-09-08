@@ -54,15 +54,20 @@ const recipients = computed(() => {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [prefs, e, d] = await Promise.all([
-    auth.uid ? fetchPreferences(auth.uid) : Promise.resolve({ uid: '', muted: [], updatedAt: '' }),
-    fetchEmployees().catch(() => []),
-    fetchDepartments().catch(() => []),
-  ])
-  muted.value = prefs.muted ?? []
-  people.value = e
-  departments.value = d
-  loading.value = false
+  try {
+    const [prefs, e, d] = await Promise.all([
+      auth.uid ? fetchPreferences(auth.uid) : Promise.resolve({ uid: '', muted: [], updatedAt: '' }),
+      fetchEmployees().catch(() => []),
+      fetchDepartments().catch(() => []),
+    ])
+    muted.value = prefs.muted ?? []
+    people.value = e
+    departments.value = d
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 async function toggleKind(kind: NotificationKind): Promise<void> {

@@ -159,15 +159,20 @@ const owed = computed(() =>
 
 async function load(): Promise<void> {
   loading.value = true
-  const [snap, e, d] = await Promise.all([
-    loadSnapshot(),
-    fetchEmployees().catch(() => []),
-    fetchDepartments().catch(() => []),
-  ])
-  snapshot.value = snap
-  people.value = e
-  departments.value = d
-  loading.value = false
+  try {
+    const [snap, e, d] = await Promise.all([
+      loadSnapshot(),
+      fetchEmployees().catch(() => []),
+      fetchDepartments().catch(() => []),
+    ])
+    snapshot.value = snap
+    people.value = e
+    departments.value = d
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ---- Programme editor ------------------------------------------------ */

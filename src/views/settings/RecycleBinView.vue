@@ -56,8 +56,13 @@ const overdue = computed(() => expired(rows.value))
 
 async function load(): Promise<void> {
   loading.value = true
-  rows.value = await fetchBin()
-  loading.value = false
+  try {
+    rows.value = await fetchBin()
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 async function restore(record: DeletedRecord): Promise<void> {

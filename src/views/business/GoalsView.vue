@@ -118,17 +118,22 @@ function blankGoal(): Goal {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [g, snap, e, d] = await Promise.all([
-    fetchGoals(),
-    loadSnapshot(),
-    fetchEmployees().catch(() => []),
-    fetchDepartments().catch(() => []),
-  ])
-  goals.value = g
-  snapshot.value = snap
-  people.value = e
-  departments.value = d
-  loading.value = false
+  try {
+    const [g, snap, e, d] = await Promise.all([
+      fetchGoals(),
+      loadSnapshot(),
+      fetchEmployees().catch(() => []),
+      fetchDepartments().catch(() => []),
+    ])
+    goals.value = g
+    snapshot.value = snap
+    people.value = e
+    departments.value = d
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startNew(): void {

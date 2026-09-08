@@ -48,6 +48,7 @@ import {
 import { balanceOf } from '@/types/revenue'
 import { formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import { OPEN_STAGES } from '@/types/business'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
@@ -55,6 +56,7 @@ import type { ActivityEntry } from '@/types/records'
 import type { RegistrationRequest } from '@/types/domain'
 
 const auth = useAuthStore()
+const ui = useUiStore()
 const router = useRouter()
 const { t, locale } = useI18n()
 
@@ -363,15 +365,20 @@ const hasAnything = computed(
 
 async function load(): Promise<void> {
   loading.value = true
-  const [s, a, r] = await Promise.all([
-    loadSnapshot(),
-    fetchRecentActivity(12).catch(() => []),
-    canRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
-  ])
-  snap.value = s
-  activity.value = a
-  requests.value = r.filter((x) => x.status === 'pending')
-  loading.value = false
+  try {
+    const [s, a, r] = await Promise.all([
+      loadSnapshot(),
+      fetchRecentActivity(12).catch(() => []),
+      canRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
+    ])
+    snap.value = s
+    activity.value = a
+    requests.value = r.filter((x) => x.status === 'pending')
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)

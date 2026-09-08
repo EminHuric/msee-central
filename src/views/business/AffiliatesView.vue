@@ -136,33 +136,38 @@ const myCommissions = computed(() =>
 
 async function load(): Promise<void> {
   loading.value = true
+  try {
 
-  const affiliate = auth.uid ? await fetchMyAffiliate(auth.uid).catch(() => null) : null
-  mine.value = affiliate
+    const affiliate = auth.uid ? await fetchMyAffiliate(auth.uid).catch(() => null) : null
+    mine.value = affiliate
 
-  /*
-   * A partner reads only what is theirs. The narrower query is not a security
-   * measure — the rules already refuse the rest — it is simply the one that
-   * returns anything for them.
-   */
-  const partnerOnly = !auth.hasPermission(PERMISSIONS.LEADS_VIEW_ALL)
+    /*
+     * A partner reads only what is theirs. The narrower query is not a security
+     * measure — the rules already refuse the rest — it is simply the one that
+     * returns anything for them.
+     */
+    const partnerOnly = !auth.hasPermission(PERMISSIONS.LEADS_VIEW_ALL)
 
-  const [a, c, l, s, sv, p] = await Promise.all([
-    fetchAffiliates().catch(() => []),
-    fetchCommissions().catch(() => []),
-    (partnerOnly && auth.uid ? fetchLeadsBy(auth.uid) : fetchLeads()).catch(() => []),
-    fetchSales().catch(() => []),
-    fetchServices().catch(() => []),
-    fetchEmployees().catch(() => []),
-  ])
+    const [a, c, l, s, sv, p] = await Promise.all([
+      fetchAffiliates().catch(() => []),
+      fetchCommissions().catch(() => []),
+      (partnerOnly && auth.uid ? fetchLeadsBy(auth.uid) : fetchLeads()).catch(() => []),
+      fetchSales().catch(() => []),
+      fetchServices().catch(() => []),
+      fetchEmployees().catch(() => []),
+    ])
 
-  affiliates.value = a
-  commissions.value = c
-  leads.value = l
-  sales.value = s
-  services.value = sv
-  people.value = p
-  loading.value = false
+    affiliates.value = a
+    commissions.value = c
+    leads.value = l
+    sales.value = s
+    services.value = sv
+    people.value = p
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ---- Affiliate editor ------------------------------------------------ */

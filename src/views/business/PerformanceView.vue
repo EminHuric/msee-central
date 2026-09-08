@@ -118,17 +118,22 @@ function tone(metric: KpiMetric, value: number): string {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [snap, e, r, k] = await Promise.all([
-    loadSnapshot(),
-    fetchEmployees().catch(() => []),
-    fetchRoles().catch(() => []),
-    fetchRoleKpis().catch(() => ({})),
-  ])
-  snapshot.value = snap
-  people.value = e
-  roles.value = r
-  roleKpis.value = k
-  loading.value = false
+  try {
+    const [snap, e, r, k] = await Promise.all([
+      loadSnapshot(),
+      fetchEmployees().catch(() => []),
+      fetchRoles().catch(() => []),
+      fetchRoleKpis().catch(() => ({})),
+    ])
+    snapshot.value = snap
+    people.value = e
+    roles.value = r
+    roleKpis.value = k
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startConfigure(roleId: string): void {

@@ -1792,6 +1792,7 @@ export default {
     fileTooLarge: 'File is too large. Maximum {max}.',
     fileWrongType: 'Unsupported file type. Use JPG, PNG or WebP.',
     mustAcceptTerms: 'You must accept the terms to continue.',
+    loadFailed: 'This could not be loaded. Check your connection and try again.',
   },
 
   soon: {

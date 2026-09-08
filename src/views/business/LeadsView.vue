@@ -140,19 +140,24 @@ function contactTone(lead: Lead): string {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [l, p, s, a, f] = await Promise.all([
-    fetchLeads(),
-    fetchEmployees().catch(() => []),
-    fetchServices().catch(() => []),
-    fetchAffiliates().catch(() => []),
-    fetchFieldDefs().catch(() => []),
-  ])
-  leads.value = l
-  people.value = p
-  services.value = s
-  affiliates.value = a
-  fieldDefs.value = f
-  loading.value = false
+  try {
+    const [l, p, s, a, f] = await Promise.all([
+      fetchLeads(),
+      fetchEmployees().catch(() => []),
+      fetchServices().catch(() => []),
+      fetchAffiliates().catch(() => []),
+      fetchFieldDefs().catch(() => []),
+    ])
+    leads.value = l
+    people.value = p
+    services.value = s
+    affiliates.value = a
+    fieldDefs.value = f
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startNew(): void {

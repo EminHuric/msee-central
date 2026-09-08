@@ -60,15 +60,20 @@ function isSensitive(permission: Permission): boolean {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [allRoles, people] = await Promise.all([
-    fetchRoles().catch(() => []),
-    fetchEmployees().catch(() => []),
-  ])
-  // Owner roles first: they are the ones somebody scanning this page is
-  // checking on.
-  roles.value = allRoles.sort((a, b) => Number(b.grantsAll) - Number(a.grantsAll))
-  employees.value = people
-  loading.value = false
+  try {
+    const [allRoles, people] = await Promise.all([
+      fetchRoles().catch(() => []),
+      fetchEmployees().catch(() => []),
+    ])
+    // Owner roles first: they are the ones somebody scanning this page is
+    // checking on.
+    roles.value = allRoles.sort((a, b) => Number(b.grantsAll) - Number(a.grantsAll))
+    employees.value = people
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ---- Editing ------------------------------------------------------ */

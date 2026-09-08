@@ -20,11 +20,13 @@ import { deleteNote, fetchNotes, saveNote } from '@/api/records'
 import { formatDate, formatRelative } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import type { Note, NoteEntity } from '@/types/business'
 
 const props = defineProps<{ entity: NoteEntity; entityId: string; title?: string }>()
 
 const auth = useAuthStore()
+const ui = useUiStore()
 const { t } = useI18n()
 
 const notes = ref<Note[]>([])
@@ -41,10 +43,14 @@ const open = computed(() => notes.value.filter((n) => n.dueDate && !n.done))
 const overdue = computed(() => open.value.filter((n) => (n.dueDate ?? '') < today))
 
 async function load(): Promise<void> {
-  if (!props.entityId) return
   loading.value = true
-  notes.value = await fetchNotes(props.entity, props.entityId)
-  loading.value = false
+  try {
+    notes.value = await fetchNotes(props.entity, props.entityId)
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 async function add(): Promise<void> {

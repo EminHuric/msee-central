@@ -53,8 +53,13 @@ const needsOptions = computed(
 
 async function load(): Promise<void> {
   loading.value = true
-  fields.value = await fetchFieldDefs()
-  loading.value = false
+  try {
+    fields.value = await fetchFieldDefs()
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function blankField(): CustomFieldDef {

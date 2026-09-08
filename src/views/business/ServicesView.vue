@@ -99,15 +99,20 @@ const visible = computed(() => {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [sv, sl, f] = await Promise.all([
-    fetchServices(),
-    fetchSales().catch(() => []),
-    fetchFieldDefs().catch(() => []),
-  ])
-  services.value = sv
-  sales.value = sl
-  fieldDefs.value = f
-  loading.value = false
+  try {
+    const [sv, sl, f] = await Promise.all([
+      fetchServices(),
+      fetchSales().catch(() => []),
+      fetchFieldDefs().catch(() => []),
+    ])
+    services.value = sv
+    sales.value = sl
+    fieldDefs.value = f
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startNew(): void {

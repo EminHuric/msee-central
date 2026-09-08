@@ -55,15 +55,20 @@ function positionUsage(id: string): number {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [deps, pos, people] = await Promise.all([
-    fetchDepartments().catch(() => []),
-    fetchPositions().catch(() => []),
-    fetchEmployees().catch(() => []),
-  ])
-  departments.value = deps
-  positions.value = pos
-  employees.value = people
-  loading.value = false
+  try {
+    const [deps, pos, people] = await Promise.all([
+      fetchDepartments().catch(() => []),
+      fetchPositions().catch(() => []),
+      fetchEmployees().catch(() => []),
+    ])
+    departments.value = deps
+    positions.value = pos
+    employees.value = people
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ---- Departments ------------------------------------------------- */

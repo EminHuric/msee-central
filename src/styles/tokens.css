@@ -101,6 +101,20 @@
   /* ---- Layout ------------------------------------------------------ */
   --sidebar-width: 256px;
   --topbar-height: 60px;
+
+  /*
+   * How wide the content is allowed to get.
+   *
+   * A fixed 1440px is right on a laptop and wrong on the screen this system is
+   * meant to live on — a wall-mounted display where it would sit as a column
+   * down the middle inside two feet of empty grey.
+   *
+   * So the cap rises in two steps. Note what does *not* change with it: type
+   * size, card padding, row height. The extra width buys more columns in the
+   * `auto-fit` grids — more of the company visible at once, which is the point
+   * of a big screen — rather than the same six cards blown up, which is what
+   * scaling everything produces and is worse than the empty margins.
+   */
   --content-max: 1440px;
 
   /* ---- Motion ------------------------------------------------------ */
@@ -204,4 +218,17 @@
   --shadow-focus: 0 0 0 3px rgb(255 138 30 / 30%);
 
   --scrim: rgb(16 16 24 / 42%);
+}
+
+/* ---- Very wide screens ------------------------------------------------ *
+ *
+ * See the note on `--content-max`. Only the cap moves; nothing is scaled.
+ */
+
+@media (min-width: 1800px) {
+  :root { --content-max: 1760px; }
+}
+
+@media (min-width: 2400px) {
+  :root { --content-max: 2160px; }
 }

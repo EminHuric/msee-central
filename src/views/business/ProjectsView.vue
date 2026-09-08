@@ -109,19 +109,24 @@ function isLate(project: Project): boolean {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [p, c, sv, e, sl] = await Promise.all([
-    fetchProjects(),
-    fetchClients().catch(() => []),
-    fetchServices().catch(() => []),
-    fetchEmployees().catch(() => []),
-    fetchSales().catch(() => []),
-  ])
-  projects.value = p
-  clients.value = c
-  services.value = sv
-  people.value = e
-  sales.value = sl
-  loading.value = false
+  try {
+    const [p, c, sv, e, sl] = await Promise.all([
+      fetchProjects(),
+      fetchClients().catch(() => []),
+      fetchServices().catch(() => []),
+      fetchEmployees().catch(() => []),
+      fetchSales().catch(() => []),
+    ])
+    projects.value = p
+    clients.value = c
+    services.value = sv
+    people.value = e
+    sales.value = sl
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /**

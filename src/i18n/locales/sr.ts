@@ -1791,6 +1791,7 @@ export default {
     fileTooLarge: 'Fajl je prevelik. Najviše {max}.',
     fileWrongType: 'Nepodržan tip fajla. Koristi JPG, PNG ili WebP.',
     mustAcceptTerms: 'Moraš prihvatiti uslove da bi nastavio.',
+    loadFailed: 'Ovo nije moglo da se učita. Proveri vezu i pokušaj ponovo.',
   },
 
   soon: {

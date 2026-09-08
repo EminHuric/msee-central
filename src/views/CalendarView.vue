@@ -139,23 +139,28 @@ function goToday(): void {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [e, tx, n, g, cl, pr, p] = await Promise.all([
-    fetchEvents(),
-    fetchTransactions().catch(() => []),
-    fetchDatedNotes().catch(() => []),
-    fetchGoals().catch(() => []),
-    fetchClients().catch(() => []),
-    fetchProjects().catch(() => []),
-    fetchEmployees().catch(() => []),
-  ])
-  events.value = e
-  transactions.value = tx
-  notes.value = n
-  goals.value = g
-  clients.value = cl
-  projects.value = pr
-  people.value = p
-  loading.value = false
+  try {
+    const [e, tx, n, g, cl, pr, p] = await Promise.all([
+      fetchEvents(),
+      fetchTransactions().catch(() => []),
+      fetchDatedNotes().catch(() => []),
+      fetchGoals().catch(() => []),
+      fetchClients().catch(() => []),
+      fetchProjects().catch(() => []),
+      fetchEmployees().catch(() => []),
+    ])
+    events.value = e
+    transactions.value = tx
+    notes.value = n
+    goals.value = g
+    clients.value = cl
+    projects.value = pr
+    people.value = p
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 /* ---- Editor --------------------------------------------------------- */

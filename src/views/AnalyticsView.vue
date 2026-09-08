@@ -13,6 +13,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useUiStore } from '@/stores/ui'
+
 import AppIcon from '@/components/ui/AppIcon.vue'
 import PeriodPicker from '@/components/PeriodPicker.vue'
 import RankChart from '@/components/ui/RankChart.vue'
@@ -37,6 +39,7 @@ import {
 } from '@/api/metrics'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
 
+const ui = useUiStore()
 const { t, locale } = useI18n()
 
 const loading = ref(true)
@@ -160,8 +163,13 @@ const hasAnything = computed(
 
 async function load(): Promise<void> {
   loading.value = true
-  all.value = await loadSnapshot()
-  loading.value = false
+  try {
+    all.value = await loadSnapshot()
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)

@@ -133,25 +133,30 @@ const totals = computed(() => totalsOf(visible.value, transactions.value))
 
 async function load(): Promise<void> {
   loading.value = true
-  const [s, tx, c, sv, pr, p, a, f] = await Promise.all([
-    fetchSales(),
-    fetchTransactions().catch(() => []),
-    fetchClients().catch(() => []),
-    fetchServices().catch(() => []),
-    fetchProjects().catch(() => []),
-    fetchEmployees().catch(() => []),
-    fetchAffiliates().catch(() => []),
-    fetchFieldDefs().catch(() => []),
-  ])
-  sales.value = s
-  transactions.value = tx
-  clients.value = c
-  services.value = sv
-  projects.value = pr
-  people.value = p
-  affiliates.value = a
-  fieldDefs.value = f
-  loading.value = false
+  try {
+    const [s, tx, c, sv, pr, p, a, f] = await Promise.all([
+      fetchSales(),
+      fetchTransactions().catch(() => []),
+      fetchClients().catch(() => []),
+      fetchServices().catch(() => []),
+      fetchProjects().catch(() => []),
+      fetchEmployees().catch(() => []),
+      fetchAffiliates().catch(() => []),
+      fetchFieldDefs().catch(() => []),
+    ])
+    sales.value = s
+    transactions.value = tx
+    clients.value = c
+    services.value = sv
+    projects.value = pr
+    people.value = p
+    affiliates.value = a
+    fieldDefs.value = f
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startNew(): void {

@@ -202,23 +202,28 @@ const ledger = computed(() => {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [tx, sl, c, sv, pr, p, a] = await Promise.all([
-    fetchTransactions(),
-    fetchSales().catch(() => []),
-    fetchClients().catch(() => []),
-    fetchServices().catch(() => []),
-    fetchProjects().catch(() => []),
-    fetchEmployees().catch(() => []),
-    fetchAffiliates().catch(() => []),
-  ])
-  transactions.value = tx
-  sales.value = sl
-  clients.value = c
-  services.value = sv
-  projects.value = pr
-  people.value = p
-  affiliates.value = a
-  loading.value = false
+  try {
+    const [tx, sl, c, sv, pr, p, a] = await Promise.all([
+      fetchTransactions(),
+      fetchSales().catch(() => []),
+      fetchClients().catch(() => []),
+      fetchServices().catch(() => []),
+      fetchProjects().catch(() => []),
+      fetchEmployees().catch(() => []),
+      fetchAffiliates().catch(() => []),
+    ])
+    transactions.value = tx
+    sales.value = sl
+    clients.value = c
+    services.value = sv
+    projects.value = pr
+    people.value = p
+    affiliates.value = a
+  } catch {
+    ui.notify('danger', t('errors.loadFailed'))
+  } finally {
+    loading.value = false
+  }
 }
 
 function startNew(type: TransactionType = 'income'): void {
