@@ -16,10 +16,11 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { fetchAllWork } from '@/api/clientDossier'
-import { fetchClients } from '@/api/clients'
-import { fetchTasks } from '@/api/operations'
-import { fetchContracts, fetchInvoices } from '@/api/revenue'
+import { fetchDatedNotes } from '@/api/records'
+import { fetchProjects } from '@/api/operations'
+import { fetchSales } from '@/api/sales'
+import { fetchTransactions } from '@/api/finance'
+import { balanceOf } from '@/types/revenue'
 import {
   deriveNotifications,
   dismiss,
@@ -63,35 +64,26 @@ async function load(): Promise<void> {
 
   loading.value = true
   try {
-    const [items, prefs, tasks, invoices, contracts, work, clients] = await Promise.all([
+    const [items, prefs, transactions, projects, notes, sales] = await Promise.all([
       fetchNotifications(uid),
       fetchPreferences(uid),
-      fetchTasks().catch(() => []),
-      fetchInvoices().catch(() => []),
-      fetchContracts().catch(() => []),
-      fetchAllWork().catch(() => []),
-      fetchClients().catch(() => []),
+      fetchTransactions().catch(() => []),
+      fetchProjects().catch(() => []),
+      fetchDatedNotes().catch(() => []),
+      fetchSales().catch(() => []),
     ])
-
-    const names = new Map(clients.map((c) => [c.id, c.name]))
-    const now = new Date().toISOString().slice(0, 10)
 
     stored.value = items
     muted.value = prefs.muted ?? []
     derived.value = deriveNotifications({
       uid,
-      tasks,
-      invoices,
-      contracts,
-      overdueWork: work
-        .filter((w) => w.paymentStatus !== 'paid' && w.dueDate && w.dueDate < now)
-        .map((w) => ({
-          id: w.id,
-          clientId: w.clientId,
-          label: `${w.title} · ${names.get(w.clientId) ?? ''}`,
-          dueDate: w.dueDate!,
-          amount: w.revenue.baseMinor,
-        })),
+      transactions,
+      projects,
+      notes,
+      /* A sale sold on an advance that has not arrived is the loudest one. */
+      advanceDue: sales
+        .filter((s) => balanceOf(s, transactions).advanceDue)
+        .map((s) => ({ id: s.id, label: s.title, clientName: s.clientName })),
     })
   } finally {
     loading.value = false
@@ -240,7 +232,7 @@ onBeforeUnmount(() => {
           </section>
         </template>
 
-        <RouterLink to="/settings?tab=notifications" class="panel-foot" @click="open = false">
+        <RouterLink to="/settings/notifications" class="panel-foot" @click="open = false">
           <AppIcon name="settings" :size="14" />
           {{ t('notifications.preferences') }}
         </RouterLink>

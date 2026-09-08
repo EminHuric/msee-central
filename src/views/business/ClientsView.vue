@@ -2,174 +2,163 @@
 /**
  * Clients.
  *
- * The first business record, and the one everything else attaches to:
- * projects point at a client, income points at a project. Getting this shape
- * right is what makes "which client is actually worth keeping" answerable
- * later without restructuring anything.
+ * Deliberately a plain table. The brief was "simple, fast, professional — not
+ * an unnecessarily complicated CRM", and the way to honour that is to show the
+ * ten things somebody scans for and put everything else one click away on the
+ * client's own page.
  *
- * Nothing is deletable. A client that stops working with you becomes
- * `former`, which keeps their history readable — deleting one would leave
- * every invoice and project pointing at a name nobody can look up.
+ * The editor opens as a panel rather than a separate route: adding a client is
+ * something you do while looking at the list, and losing your place in it to
+ * type a phone number is the small friction that stops people entering data.
  */
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { dueStateOf, fetchAllWork, totalsFor } from '@/api/clientDossier'
-import { formatDate } from '@/i18n'
-import {
-  EMPTY_CLIENT,
-  fetchClients,
-  saveClient,
-  type ClientInput,
-} from '@/api/clients'
-import { isEmail, LIMITS } from '@/lib/validation'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import CustomFields from '@/components/CustomFields.vue'
+import TagInput from '@/components/ui/TagInput.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
+import { blankClient, deleteClient, fetchClients, saveClient, setArchived } from '@/api/clients'
+import { fetchEmployees } from '@/api/employees'
+import { fetchServices } from '@/api/operations'
+import { fetchSales } from '@/api/sales'
+import { fieldsFor, fetchFieldDefs } from '@/api/records'
+import { formatDate, formatRelative } from '@/i18n'
+import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { CLIENT_STATUSES, type Client, type ClientStatus, type WorkItem } from '@/types/business'
-import { BASE_CURRENCY, formatMoney } from '@/types/money'
+import { CLIENT_STATUSES, type Client, type ClientStatus, type Service } from '@/types/business'
+import type { Sale } from '@/types/revenue'
+import type { CustomFieldDef } from '@/types/records'
 import { PERMISSIONS } from '@/types/permissions'
+import type { EmployeePublic } from '@/types/domain'
 
 const auth = useAuthStore()
 const ui = useUiStore()
-const { t, locale } = useI18n()
+const router = useRouter()
+const { t } = useI18n()
 
 const loading = ref(true)
-const loadError = ref(false)
 const saving = ref(false)
-const clients = ref<Client[]>([])
-const work = ref<WorkItem[]>([])
 
-/*
- * Two views of the same business. The ledger answers "what have we done and
- * what did it earn"; the list answers "who do we work for". They were one
- * table at first and it served neither question well.
- */
-type Tab = 'work' | 'list'
-const tab = ref<Tab>('work')
+const clients = ref<Client[]>([])
+const services = ref<Service[]>([])
+const people = ref<EmployeePublic[]>([])
+const sales = ref<Sale[]>([])
+const fieldDefs = ref<CustomFieldDef[]>([])
 
 const search = ref('')
 const statusFilter = ref<ClientStatus | ''>('')
+const responsibleFilter = ref('')
+const showArchived = ref(false)
+const sortKey = ref<'name' | 'recent' | 'status'>('name')
 
-const draft = ref<ClientInput | null>(null)
-const editingExisting = ref(false)
+const draft = ref<Client | null>(null)
+const pendingDelete = ref<Client | null>(null)
 
-const canManage = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_MANAGE))
-const canMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
+const canCreate = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_CREATE))
+const canEdit = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_EDIT))
+const canDelete = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_DELETE))
+const canSeeManagement = computed(() => auth.hasPermission(PERMISSIONS.EMPLOYEES_VIEW_PRIVATE_INFO))
 
-/** Client names by id, so the ledger can show who each row belongs to. */
-const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])))
+const clientFields = computed(() => fieldsFor(fieldDefs.value, 'client'))
+const serviceNames = computed(() => new Map(services.value.map((s) => [s.id, s.name])))
 
-const visibleWork = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  if (!term) return work.value
-  return work.value.filter((item) =>
-    [item.title, item.serviceName, item.note, clientNames.value.get(item.clientId) ?? '']
-      .join(' ')
-      .toLowerCase()
-      .includes(term),
-  )
+/** When somebody last did anything with this client, from their sales. */
+const lastActivity = computed(() => {
+  const map = new Map<string, string>()
+  for (const sale of sales.value) {
+    const current = map.get(sale.clientId) ?? ''
+    if (sale.saleDate > current) map.set(sale.clientId, sale.saleDate)
+  }
+  return map
 })
 
-const workTotals = computed(() => totalsFor(visibleWork.value))
-
-function money(minor: number): string {
-  return formatMoney(minor, BASE_CURRENCY, locale.value)
-}
-
-const filtered = computed(() => {
+const visible = computed(() => {
   const term = search.value.trim().toLowerCase()
 
-  return clients.value.filter((client) => {
-    if (statusFilter.value && client.status !== statusFilter.value) return false
+  const rows = clients.value.filter((c) => {
+    if (!showArchived.value && c.archived) return false
+    if (statusFilter.value && c.status !== statusFilter.value) return false
+    if (responsibleFilter.value && c.responsibleUid !== responsibleFilter.value) return false
     if (!term) return true
 
-    return [client.name, client.contactName, client.email, client.city, client.country]
+    return [c.name, c.description, c.contactName, c.email, c.phone, c.city, ...(c.tags ?? [])]
       .join(' ')
       .toLowerCase()
       .includes(term)
   })
+
+  return rows.sort((a, b) => {
+    if (sortKey.value === 'recent') {
+      return (lastActivity.value.get(b.id) ?? b.updatedAt ?? '').localeCompare(
+        lastActivity.value.get(a.id) ?? a.updatedAt ?? '',
+      )
+    }
+    if (sortKey.value === 'status') return a.status.localeCompare(b.status)
+    return a.name.localeCompare(b.name)
+  })
 })
-
-const hasFilters = computed(() => search.value.trim() !== '' || statusFilter.value !== '')
-
-/** How many sit in each status, so the tabs carry a count. */
-const counts = computed(() => {
-  const out = {} as Record<ClientStatus, number>
-  for (const status of CLIENT_STATUSES) {
-    out[status] = clients.value.filter((c) => c.status === status).length
-  }
-  return out
-})
-
-function clearFilters(): void {
-  search.value = ''
-  statusFilter.value = ''
-}
 
 async function load(): Promise<void> {
   loading.value = true
-  loadError.value = false
-  try {
-    // The ledger is optional: somebody with clients.view but not finance.view
-    // gets the client list and no figures, rather than an error page.
-    const [list, ledger] = await Promise.all([
-      fetchClients(),
-      canMoney.value ? fetchAllWork().catch(() => []) : Promise.resolve([]),
-    ])
-    clients.value = list
-    work.value = ledger
-  } catch {
-    loadError.value = true
-  } finally {
-    loading.value = false
-  }
+  const [c, s, p, sl, f] = await Promise.all([
+    fetchClients(),
+    fetchServices().catch(() => []),
+    fetchEmployees().catch(() => []),
+    fetchSales().catch(() => []),
+    fetchFieldDefs().catch(() => []),
+  ])
+  clients.value = c
+  services.value = s
+  people.value = p
+  sales.value = sl
+  fieldDefs.value = f
+  loading.value = false
 }
 
-/* ---- Editing ------------------------------------------------------ */
-
 function startNew(): void {
-  editingExisting.value = false
-  draft.value = { ...EMPTY_CLIENT }
+  const me = people.value.find((p) => p.uid === auth.uid)
+  draft.value = {
+    ...blankClient(),
+    responsibleUid: auth.uid,
+    responsibleName: me ? `${me.firstName} ${me.lastName}` : (auth.displayName ?? ''),
+  }
 }
 
 function startEdit(client: Client): void {
-  editingExisting.value = true
-  draft.value = {
-    id: client.id,
-    name: client.name,
-    contactName: client.contactName ?? '',
-    email: client.email ?? '',
-    phone: client.phone ?? '',
-    city: client.city ?? '',
-    country: client.country ?? '',
-    website: client.website ?? '',
-    status: client.status,
-    notes: client.notes ?? '',
-  }
+  draft.value = { ...client, tags: [...(client.tags ?? [])], serviceIds: [...(client.serviceIds ?? [])] }
 }
 
-const emailInvalid = computed(
-  () => !!draft.value?.email.trim() && !isEmail(draft.value.email),
-)
+function toggleService(id: string): void {
+  const list = draft.value?.serviceIds
+  if (!list) return
+  const i = list.indexOf(id)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(id)
+}
+
+function onResponsibleChange(uid: string): void {
+  if (!draft.value) return
+  const person = people.value.find((p) => p.uid === uid)
+  draft.value.responsibleUid = uid || null
+  draft.value.responsibleName = person ? `${person.firstName} ${person.lastName}` : ''
+}
 
 async function commit(): Promise<void> {
-  const client = draft.value
-  if (!client || saving.value) return
-
-  if (!client.name.trim()) {
+  const d = draft.value
+  if (!d || saving.value) return
+  if (!d.name.trim()) {
     ui.notify('danger', t('clients.nameRequired'))
-    return
-  }
-  if (emailInvalid.value) {
-    ui.notify('danger', t('errors.invalidEmail'))
     return
   }
 
   saving.value = true
   try {
-    await saveClient(client, !editingExisting.value)
+    await saveClient({ ...d, name: d.name.trim() })
     ui.notify('ok', t('clients.saved'))
     draft.value = null
     await load()
@@ -178,6 +167,26 @@ async function commit(): Promise<void> {
   } finally {
     saving.value = false
   }
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!pendingDelete.value) return
+  await deleteClient(pendingDelete.value)
+  ui.notify('ok', t('recycle.movedToBin'))
+  pendingDelete.value = null
+  await load()
+}
+
+async function toggleArchive(client: Client): Promise<void> {
+  await setArchived(client, !client.archived)
+  await load()
+}
+
+function clearFilters(): void {
+  search.value = ''
+  statusFilter.value = ''
+  responsibleFilter.value = ''
+  showArchived.value = false
 }
 
 onMounted(load)
@@ -190,9 +199,8 @@ onMounted(load)
         <h1 class="page-title">{{ t('clients.title') }}</h1>
         <p class="page-subtitle">{{ t('clients.subtitle') }}</p>
       </div>
-      <button v-if="canManage && !draft" class="btn btn-primary" @click="startNew">
-        <AppIcon name="plus" :size="16" />
-        {{ t('clients.newClient') }}
+      <button v-if="canCreate && !draft" class="btn btn-primary" @click="startNew">
+        <AppIcon name="plus" :size="16" /> {{ t('clients.newClient') }}
       </button>
     </header>
 
@@ -200,13 +208,9 @@ onMounted(load)
     <section v-if="draft" class="card editor">
       <div class="card-header">
         <h2 class="card-title">
-          {{ editingExisting ? t('clients.editClient') : t('clients.newClient') }}
+          {{ draft.id ? t('clients.editClient') : t('clients.newClient') }}
         </h2>
-        <button
-          class="btn btn-ghost btn-icon"
-          :aria-label="t('common.close')"
-          @click="draft = null"
-        >
+        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
           <AppIcon name="close" :size="18" />
         </button>
       </div>
@@ -218,126 +222,137 @@ onMounted(load)
               {{ t('clients.name') }}<span class="req">*</span>
             </label>
             <input id="c-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
-            <p class="field-hint">{{ t('clients.nameHint') }}</p>
           </div>
 
           <div class="field">
-            <label class="field-label" for="c-status">{{ t('clients.filterStatus') }}</label>
-            <select id="c-status" v-model="draft.status" class="select">
-              <option v-for="status in CLIENT_STATUSES" :key="status" :value="status">
-                {{ t(`clientStatus.${status}`) }}
+            <label class="field-label" for="c-desc">{{ t('clients.description') }}</label>
+            <input id="c-desc" v-model="draft.description" class="input" :maxlength="LIMITS.shortText" />
+            <p class="field-hint">{{ t('clients.descriptionHint') }}</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-contact">{{ t('clients.contactName') }}</label>
+            <input id="c-contact" v-model="draft.contactName" class="input" :maxlength="LIMITS.name" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-email">{{ t('clients.email') }}</label>
+            <input id="c-email" v-model="draft.email" class="input" type="email" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-phone">{{ t('clients.phone') }}</label>
+            <input id="c-phone" v-model="draft.phone" class="input" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-resp">{{ t('clients.responsible') }}</label>
+            <select
+              id="c-resp"
+              :value="draft.responsibleUid ?? ''"
+              class="select"
+              @change="onResponsibleChange(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">—</option>
+              <option v-for="p in people" :key="p.uid" :value="p.uid">
+                {{ p.firstName }} {{ p.lastName }}
               </option>
             </select>
-            <p class="field-hint">{{ t('clients.statusHint') }}</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-status">{{ t('table.status') }}</label>
+            <select id="c-status" v-model="draft.status" class="select">
+              <option v-for="s in CLIENT_STATUSES" :key="s" :value="s">
+                {{ t(`clientStatus.${s}`) }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="c-since">{{ t('clients.since') }}</label>
+            <input id="c-since" v-model="draft.clientSince" class="input" type="date" />
           </div>
         </div>
 
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="c-contact">{{ t('clients.contactName') }}</label>
-            <input
-              id="c-contact"
-              v-model="draft.contactName"
-              class="input"
-              :maxlength="LIMITS.name"
-            />
-            <p class="field-hint">{{ t('clients.contactHint') }}</p>
+        <!-- Advanced, folded away so the common case stays short --------- -->
+        <details class="more">
+          <summary>{{ t('common.moreDetails') }}</summary>
+
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="c-city">{{ t('clients.city') }}</label>
+              <input id="c-city" v-model="draft.city" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-country">{{ t('clients.country') }}</label>
+              <input id="c-country" v-model="draft.country" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-address">{{ t('clients.address') }}</label>
+              <input id="c-address" v-model="draft.address" class="input" :maxlength="LIMITS.shortText" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-web">{{ t('clients.website') }}</label>
+              <input id="c-web" v-model="draft.website" class="input" type="url" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-industry">{{ t('clients.industry') }}</label>
+              <input id="c-industry" v-model="draft.industry" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-ig">{{ t('clients.instagram') }}</label>
+              <input id="c-ig" v-model="draft.instagram" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-owner">{{ t('clients.ownerName') }}</label>
+              <input id="c-owner" v-model="draft.ownerName" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="c-manager">{{ t('clients.managerName') }}</label>
+              <input id="c-manager" v-model="draft.managerName" class="input" :maxlength="LIMITS.name" />
+            </div>
           </div>
 
           <div class="field">
-            <label class="field-label" for="c-email">{{ t('auth.email') }}</label>
-            <input
-              id="c-email"
-              v-model="draft.email"
-              class="input"
-              type="email"
-              :maxlength="LIMITS.email"
-              :aria-invalid="emailInvalid"
-            />
-            <p v-if="emailInvalid" class="field-error">{{ t('errors.invalidEmail') }}</p>
+            <span class="field-label">{{ t('clients.tags') }}</span>
+            <TagInput v-model="draft.tags" :placeholder="t('clients.tagsHint')" />
+          </div>
+
+          <div v-if="services.length" class="field">
+            <span class="field-label">{{ t('clients.services') }}</span>
+            <div class="options">
+              <label v-for="s in services" :key="s.id" class="check">
+                <input
+                  type="checkbox"
+                  :checked="draft.serviceIds.includes(s.id)"
+                  @change="toggleService(s.id)"
+                />
+                <span class="check-text">{{ s.name }}</span>
+              </label>
+            </div>
           </div>
 
           <div class="field">
-            <label class="field-label" for="c-phone">{{ t('register.phone') }}</label>
-            <input id="c-phone" v-model="draft.phone" class="input" :maxlength="LIMITS.phone" />
+            <label class="field-label" for="c-notes">{{ t('clients.notes') }}</label>
+            <textarea id="c-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
           </div>
-        </div>
+        </details>
 
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="c-city">{{ t('register.city') }}</label>
-            <input id="c-city" v-model="draft.city" class="input" :maxlength="LIMITS.city" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-country">{{ t('register.country') }}</label>
-            <input
-              id="c-country"
-              v-model="draft.country"
-              class="input"
-              :maxlength="LIMITS.country"
-            />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-web">{{ t('clients.website') }}</label>
-            <input
-              id="c-web"
-              v-model="draft.website"
-              class="input"
-              :maxlength="LIMITS.position"
-              placeholder="example.com"
-            />
-          </div>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="c-notes">{{ t('clients.notes') }}</label>
-          <textarea
-            id="c-notes"
-            v-model="draft.notes"
-            class="textarea"
-            :maxlength="LIMITS.longText"
-          />
-          <p class="field-hint">{{ t('clients.notesHint') }}</p>
-        </div>
+        <CustomFields
+          v-model="draft.custom"
+          :fields="clientFields"
+          :can-see-management="canSeeManagement"
+        />
       </div>
 
       <div class="card-footer">
         <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />
-          {{ saving ? t('common.saving') : t('common.save') }}
+          <span v-if="saving" class="spinner" />{{ t('common.save') }}
         </button>
       </div>
     </section>
-
-    <!-- Tabs ----------------------------------------------------------- -->
-    <div class="tabs" role="tablist">
-      <button
-        v-if="canMoney"
-        type="button"
-        role="tab"
-        class="tab"
-        :class="{ 'is-active': tab === 'work' }"
-        :aria-selected="tab === 'work'"
-        @click="tab = 'work'"
-      >
-        {{ t('clients.tabWork') }}
-        <span v-if="work.length" class="tab-count">{{ work.length }}</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="tab"
-        :class="{ 'is-active': tab === 'list' || !canMoney }"
-        :aria-selected="tab === 'list'"
-        @click="tab = 'list'"
-      >
-        {{ t('clients.tabList') }}
-        <span v-if="clients.length" class="tab-count">{{ clients.length }}</span>
-      </button>
-    </div>
 
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">
@@ -352,118 +367,38 @@ onMounted(load)
         />
       </div>
 
-      <select
-        v-if="tab === 'list' || !canMoney"
-        v-model="statusFilter"
-        class="select"
-        :aria-label="t('clients.filterStatus')"
-      >
+      <select v-model="statusFilter" class="select compact" :aria-label="t('table.status')">
         <option value="">{{ t('clients.allStatuses') }}</option>
-        <option v-for="status in CLIENT_STATUSES" :key="status" :value="status">
-          {{ t(`clientStatus.${status}`) }} ({{ counts[status] }})
+        <option v-for="s in CLIENT_STATUSES" :key="s" :value="s">{{ t(`clientStatus.${s}`) }}</option>
+      </select>
+
+      <select v-model="responsibleFilter" class="select compact" :aria-label="t('clients.responsible')">
+        <option value="">{{ t('clients.allResponsible') }}</option>
+        <option v-for="p in people" :key="p.uid" :value="p.uid">
+          {{ p.firstName }} {{ p.lastName }}
         </option>
       </select>
 
-      <button v-if="hasFilters" type="button" class="btn btn-ghost" @click="clearFilters">
-        {{ t('common.clear') }}
-      </button>
+      <select v-model="sortKey" class="select compact" :aria-label="t('common.sort')">
+        <option value="name">{{ t('clients.sortName') }}</option>
+        <option value="recent">{{ t('clients.sortRecent') }}</option>
+        <option value="status">{{ t('clients.sortStatus') }}</option>
+      </select>
+
+      <label class="check inline">
+        <input v-model="showArchived" type="checkbox" />
+        <span class="check-text">{{ t('clients.showArchived') }}</span>
+      </label>
     </div>
 
-    <!-- States --------------------------------------------------------- -->
+    <!-- List ----------------------------------------------------------- -->
     <div v-if="loading" class="card">
       <div class="card-body stack">
         <div v-for="n in 4" :key="n" class="skeleton" style="height: 44px" />
       </div>
     </div>
 
-    <div v-else-if="loadError" class="card">
-      <div class="empty">
-        <span class="empty-icon"><AppIcon name="alert" :size="20" /></span>
-        <p class="empty-title">{{ t('errors.generic') }}</p>
-        <button class="btn btn-secondary" @click="load">{{ t('common.retry') }}</button>
-      </div>
-    </div>
-
-    <!-- The ledger ----------------------------------------------------- -->
-    <template v-else-if="tab === 'work' && canMoney">
-      <div v-if="visibleWork.length === 0" class="card">
-        <div class="empty">
-          <span class="empty-icon"><AppIcon name="trending" :size="20" /></span>
-          <p class="empty-title">{{ t('clients.noWorkAll') }}</p>
-          <p class="empty-text">{{ t('clients.noWorkAllHint') }}</p>
-        </div>
-      </div>
-
-      <div v-else class="card">
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>{{ t('table.submitted') }}</th>
-                <th>{{ t('dossier.itemTitle') }}</th>
-                <th>{{ t('clients.clientColumn') }}</th>
-                <th>{{ t('dossier.cost') }}</th>
-                <th>{{ t('dossier.revenue') }}</th>
-                <th>{{ t('dossier.profit') }}</th>
-                <th>{{ t('clients.notes') }}</th>
-                <th>{{ t('table.status') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in visibleWork" :key="item.id">
-                <td class="muted nowrap">{{ formatDate(item.date) }}</td>
-                <td>
-                  <div class="stacked">
-                    <span class="strong">{{ item.title }}</span>
-                    <span v-if="item.serviceName" class="tertiary small">{{ item.serviceName }}</span>
-                  </div>
-                </td>
-                <td>
-                  <RouterLink :to="`/clients/${item.clientId}`" class="client-link">
-                    {{ clientNames.get(item.clientId) ?? '—' }}
-                  </RouterLink>
-                </td>
-                <td class="muted nowrap">{{ money(item.cost.baseMinor) }}</td>
-                <td class="nowrap">{{ money(item.revenue.baseMinor) }}</td>
-                <td class="nowrap strong" :class="{ 'is-negative': item.profitBaseMinor < 0 }">
-                  {{ money(item.profitBaseMinor) }}
-                </td>
-                <td class="muted truncate note-cell">{{ item.note || '—' }}</td>
-                <td>
-                  <span
-                    class="badge badge-plain"
-                    :class="`due-${dueStateOf(item.dueDate, item.paymentStatus)}`"
-                  >
-                    {{ t(`paymentStatus.${item.paymentStatus}`) }}
-                  </span>
-                  <div v-if="item.dueDate && item.paymentStatus !== 'paid'" class="tertiary small">
-                    {{ formatDate(item.dueDate) }}
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="totals">
-                <td colspan="3">
-                  {{ t('common.results', workTotals.itemCount, { named: { n: workTotals.itemCount } }) }}
-                </td>
-                <td class="nowrap">{{ money(workTotals.costMinor) }}</td>
-                <td class="nowrap">{{ money(workTotals.revenueMinor) }}</td>
-                <td class="nowrap strong">{{ money(workTotals.profitMinor) }}</td>
-                <td />
-                <td class="nowrap">
-                  <span v-if="workTotals.outstandingMinor > 0" class="owed">
-                    {{ money(workTotals.outstandingMinor) }}
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-    </template>
-
-    <div v-else-if="filtered.length === 0" class="card">
+    <div v-else-if="visible.length === 0" class="card">
       <div class="empty">
         <span class="empty-icon"><AppIcon name="building" :size="20" /></span>
         <p class="empty-title">
@@ -472,271 +407,174 @@ onMounted(load)
         <p class="empty-text">
           {{ clients.length === 0 ? t('clients.emptyHint') : t('clients.noMatchHint') }}
         </p>
-        <button v-if="hasFilters" class="btn btn-secondary" @click="clearFilters">
-          {{ t('common.clear') }}
-        </button>
-        <button v-else-if="canManage" class="btn btn-primary" @click="startNew">
+        <button v-if="canCreate && clients.length === 0" class="btn btn-primary" @click="startNew">
           {{ t('clients.newClient') }}
+        </button>
+        <button v-else-if="clients.length > 0" class="btn btn-secondary" @click="clearFilters">
+          {{ t('common.clear') }}
         </button>
       </div>
     </div>
 
-    <!-- The list ------------------------------------------------------- -->
-    <div v-else class="card">
+    <section v-else class="card">
       <div class="table-wrap">
         <table class="table">
           <thead>
             <tr>
               <th>{{ t('clients.name') }}</th>
-              <th>{{ t('clients.contact') }}</th>
-              <th>{{ t('clients.location') }}</th>
+              <th class="hide-sm">{{ t('clients.contact') }}</th>
+              <th class="hide-md">{{ t('clients.responsible') }}</th>
+              <th class="hide-md">{{ t('clients.services') }}</th>
               <th>{{ t('table.status') }}</th>
+              <th class="hide-sm">{{ t('clients.lastActivity') }}</th>
               <th class="col-actions" />
             </tr>
           </thead>
           <tbody>
-            <tr v-for="client in filtered" :key="client.id">
+            <tr v-for="client in visible" :key="client.id" :class="{ 'is-archived': client.archived }">
               <td>
-                <RouterLink :to="`/clients/${client.id}`" class="client-cell">
-                  <span class="client-mark">
-                    <img v-if="client.logoUrl" :src="client.logoUrl" :alt="client.name" />
-                    <span v-else>{{ client.name.slice(0, 1).toUpperCase() }}</span>
+                <button type="button" class="name-cell" @click="router.push(`/clients/${client.id}`)">
+                  <UserAvatar :name="client.name" :photo-url="client.logoUrl" :size="32" />
+                  <span class="name-text">
+                    <span class="name">{{ client.name }}</span>
+                    <span class="tertiary truncate">{{ client.description || client.city }}</span>
                   </span>
-                  <div class="client-text">
-                    <span class="client-name">{{ client.name }}</span>
-                    <span v-if="client.website" class="client-sub truncate">
-                      {{ client.website }}
-                    </span>
-                  </div>
-                </RouterLink>
+                </button>
               </td>
-              <td>
-                <div class="stacked">
+
+              <td class="hide-sm">
+                <span class="stack-tight">
                   <span v-if="client.contactName">{{ client.contactName }}</span>
-                  <span v-if="client.email" class="tertiary small">{{ client.email }}</span>
-                  <span v-if="!client.contactName && !client.email" class="tertiary">—</span>
-                </div>
+                  <a v-if="client.email" :href="`mailto:${client.email}`" class="link-quiet">
+                    {{ client.email }}
+                  </a>
+                  <a v-if="client.phone" :href="`tel:${client.phone}`" class="link-quiet">
+                    {{ client.phone }}
+                  </a>
+                  <span v-if="!client.contactName && !client.email && !client.phone" class="tertiary">
+                    —
+                  </span>
+                </span>
               </td>
-              <td class="muted">
-                {{ [client.city, client.country].filter(Boolean).join(', ') || '—' }}
+
+              <td class="hide-md muted">{{ client.responsibleName || '—' }}</td>
+
+              <td class="hide-md">
+                <span v-if="(client.serviceIds ?? []).length === 0" class="tertiary">—</span>
+                <span v-else class="chips">
+                  <span v-for="id in client.serviceIds.slice(0, 2)" :key="id" class="badge badge-plain">
+                    {{ serviceNames.get(id) ?? '—' }}
+                  </span>
+                  <span v-if="client.serviceIds.length > 2" class="tertiary">
+                    +{{ client.serviceIds.length - 2 }}
+                  </span>
+                </span>
               </td>
+
               <td>
-                <span class="badge" :class="`badge-${client.status}`">
+                <span class="badge" :class="`cs-${client.status}`">
                   {{ t(`clientStatus.${client.status}`) }}
                 </span>
               </td>
+
+              <td class="hide-sm muted nowrap">
+                <template v-if="lastActivity.get(client.id)">
+                  {{ formatDate(lastActivity.get(client.id)!) }}
+                </template>
+                <template v-else-if="client.updatedAt">
+                  {{ formatRelative(client.updatedAt) }}
+                </template>
+                <template v-else>—</template>
+              </td>
+
               <td class="col-actions">
                 <button
-                  v-if="canManage"
-                  class="btn btn-secondary btn-sm"
+                  class="btn btn-ghost btn-sm"
+                  :aria-label="t('clients.openClient')"
+                  @click="router.push(`/clients/${client.id}`)"
+                >
+                  <AppIcon name="arrowRight" :size="15" />
+                </button>
+                <button
+                  v-if="canEdit"
+                  class="btn btn-ghost btn-sm"
+                  :aria-label="t('common.edit')"
                   @click="startEdit(client)"
                 >
-                  {{ t('common.edit') }}
+                  <AppIcon name="edit" :size="15" />
+                </button>
+                <button
+                  v-if="canEdit"
+                  class="btn btn-ghost btn-sm"
+                  :aria-label="t('clients.archive')"
+                  @click="toggleArchive(client)"
+                >
+                  <AppIcon name="inbox" :size="15" />
+                </button>
+                <button
+                  v-if="canDelete"
+                  class="btn btn-ghost btn-sm danger"
+                  :aria-label="t('common.delete')"
+                  @click="pendingDelete = client"
+                >
+                  <AppIcon name="trash" :size="15" />
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-    </div>
 
-    <p v-if="!loading && clients.length > 0" class="tertiary foot-note">
-      {{ t('common.results', filtered.length, { named: { n: filtered.length } }) }}
-    </p>
+      <p class="card-body tertiary small">
+        {{ visible.length }} / {{ clients.length }}
+      </p>
+    </section>
+
+    <ConfirmDialog
+      :open="pendingDelete !== null"
+      :title="t('clients.deleteClient')"
+      :message="t('recycle.deleteExplain')"
+      danger
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
   </div>
 </template>
 
 <style scoped>
-.editor {
-  border-color: var(--accent-soft-border);
-}
+.editor { border-color: var(--accent-soft-border); }
+.search { position: relative; display: flex; align-items: center; }
+.search-icon { position: absolute; left: var(--space-3); color: var(--text-tertiary); pointer-events: none; }
+.search-input { padding-left: calc(var(--space-3) * 2 + 16px); }
+.select.compact { max-width: 180px; }
+.check.inline { align-items: center; white-space: nowrap; }
 
-.search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
+.more { border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
+.more > summary { cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-3); }
+.more > summary:hover { color: var(--text-brand); }
+.options { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
 
-.search-icon {
-  position: absolute;
-  left: var(--space-3);
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
+.name-cell { display: flex; align-items: center; gap: var(--space-3); text-align: left; min-width: 0; }
+.name-text { display: flex; flex-direction: column; min-width: 0; }
+.name { font-weight: 600; }
+.name-cell:hover .name { color: var(--text-brand); }
+.name-text .tertiary { font-size: var(--text-xs); }
 
-.search-input {
-  padding-left: calc(var(--space-3) * 2 + 16px);
-}
+.stack-tight { display: flex; flex-direction: column; font-size: var(--text-xs); }
+.link-quiet { color: var(--text-secondary); }
+.link-quiet:hover { color: var(--text-brand); }
+.chips { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
 
-.client-cell {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  text-decoration: none;
-  color: inherit;
-}
+.is-archived { opacity: 0.55; }
+.cs-active { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
+.cs-prospect { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); color: var(--text-brand); }
+.cs-paused { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
+.cs-former { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
 
-.client-cell:hover {
-  text-decoration: none;
-}
+.nowrap { white-space: nowrap; }
+.small { font-size: var(--text-xs); }
+.danger:hover { color: var(--danger-500); }
 
-.client-cell:hover .client-name {
-  color: var(--text-brand);
-}
-
-.client-mark img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-/* Initial rather than a photo: a client is a company, not a face. */
-.client-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: var(--accent-soft-bg);
-  border: 1px solid var(--accent-soft-border);
-  color: var(--text-brand);
-  font-weight: 650;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.client-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.client-name {
-  font-weight: 550;
-}
-
-.client-sub {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.stacked {
-  display: flex;
-  flex-direction: column;
-}
-
-.small {
-  font-size: var(--text-xs);
-}
-
-.foot-note {
-  font-size: var(--text-xs);
-}
-
-.tabs {
-  display: flex;
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--border-subtle);
-  overflow-x: auto;
-}
-
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 2px solid transparent;
-  font-size: var(--text-base);
-  font-weight: 550;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.tab:hover {
-  color: var(--text-primary);
-}
-
-.tab.is-active {
-  color: var(--text-brand);
-  border-bottom-color: var(--accent);
-}
-
-.tab-count {
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--bg-surface-3);
-  font-size: var(--text-xs);
-  font-weight: 650;
-  color: var(--text-tertiary);
-}
-
-.client-link {
-  font-weight: 550;
-  color: var(--text-brand);
-}
-
-.nowrap {
-  white-space: nowrap;
-}
-
-.strong {
-  font-weight: 600;
-}
-
-.is-negative {
-  color: var(--danger-500);
-}
-
-.note-cell {
-  max-width: 180px;
-}
-
-.totals td {
-  background: var(--bg-surface-2);
-  font-weight: 600;
-  border-top: 1px solid var(--border-default);
-}
-
-.owed {
-  color: var(--warn-500);
-}
-
-.due-overdue {
-  background: var(--danger-bg);
-  border-color: var(--danger-border);
-  color: var(--danger-500);
-}
-
-.due-today,
-.due-soon {
-  background: var(--warn-bg);
-  border-color: var(--warn-border);
-  color: var(--warn-500);
-}
-
-.due-paid {
-  background: var(--ok-bg);
-  border-color: var(--ok-border);
-  color: var(--ok-500);
-}
-
-/* Client statuses reuse the account badge palette. */
-.badge-prospect {
-  background: var(--info-bg);
-  border-color: var(--info-border);
-  color: var(--info-500);
-}
-
-.badge-paused {
-  background: var(--warn-bg);
-  border-color: var(--warn-border);
-  color: var(--warn-500);
-}
-
-.badge-former {
-  background: var(--neutral-bg);
-  border-color: var(--neutral-border);
-  color: var(--neutral-500);
-}
+@media (max-width: 900px) { .hide-md { display: none; } }
+@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

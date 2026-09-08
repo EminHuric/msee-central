@@ -35,17 +35,58 @@ const routerSource = readFileSync(join(srcDir, 'router', 'index.ts'), 'utf8')
 /**
  * Paths are read from the source rather than by importing the router, because
  * importing it pulls in every view and the Firebase client with them.
+ *
+ * Child routes are relative to their parent, and the router now nests two
+ * levels deep — `/settings/recycle` is a `recycle` inside a `settings` inside
+ * the root. So the file is walked with a brace counter that remembers which
+ * `children:` array each `path:` sits in, and the prefixes are composed.
+ *
+ * The first version assumed one level and quietly declared `/recycle`, which
+ * is exactly the kind of near-miss this tool exists to catch.
  */
-const declared = new Set()
-for (const m of routerSource.matchAll(/path:\s*'([^']*)'/g)) {
-  const raw = m[1]
-  if (raw.startsWith('/:pathMatch')) continue
+const declared = new Set(['/'])
 
-  /* Child paths are relative; the parent here is '/'. */
-  const path = raw.startsWith('/') ? raw : `/${raw}`
-  declared.add(path)
+{
+  const lines = routerSource.split(/\r?\n/)
+
+  /* A stack of { depth, prefix }: the route arrays currently open. */
+  const stack = [{ depth: 0, prefix: '' }]
+  let depth = 0
+  let pendingChildren = false
+
+  for (const line of lines) {
+    const pathMatch = /path:\s*'([^']*)'/.exec(line)
+
+    if (pathMatch) {
+      const raw = pathMatch[1]
+      if (!raw.startsWith('/:pathMatch')) {
+        const parent = stack[stack.length - 1].prefix
+        const full = raw.startsWith('/')
+          ? raw
+          : `${parent}/${raw}`.replace(/\/+/g, '/').replace(/(.)\/$/, '$1')
+
+        declared.add(full || '/')
+        /* If this route opens a `children:` block, its children hang off here. */
+        stack[stack.length - 1].lastPath = full || '/'
+      }
+    }
+
+    if (/children:\s*\[/.test(line)) pendingChildren = true
+
+    for (const ch of line) {
+      if (ch === '{' || ch === '[') {
+        depth += 1
+        if (pendingChildren && ch === '[') {
+          stack.push({ depth, prefix: stack[stack.length - 1].lastPath ?? '' })
+          pendingChildren = false
+        }
+      } else if (ch === '}' || ch === ']') {
+        if (stack.length > 1 && stack[stack.length - 1].depth === depth) stack.pop()
+        depth -= 1
+      }
+    }
+  }
 }
-declared.add('/')
 
 /** A concrete path matches a declared one with `:params` in it. */
 function matches(path) {

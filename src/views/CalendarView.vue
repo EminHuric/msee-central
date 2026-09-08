@@ -2,13 +2,13 @@
 /**
  * The calendar.
  *
- * Most of what appears here is not stored here. Task deadlines, contract
- * renewals and payment due dates are read from the records that own them and
- * merged into the same grid, so moving a deadline means editing the task —
- * there is no second copy to forget.
+ * Most of what appears here is not stored here. Payment dates, project
+ * deadlines, note reminders and goal end-dates are read from the records that
+ * own them and merged into the same grid, so moving a deadline means editing
+ * the record — there is no second copy to forget.
  *
- * Only meetings and reminders are typed in, because those have no underlying
- * record to derive from. They are the exception, and they say so.
+ * Only meetings and one-off entries are typed in, because those have no
+ * underlying record to derive from. They are the exception, and they say so.
  */
 
 import { computed, onMounted, ref } from 'vue'
@@ -17,19 +17,19 @@ import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-import { buildCalendar, deleteEvent, fetchEvents, monthGrid, saveEvent } from '@/api/company'
-import { fetchAllWork } from '@/api/clientDossier'
+import { buildCalendar, deleteEvent, fetchEvents, fetchGoals, monthGrid, saveEvent } from '@/api/company'
 import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
-import { fetchProjects, fetchTasks } from '@/api/operations'
-import { fetchContracts, fetchInvoices } from '@/api/revenue'
+import { fetchDatedNotes } from '@/api/records'
+import { fetchProjects } from '@/api/operations'
+import { fetchTransactions } from '@/api/finance'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Client, Project, Task, WorkItem } from '@/types/business'
-import { EVENT_KINDS, type CalendarEvent, type EventKind } from '@/types/company'
-import type { Contract, Invoice } from '@/types/revenue'
+import type { Client, Note, Project } from '@/types/business'
+import { EVENT_KINDS, type CalendarEvent, type EventKind, type Goal } from '@/types/company'
+import type { Transaction } from '@/types/revenue'
 import { PERMISSIONS } from '@/types/permissions'
 import type { EmployeePublic } from '@/types/domain'
 
@@ -42,10 +42,9 @@ const loading = ref(true)
 const saving = ref(false)
 
 const events = ref<CalendarEvent[]>([])
-const tasks = ref<Task[]>([])
-const contracts = ref<Contract[]>([])
-const invoices = ref<Invoice[]>([])
-const work = ref<WorkItem[]>([])
+const transactions = ref<Transaction[]>([])
+const notes = ref<Note[]>([])
+const goals = ref<Goal[]>([])
 const clients = ref<Client[]>([])
 const projects = ref<Project[]>([])
 const people = ref<EmployeePublic[]>([])
@@ -75,22 +74,13 @@ const draft = ref<Draft | null>(null)
 
 /* ---- Data ----------------------------------------------------------- */
 
-const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])))
-
 const items = computed(() =>
   buildCalendar({
     events: events.value,
-    tasks: tasks.value,
-    contracts: contracts.value,
-    invoices: invoices.value,
-    dueWork: work.value
-      .filter((w) => w.paymentStatus !== 'paid' && w.dueDate)
-      .map((w) => ({
-        id: w.id,
-        clientId: w.clientId,
-        label: `${w.title} · ${clientNames.value.get(w.clientId) ?? ''}`,
-        dueDate: w.dueDate!,
-      })),
+    transactions: transactions.value,
+    projects: projects.value,
+    notes: notes.value.filter((n) => n.authorUid === auth.uid),
+    goals: goals.value,
     uid: auth.uid ?? '',
   }),
 )
@@ -149,21 +139,19 @@ function goToday(): void {
 
 async function load(): Promise<void> {
   loading.value = true
-  const [e, tk, c, inv, w, cl, pr, p] = await Promise.all([
+  const [e, tx, n, g, cl, pr, p] = await Promise.all([
     fetchEvents(),
-    fetchTasks().catch(() => []),
-    fetchContracts().catch(() => []),
-    fetchInvoices().catch(() => []),
-    fetchAllWork().catch(() => []),
+    fetchTransactions().catch(() => []),
+    fetchDatedNotes().catch(() => []),
+    fetchGoals().catch(() => []),
     fetchClients().catch(() => []),
     fetchProjects().catch(() => []),
     fetchEmployees().catch(() => []),
   ])
   events.value = e
-  tasks.value = tk
-  contracts.value = c
-  invoices.value = inv
-  work.value = w
+  transactions.value = tx
+  notes.value = n
+  goals.value = g
   clients.value = cl
   projects.value = pr
   people.value = p

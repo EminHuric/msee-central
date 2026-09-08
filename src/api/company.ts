@@ -2,19 +2,20 @@
  * Goals, role KPIs and the calendar.
  *
  * What these share: they describe the company rather than record its work.
- * None of them holds a figure of its own — a goal knows what to count, not
- * what the count is, and the calendar merges dates that already live on tasks,
- * contracts and invoices instead of copying them.
+ * None holds a figure of its own — a goal knows what to count, not what the
+ * count is, and the calendar merges dates that already live on payments,
+ * projects and notes instead of copying them.
  *
  * The copying is the point. A deadline stored twice is a deadline that will be
  * moved in one place and not the other, and then nobody trusts either.
  */
 
 import { logAudit } from './audit'
-import { readAll, readOne, remove, write } from './store'
+import { remove } from './records'
+import { readAll, readOne, write } from './store'
 import { getDb } from '@/lib/firebase'
 import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore'
-import type { Task } from '@/types/business'
+import type { Note, Project } from '@/types/business'
 import {
   DEFAULT_KPIS,
   type CalendarEvent,
@@ -23,7 +24,7 @@ import {
   type KpiMetric,
   type RoleKpiSet,
 } from '@/types/company'
-import type { Contract, Invoice } from '@/types/revenue'
+import type { Transaction } from '@/types/revenue'
 
 /* ------------------------------------------------------------------ *
  * Goals
@@ -48,15 +49,7 @@ export async function saveGoal(input: Goal): Promise<string> {
   return id
 }
 
-export async function deleteGoal(goal: Goal): Promise<void> {
-  await remove('goals', goal.id)
-  await logAudit({
-    action: 'goal.deleted',
-    targetType: 'goal',
-    targetId: goal.id,
-    targetLabel: goal.title,
-  })
-}
+export const deleteGoal = (goal: Goal) => remove('goals', goal.id, goal.title)
 
 /* ------------------------------------------------------------------ *
  * Role KPIs
@@ -117,23 +110,17 @@ export async function saveEvent(input: CalendarEvent): Promise<string> {
   return id
 }
 
-export async function deleteEvent(event: CalendarEvent): Promise<void> {
-  await remove('calendarEvents', event.id)
-  await logAudit({
-    action: 'event.deleted',
-    targetType: 'event',
-    targetId: event.id,
-    targetLabel: event.title,
-  })
-}
+export const deleteEvent = (event: CalendarEvent) =>
+  remove('calendarEvents', event.id, event.title)
 
 export interface CalendarSources {
   events: CalendarEvent[]
-  tasks: Task[]
-  contracts: Contract[]
-  invoices: Invoice[]
-  /** Unpaid work with a due date: {id, clientId, label, dueDate}. */
-  dueWork: { id: string; clientId: string; label: string; dueDate: string }[]
+  /** Anything expected or overdue: dueDate on an unpaid transaction. */
+  transactions: Transaction[]
+  projects: Project[]
+  /** Notes carrying a reminder date, which is as close to a task as this goes. */
+  notes: Note[]
+  goals: Goal[]
   /** Whose calendar it is. An event with attendees is only theirs. */
   uid: string
 }
@@ -141,10 +128,11 @@ export interface CalendarSources {
 /**
  * Everything with a date, in one list.
  *
- * Four of the five sources are derived: a task deadline belongs to the task, a
- * renewal belongs to the contract. They appear here, they link back to where
- * they live, and editing them means editing the record — which is the only way
- * a calendar and the rest of a system stay in agreement.
+ * Only the first source is stored here. A payment date belongs to the
+ * transaction, a deadline to the project, a reminder to the note — they appear
+ * in this view, they link back to where they live, and editing one means
+ * editing the record. That is the only way a calendar and the rest of a system
+ * stay in agreement.
  */
 export function buildCalendar(sources: CalendarSources): CalendarItem[] {
   const out: CalendarItem[] = []
@@ -159,62 +147,64 @@ export function buildCalendar(sources: CalendarSources): CalendarItem[] {
       title: event.title,
       kind: event.kind,
       link: null,
-      detail: event.startTime ? `${event.startTime}${event.endTime ? `–${event.endTime}` : ''}` : '',
+      detail: event.startTime
+        ? `${event.startTime}${event.endTime ? `–${event.endTime}` : ''}`
+        : event.location,
       derived: false,
       done: false,
     })
   }
 
-  for (const task of sources.tasks) {
-    if (!task.dueDate) continue
+  for (const tx of sources.transactions) {
+    if (!tx.dueDate || tx.status === 'paid') continue
     out.push({
-      id: `task-${task.id}`,
-      date: task.dueDate,
-      title: task.title,
-      kind: 'task',
-      link: '/tasks',
-      detail: task.assigneeName ?? '',
-      derived: true,
-      done: task.status === 'done' || task.status === 'cancelled',
-    })
-  }
-
-  for (const contract of sources.contracts) {
-    const when = contract.renewalDate ?? contract.endDate
-    if (!when) continue
-    out.push({
-      id: `contract-${contract.id}`,
-      date: when,
-      title: `${contract.number} · ${contract.clientName}`,
-      kind: 'contract',
-      link: '/contracts',
-      detail: contract.serviceName ?? '',
-      derived: true,
-      done: contract.status === 'cancelled' || contract.status === 'expired',
-    })
-  }
-
-  for (const invoice of sources.invoices) {
-    if (!invoice.dueDate) continue
-    out.push({
-      id: `invoice-${invoice.id}`,
-      date: invoice.dueDate,
-      title: `${invoice.number} · ${invoice.clientName}`,
+      id: `tx-${tx.id}`,
+      date: tx.dueDate,
+      title: tx.description || tx.clientName,
       kind: 'payment',
       link: '/finance',
-      detail: '',
+      detail: tx.clientName,
       derived: true,
-      done: invoice.status === 'paid' || invoice.status === 'cancelled',
+      done: false,
     })
   }
 
-  for (const item of sources.dueWork) {
+  for (const project of sources.projects) {
+    if (!project.endDate) continue
     out.push({
-      id: `work-${item.id}`,
-      date: item.dueDate,
-      title: item.label,
-      kind: 'payment',
-      link: `/clients/${item.clientId}`,
+      id: `project-${project.id}`,
+      date: project.endDate,
+      title: project.name,
+      kind: 'deadline',
+      link: `/projects/${project.id}`,
+      detail: project.ownerName,
+      derived: true,
+      done: project.status === 'completed' || project.status === 'cancelled',
+    })
+  }
+
+  for (const note of sources.notes) {
+    if (!note.dueDate) continue
+    out.push({
+      id: `note-${note.id}`,
+      date: note.dueDate,
+      title: note.body.slice(0, 80),
+      kind: 'reminder',
+      link: null,
+      detail: note.authorName,
+      derived: true,
+      done: note.done,
+    })
+  }
+
+  for (const goal of sources.goals) {
+    if (!goal.endDate || goal.status !== 'active') continue
+    out.push({
+      id: `goal-${goal.id}`,
+      date: goal.endDate,
+      title: goal.title,
+      kind: 'goal',
+      link: '/goals',
       detail: '',
       derived: true,
       done: false,

@@ -1,110 +1,129 @@
 /**
  * Clients.
  *
- * The record everything else hangs from: projects point at a client, income
- * points at a project, and the question "is this client worth keeping" is
- * answered by walking that chain.
+ * Kept deliberately plain. A client record is a name, a way to reach them, who
+ * looks after them, and what they buy; everything else about the relationship
+ * — the sales, the money, the projects, the notes — lives in its own module
+ * and is read onto the client's page. A CRM that stores all of it on one
+ * document is a CRM nobody keeps up to date.
  *
- * Clients are never deleted, only moved to `former`. A client with money
- * attached is the company's history, and deleting one would leave income
- * records pointing at nothing.
+ * The id is derived from the first name given and then frozen. A client that
+ * rebrands must not orphan the sales and projects pointing at it.
  */
 
-import { collection, doc, getDoc, getDocs, orderBy, query, setDoc } from 'firebase/firestore'
-
 import { logAudit } from './audit'
-import { slugify } from './administration'
-import { getDb } from '@/lib/firebase'
-import { useAuthStore } from '@/stores/auth'
-import type { Client, ClientStatus } from '@/types/business'
+import { logActivity, remove } from './records'
+import { newId, readAll, readOne, today, write } from './store'
+import { NO_REFERRAL, type Client } from '@/types/business'
 
-export async function fetchClients(): Promise<Client[]> {
-  const snap = await getDocs(query(collection(getDb(), 'clients'), orderBy('name')))
-  return snap.docs.map((d) => ({ ...(d.data() as Client), id: d.id }))
-}
+export const fetchClients = () => readAll<Client>('clients', 'name', 'asc')
 
-export async function fetchClient(id: string): Promise<Client | null> {
-  const snap = await getDoc(doc(getDb(), 'clients', id))
-  return snap.exists() ? { ...(snap.data() as Client), id: snap.id } : null
-}
+export const fetchClient = (id: string) => readOne<Client>('clients', id)
 
-export interface ClientInput {
-  id: string
-  name: string
-  contactName: string
-  email: string
-  phone: string
-  city: string
-  country: string
-  website: string
-  status: ClientStatus
-  notes: string
-}
-
-export const EMPTY_CLIENT: ClientInput = {
-  id: '',
-  name: '',
-  contactName: '',
-  email: '',
-  phone: '',
-  city: '',
-  country: '',
-  website: '',
-  status: 'prospect',
-  notes: '',
+export function blankClient(): Client {
+  return {
+    id: '',
+    name: '',
+    description: '',
+    contactName: '',
+    email: '',
+    phone: '',
+    city: '',
+    country: '',
+    address: '',
+    website: '',
+    industry: '',
+    tags: [],
+    status: 'prospect',
+    archived: false,
+    notes: '',
+    logoUrl: null,
+    ownerName: '',
+    managerName: '',
+    instagram: '',
+    facebook: '',
+    otherContact: '',
+    responsibleUid: null,
+    responsibleName: '',
+    serviceIds: [],
+    referral: { ...NO_REFERRAL },
+    custom: {},
+    clientSince: today(),
+    externalClientId: null,
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+  }
 }
 
 /**
- * Create or update a client.
+ * A readable, stable id from the client's name.
  *
- * The id is derived from the first name given and then frozen. A client that
- * rebrands must not orphan the projects and invoices pointing at it, and the
- * id is what those hold.
+ * Readable because a document id turns up in URLs and in the console, and
+ * `hotel-abc` is worth more there than a random string. Suffixed when taken,
+ * because two clients may legitimately share a name.
  */
-export async function saveClient(input: ClientInput, isNew: boolean): Promise<string> {
-  const id = isNew ? uniqueId(input.name) : input.id
-  const now = new Date().toISOString()
-  const actorUid = useAuthStore().uid ?? 'unknown'
+function slugId(name: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) || 'client'
 
-  await setDoc(
-    doc(getDb(), 'clients', id),
-    {
-      id,
-      name: input.name.trim(),
-      contactName: input.contactName.trim(),
-      email: input.email.trim(),
-      phone: input.phone.trim(),
-      city: input.city.trim(),
-      country: input.country.trim(),
-      website: input.website.trim(),
-      status: input.status,
-      notes: input.notes.trim(),
-      ...(isNew ? { externalClientId: null, createdAt: now, createdBy: actorUid } : {}),
-      updatedAt: now,
-    },
-    { merge: true },
-  )
+  return `${base}-${newId().slice(0, 4).toLowerCase()}`
+}
+
+export async function saveClient(input: Client): Promise<string> {
+  const isNew = !input.id
+  const id = await write('clients', { ...input, id: input.id || slugId(input.name) })
 
   await logAudit({
     action: isNew ? 'client.created' : 'client.updated',
     targetType: 'client',
     targetId: id,
     targetLabel: input.name,
-    metadata: { status: input.status },
+    metadata: {
+      status: input.status,
+      responsible: input.responsibleUid,
+      services: input.serviceIds?.length ?? 0,
+    },
+  })
+
+  await logActivity({
+    entity: 'clients',
+    entityId: id,
+    entityLabel: input.name,
+    kind: isNew ? 'created' : 'updated',
+    summary: input.description || input.contactName,
+    detail: input.status,
   })
 
   return id
 }
 
+export const deleteClient = (client: Client) => remove('clients', client.id, client.name)
+
 /**
- * A slug with a short suffix.
+ * Archive rather than delete.
  *
- * Two clients genuinely can share a name — a franchise, a rebrand, a common
- * word — and silently merging them into one record because the slug collided
- * would be far worse than an id that is slightly less pretty.
+ * A former client with three years of sales behind them is history, not
+ * clutter. Archiving drops them out of the working lists and leaves every
+ * figure they contributed to intact.
  */
-function uniqueId(name: string): string {
-  const base = slugify(name) || 'client'
-  const suffix = Math.random().toString(36).slice(2, 6)
-  return `${base}-${suffix}`
+export async function setArchived(client: Client, archived: boolean): Promise<void> {
+  await write('clients', { ...client, archived, status: archived ? 'former' : client.status })
+
+  await logActivity({
+    entity: 'clients',
+    entityId: client.id,
+    entityLabel: client.name,
+    kind: 'status_changed',
+    summary: archived ? 'archived' : 'restored',
+  })
 }

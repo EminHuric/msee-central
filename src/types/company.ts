@@ -1,15 +1,17 @@
 /**
- * Goals, the calendar, notifications and internal messages.
+ * Goals, the calendar, notifications and announcements.
  *
- * The common thread: none of these hold a fact of their own. A goal's progress
- * is counted from the records that already exist, a calendar entry is a date
- * that already lives on a task or a contract, and a notification is something
- * that already happened. Storing an independent copy of any of them is how a
- * dashboard ends up reporting a number nobody can reproduce.
+ * The common thread: almost none of these hold a fact of their own. A goal's
+ * progress is counted from records that already exist, a calendar entry is
+ * often a date that already lives on a sale or a note, and a notification is
+ * something that already happened. Storing an independent copy of any of them
+ * is how a dashboard ends up reporting a number nobody can reproduce.
  *
- * The exception is a manual goal and a manual calendar entry, which have no
- * underlying record — those are typed in, and say so.
+ * The exceptions are a manual goal and a typed-in calendar entry, which have
+ * no underlying record — and both say so where they are defined.
  */
+
+import type { SoftDeletable } from './records'
 
 /* ------------------------------------------------------------------ *
  * Goals & KPIs
@@ -25,13 +27,13 @@
 export const GOAL_METRICS = [
   'revenue',
   'profit',
+  'collected',
   'new_clients',
   'new_leads',
   'leads_converted',
-  'sales_won',
+  'sales_count',
   'sales_value',
   'projects_completed',
-  'tasks_completed',
   'affiliate_revenue',
   'manual',
 ] as const
@@ -41,6 +43,7 @@ export type GoalMetric = (typeof GOAL_METRICS)[number]
 export const MONEY_METRICS: readonly GoalMetric[] = [
   'revenue',
   'profit',
+  'collected',
   'sales_value',
   'affiliate_revenue',
 ]
@@ -51,16 +54,26 @@ export type GoalScope = (typeof GOAL_SCOPES)[number]
 export const GOAL_STATUSES = ['active', 'achieved', 'missed', 'cancelled'] as const
 export type GoalStatus = (typeof GOAL_STATUSES)[number]
 
-export interface Goal {
+/** Who is allowed to see a goal that is not the whole company's. */
+export const GOAL_VISIBILITY = ['everyone', 'owners', 'management'] as const
+export type GoalVisibility = (typeof GOAL_VISIBILITY)[number]
+
+export interface Goal extends SoftDeletable {
   id: string
   title: string
   description: string
   scope: GoalScope
   /** Set for a department goal; the department's id. */
   departmentId: string | null
-  /** Set for an individual goal; whose it is. */
-  ownerUid: string | null
-  ownerName: string
+  /**
+   * Whose goal it is — several people, not one.
+   *
+   * The same target can be set for a pair or a whole team without creating a
+   * copy each, and progress is then counted across all of them together. An
+   * individual goal is simply this list with one name in it.
+   */
+  ownerUids: string[]
+  ownerNames: string[]
   metric: GoalMetric
   /** Money goals store minor units; count goals store a plain number. */
   target: number
@@ -69,8 +82,10 @@ export interface Goal {
   startDate: string
   endDate: string
   status: GoalStatus
+  visibility: GoalVisibility
   /** Narrows a revenue goal to one service, when that is the point of it. */
   serviceId: string | null
+  notes: string
   createdAt: string
   createdBy: string
   updatedAt: string
@@ -91,25 +106,31 @@ export interface Goal {
 export const KPI_METRICS = [
   'leads_created',
   'leads_converted',
-  'sales_won',
+  'sales_count',
   'sales_value',
-  'revenue_generated',
-  'tasks_completed',
-  'tasks_overdue',
+  'revenue_collected',
+  'new_clients',
   'projects_completed',
   'commission_generated',
+  'bonuses_earned',
 ] as const
 export type KpiMetric = (typeof KPI_METRICS)[number]
 
 /** KPI metrics measured in money. */
 export const MONEY_KPIS: readonly KpiMetric[] = [
   'sales_value',
-  'revenue_generated',
+  'revenue_collected',
   'commission_generated',
+  'bonuses_earned',
 ]
 
-/** Metrics where a lower number is the better result. */
-export const INVERSE_KPIS: readonly KpiMetric[] = ['tasks_overdue']
+/**
+ * Metrics where a lower number is the better result.
+ *
+ * Empty for now, and kept because the moment one is added — response time,
+ * overdue anything — every screen already knows to colour it the other way.
+ */
+export const INVERSE_KPIS: readonly KpiMetric[] = []
 
 /**
  * Which KPIs a role is measured on.
@@ -125,10 +146,10 @@ export interface RoleKpiSet {
 
 /** Sensible defaults so a new company is not looking at an empty screen. */
 export const DEFAULT_KPIS: readonly KpiMetric[] = [
-  'tasks_completed',
-  'tasks_overdue',
+  'leads_created',
   'leads_converted',
-  'revenue_generated',
+  'sales_count',
+  'revenue_collected',
 ]
 
 /* ------------------------------------------------------------------ *
@@ -138,23 +159,22 @@ export const DEFAULT_KPIS: readonly KpiMetric[] = [
 export const EVENT_KINDS = [
   'meeting',
   'deadline',
-  'task',
-  'contract',
   'payment',
   'reminder',
+  'goal',
   'other',
 ] as const
 export type EventKind = (typeof EVENT_KINDS)[number]
 
 /**
- * A calendar entry the user typed in.
+ * A calendar entry somebody typed in.
  *
- * Deadlines, contract renewals and payment dates are NOT stored here — they
- * are read from the tasks, contracts and invoices that own them and merged
- * into the same view. Copying them would create a second date that stops
- * matching the first the moment anybody edits one.
+ * Payment dates, project deadlines and note reminders are NOT stored here —
+ * they are read from the records that own them and merged into the same view.
+ * Copying them would create a second date that stops matching the first the
+ * moment anybody edits one.
  */
-export interface CalendarEvent {
+export interface CalendarEvent extends SoftDeletable {
   id: string
   title: string
   description: string
@@ -182,7 +202,7 @@ export interface CalendarItem {
   /** Where clicking it should go. */
   link: string | null
   detail: string
-  /** True when it comes from a task, contract or invoice rather than an event. */
+  /** True when it is read from another record rather than typed in here. */
   derived: boolean
   done: boolean
 }
@@ -197,19 +217,23 @@ export type NotificationPriority = (typeof NOTIFICATION_PRIORITIES)[number]
 export const NOTIFICATION_KINDS = [
   'lead_new',
   'lead_stale',
+  'lead_assigned',
   'client_new',
-  'sale_won',
+  'sale_new',
   'payment_received',
   'payment_overdue',
-  'contract_expiring',
+  'expense_recorded',
   'project_deadline',
-  'task_assigned',
-  'task_overdue',
+  'project_assigned',
   'registration_request',
+  'affiliate_lead',
   'commission_earned',
   'goal_achieved',
+  'bonus_earned',
+  'bonus_approved',
+  'work_assigned',
+  'work_submitted',
   'announcement',
-  'message',
 ] as const
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
@@ -242,42 +266,13 @@ export interface NotificationPreferences {
 }
 
 /* ------------------------------------------------------------------ *
- * Internal messages
+ * Announcements
+ *
+ * There is deliberately no chat. An announcement is a notification with a
+ * chosen audience, not a thread: it is the CEO telling people something, and
+ * building a conversation system around that would be answering a question
+ * nobody asked.
  * ------------------------------------------------------------------ */
 
-export const THREAD_KINDS = ['direct', 'group', 'announcement'] as const
-export type ThreadKind = (typeof THREAD_KINDS)[number]
-
-export interface ChatThread {
-  id: string
-  kind: ThreadKind
-  /** Empty for a direct thread, where the other person's name is the title. */
-  title: string
-  /** Everybody who can read it. Membership is what the rules check. */
-  memberUids: string[]
-  createdAt: string
-  createdBy: string
-  /** Denormalised so the thread list does not need a read per thread. */
-  lastMessage: string
-  lastMessageAt: string
-  lastMessageBy: string
-  /** uid → ISO timestamp they last opened it, for the unread count. */
-  readAt: Record<string, string>
-  updatedAt: string
-}
-
-export interface ChatMessage {
-  id: string
-  threadId: string
-  authorUid: string
-  authorName: string
-  body: string
-  /** uids mentioned with @, so they can be notified. */
-  mentions: string[]
-  createdAt: string
-  editedAt: string | null
-}
-
-/** An announcement is a thread nobody can reply to. */
 export const ANNOUNCEMENT_AUDIENCES = ['everyone', 'department', 'selected'] as const
 export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number]

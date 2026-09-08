@@ -3,32 +3,30 @@
  * Performance.
  *
  * There is no score on this page, and that is a decision rather than an
- * omission. A developer's task count and a salesperson's revenue are not the
- * same axis; averaging them produces a number that is precise, comparable and
- * meaningless, and people quickly learn to work for the number instead of the
- * job.
+ * omission. A developer's project count and a salesperson's revenue are not
+ * the same axis; averaging them produces a number that is precise, comparable
+ * and meaningless, and people quickly learn to work for the number instead of
+ * the job.
  *
- * What exists instead: each role carries the KPIs that matter for it, and each
- * person is shown against those. Every figure is counted from records the
- * system already holds, so nobody is scored on data somebody typed about them.
+ * What exists instead: each role carries the KPIs that matter for it, set by
+ * the CEO, and each person is shown against those. Everything is counted from
+ * records the system already keeps, so nobody is measured on data somebody
+ * typed about them.
  */
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import PeriodPicker from '@/components/PeriodPicker.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchEmployees } from '@/api/employees'
-import { fetchRoles } from '@/api/roles'
 import { fetchRoleKpis, saveRoleKpi } from '@/api/company'
-import {
-  EMPTY_SNAPSHOT,
-  kpisFor,
-  loadSnapshot,
-  periodOf,
-  type PeriodKey,
-  type Snapshot,
-} from '@/api/metrics'
+import { fetchRoles } from '@/api/roles'
+import { EMPTY_SNAPSHOT, kpisFor, loadSnapshot, periodOf, type Period, type Snapshot } from '@/api/metrics'
+import { earningsFor } from '@/api/rewards'
+import { affiliateOwners } from '@/api/affiliates'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { DEFAULT_KPIS, INVERSE_KPIS, KPI_METRICS, MONEY_KPIS, type KpiMetric } from '@/types/company'
@@ -38,6 +36,7 @@ import type { EmployeePublic, Role } from '@/types/domain'
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const router = useRouter()
 const { t, locale } = useI18n()
 
 const loading = ref(true)
@@ -48,14 +47,13 @@ const people = ref<EmployeePublic[]>([])
 const roles = ref<Role[]>([])
 const roleKpis = ref<Record<string, KpiMetric[]>>({})
 
-const periodKey = ref<PeriodKey>('month')
+const period = ref<Period>(periodOf('month'))
 const configuringRole = ref<string | null>(null)
 const chosen = ref<KpiMetric[]>([])
 
 const canSeeAll = computed(() => auth.hasPermission(PERMISSIONS.PERFORMANCE_VIEW_ALL))
 const canConfigure = computed(() => auth.hasPermission(PERMISSIONS.ROLES_EDIT))
-
-const period = computed(() => periodOf(periodKey.value))
+const canSeeEarnings = computed(() => auth.hasPermission(PERMISSIONS.EARNINGS_VIEW_ALL))
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -64,8 +62,7 @@ function money(minor: number): string {
 /** Which people this viewer may see. Without the wider permission: only you. */
 const visiblePeople = computed(() => {
   const all = people.value.filter((p) => p.accountType !== 'affiliate')
-  if (canSeeAll.value) return all
-  return all.filter((p) => p.uid === auth.uid)
+  return canSeeAll.value ? all : all.filter((p) => p.uid === auth.uid)
 })
 
 const roleName = computed(() => new Map(roles.value.map((r) => [r.id, r.name])))
@@ -85,9 +82,8 @@ function metricsFor(roleId: string | null | undefined): KpiMetric[] {
 /**
  * What one person is measured on.
  *
- * Somebody holding two roles is measured on the union of both. Taking the
- * intersection would mean a person gains a title and is judged on less, which
- * is exactly backwards.
+ * Somebody holding two roles is measured on the union. Taking the intersection
+ * would mean gaining a title and being judged on less, which is backwards.
  */
 function metricsForPerson(person: EmployeePublic): KpiMetric[] {
   const roleIds = person.roleIds ?? []
@@ -95,11 +91,19 @@ function metricsForPerson(person: EmployeePublic): KpiMetric[] {
   return [...new Set(roleIds.flatMap((id) => metricsFor(id)))]
 }
 
+const owners = computed(() => affiliateOwners(snapshot.value.affiliates))
+
 const rows = computed(() =>
   visiblePeople.value.map((person) => ({
     person,
     metrics: metricsForPerson(person),
     values: kpisFor(person.uid, snapshot.value, period.value),
+    earnings: earningsFor(
+      person.uid,
+      snapshot.value.awards,
+      snapshot.value.commissions,
+      owners.value,
+    ),
   })),
 )
 
@@ -107,7 +111,6 @@ function display(metric: KpiMetric, value: number): string {
   return MONEY_KPIS.includes(metric) ? money(value) : String(value)
 }
 
-/** For a metric where lower is better, a non-zero value is the bad case. */
 function tone(metric: KpiMetric, value: number): string {
   if (!INVERSE_KPIS.includes(metric)) return value > 0 ? 'pos' : ''
   return value > 0 ? 'neg' : 'pos'
@@ -176,27 +179,17 @@ onMounted(load)
       </div>
     </div>
 
-    <div class="toolbar">
-      <div class="segmented">
-        <button
-          v-for="key in (['week', 'month', 'quarter', 'year'] as PeriodKey[])"
-          :key="key"
-          type="button"
-          :class="{ 'is-on': periodKey === key }"
-          @click="periodKey = key"
-        >
-          {{ t(`period.${key}`) }}
-        </button>
-      </div>
-      <span v-if="!canSeeAll" class="tertiary small">{{ t('performance.onlyMine') }}</span>
-    </div>
+    <PeriodPicker v-model="period" />
+    <p v-if="!canSeeAll" class="tertiary small">{{ t('performance.onlyMine') }}</p>
 
     <!-- Role KPI configuration ---------------------------------------- -->
     <section v-if="canConfigure && roles.length" class="card">
       <div class="card-header">
-        <h2 class="card-title">{{ t('performance.configure') }}</h2>
+        <div>
+          <h2 class="card-title">{{ t('performance.configure') }}</h2>
+          <p class="field-hint">{{ t('performance.configureHint') }}</p>
+        </div>
       </div>
-      <p class="card-body tertiary small">{{ t('performance.configureHint') }}</p>
 
       <ul class="roles">
         <li v-for="role in roles" :key="role.id" class="role">
@@ -232,7 +225,7 @@ onMounted(load)
     <!-- People --------------------------------------------------------- -->
     <div v-if="loading" class="card">
       <div class="card-body stack">
-        <div v-for="n in 3" :key="n" class="skeleton" style="height: 72px" />
+        <div v-for="n in 3" :key="n" class="skeleton" style="height: 90px" />
       </div>
     </div>
 
@@ -246,17 +239,21 @@ onMounted(load)
 
     <div v-else class="grid">
       <article v-for="row in rows" :key="row.person.uid" class="card person">
-        <div class="person-head">
+        <button
+          type="button"
+          class="person-head"
+          @click="router.push(`/employees/${row.person.uid}`)"
+        >
           <UserAvatar
             :name="`${row.person.firstName} ${row.person.lastName}`"
             :photo-url="row.person.photoUrl"
             :size="40"
           />
-          <div class="person-id">
-            <h2 class="person-name">{{ row.person.firstName }} {{ row.person.lastName }}</h2>
+          <span class="person-id">
+            <span class="person-name">{{ row.person.firstName }} {{ row.person.lastName }}</span>
             <span class="tertiary">{{ roleLabel(row.person) }}</span>
-          </div>
-        </div>
+          </span>
+        </button>
 
         <p v-if="row.metrics.length === 0" class="tertiary small">{{ t('performance.noKpis') }}</p>
 
@@ -264,6 +261,17 @@ onMounted(load)
           <div v-for="m in row.metrics" :key="m">
             <dt>{{ t(`kpi.${m}`) }}</dt>
             <dd :class="tone(m, row.values[m])">{{ display(m, row.values[m]) }}</dd>
+          </div>
+        </dl>
+
+        <dl v-if="canSeeEarnings || row.person.uid === auth.uid" class="earnings">
+          <div>
+            <dt>{{ t('earnings.owed') }}</dt>
+            <dd class="warn">{{ money(row.earnings.owedBaseMinor) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('earnings.paid') }}</dt>
+            <dd class="pos">{{ money(row.earnings.paidBaseMinor) }}</dd>
           </div>
         </dl>
       </article>
@@ -281,30 +289,32 @@ onMounted(load)
 .note-title { font-size: var(--text-sm); font-weight: 650; color: var(--text-primary); }
 .note-text { font-size: var(--text-xs); line-height: var(--leading-relaxed); margin-top: 2px; }
 
-.segmented { display: inline-flex; padding: 2px; gap: 2px; background: var(--bg-inset); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
-.segmented button { padding: 0 var(--space-3); height: 30px; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 550; color: var(--text-tertiary); }
-.segmented button.is-on { background: var(--bg-surface-3); color: var(--text-primary); box-shadow: var(--shadow-sm); }
-
 .roles { list-style: none; margin: 0; padding: 0; }
 .role { border-top: 1px solid var(--border-subtle); }
-.role-line { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); }
-.role-name { font-weight: 600; min-width: 140px; }
+.role-line { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-5); flex-wrap: wrap; }
+.role-name { font-weight: 600; min-width: 130px; }
 .role-metrics { flex: 1; min-width: 0; font-size: var(--text-xs); }
 .picker { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0 var(--space-5) var(--space-4); }
 .picker-foot { display: flex; gap: var(--space-2); width: 100%; justify-content: flex-end; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
 .person { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
-.person-head { display: flex; align-items: center; gap: var(--space-3); }
+.person-head { display: flex; align-items: center; gap: var(--space-3); text-align: left; }
 .person-id { min-width: 0; display: flex; flex-direction: column; }
 .person-name { font-size: var(--text-md); font-weight: 650; }
+.person-head:hover .person-name { color: var(--text-brand); }
 .person-id .tertiary { font-size: var(--text-xs); }
 
 .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin: 0; }
 .kpis dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); margin-bottom: 2px; }
 .kpis dd { margin: 0; font-size: var(--text-md); font-weight: 700; font-variant-numeric: tabular-nums; }
 
+.earnings { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin: 0; padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+.earnings dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); margin-bottom: 2px; }
+.earnings dd { margin: 0; font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
+
 .pos { color: var(--ok-500); }
 .neg { color: var(--danger-500); }
+.warn { color: var(--warn-500); }
 .small { font-size: var(--text-xs); }
 </style>

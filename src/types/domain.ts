@@ -389,6 +389,20 @@ export const AUDIT_ACTIONS = [
   'event.deleted',
   'announcement.sent',
   'auth.logout',
+  'record.deleted',
+  'record.restored',
+  'record.purged',
+  'transaction.recorded',
+  'transaction.updated',
+  'bonus.programme_created',
+  'bonus.awarded',
+  'bonus.approved',
+  'bonus.paid',
+  'bonus.rejected',
+  'work.assigned',
+  'work.submitted',
+  'work.reviewed',
+  'field.changed',
   'settings.updated',
   'data.exported',
 ] as const
@@ -414,8 +428,9 @@ export type AuditTargetType =
   | 'task'
   | 'event'
   | 'project'
-  | 'income'
-  | 'expense'
+  | 'transaction'
+  | 'bonus'
+  | 'work'
   | 'settings'
 
 export interface AuditLogEntry {

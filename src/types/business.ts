@@ -1,14 +1,37 @@
 /**
- * The business side: clients, projects, services and the money either way.
+ * The records the company is made of: clients, leads, projects, services and
+ * the notes stuck to them.
  *
- * Deliberately one connected set rather than separate modules for Sales,
- * Projects and Finance. The questions an agency actually asks cross all three
- * — "did this project make money", "what comes in every month without new
- * work", "which client is worth keeping" — and splitting them early turns
- * every one of those into a join.
+ * Two shapes changed here and both were deliberate.
+ *
+ * A PROJECT HOLDS MANY CLIENTS. It used to hold one, which made it a synonym
+ * for "a job for a client" and left no way to describe the thing MsEe actually
+ * runs — a season of apartment sales, a marketing push across six hotels. A
+ * project is an initiative; the clients are who it is for.
+ *
+ * A SERVICE CARRIES ITS PAYMENT STRUCTURE. Price alone cannot express "half up
+ * front, the rest in three parts", and without that the system can never say
+ * whether an advance is outstanding. The structure is copied onto a sale when
+ * one is made, so raising a price next year does not rewrite last year's deal.
+ *
+ * The work ledger that used to live under each client is gone. It recorded
+ * what was sold and what it earned, which is what a sale records — and two
+ * places to write one fact is two places for it to be wrong.
  */
 
+import type { CustomValues, SoftDeletable } from './records'
 import type { Money } from './money'
+import type { PaymentStructure } from './revenue'
+
+/* ------------------------------------------------------------------ *
+ * Shared vocabulary
+ * ------------------------------------------------------------------ */
+
+export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
+export type Priority = (typeof PRIORITIES)[number]
+
+export const CLIENT_SOURCES = ['direct', 'referral', 'affiliate', 'other'] as const
+export type ClientSource = (typeof CLIENT_SOURCES)[number]
 
 /* ------------------------------------------------------------------ *
  * Clients
@@ -17,18 +40,45 @@ import type { Money } from './money'
 export const CLIENT_STATUSES = ['prospect', 'active', 'paused', 'former'] as const
 export type ClientStatus = (typeof CLIENT_STATUSES)[number]
 
-export interface Client {
+/**
+ * Where a client came from.
+ *
+ * Commission is never stored here — it is computed from the affiliate's rules
+ * against the sales that followed, so it cannot drift from what was earned.
+ */
+export interface Referral {
+  source: ClientSource
+  /** Free text: this may be somebody outside the company. */
+  referrerName: string
+  /** Set when the referrer is a registered affiliate. */
+  affiliateId: string | null
+  note: string
+}
+
+export const NO_REFERRAL: Referral = {
+  source: 'direct',
+  referrerName: '',
+  affiliateId: null,
+  note: '',
+}
+
+export interface Client extends SoftDeletable {
   id: string
   name: string
+  /** What they do, in a line. Shown in the list so it is scannable. */
+  description: string
   /** The person you actually talk to, when the client is a company. */
   contactName: string
   email: string
   phone: string
   city: string
   country: string
+  address: string
   website: string
+  industry: string
+  tags: string[]
   status: ClientStatus
-  /** Archived clients drop out of every list but keep their whole history. */
+  /** Archived clients drop out of lists but keep their whole history. */
   archived: boolean
   notes: string
 
@@ -40,22 +90,17 @@ export interface Client {
   managerName: string
   instagram: string
   facebook: string
-  address: string
   otherContact: string
 
-  /* Terms. */
-  paymentTerm: PaymentTerm
-  agreedAmount: Money | null
-  paymentDueDays: number | null
-  nextChargeDate: string | null
-  paymentNote: string
+  /** Which employee looks after them. */
+  responsibleUid: string | null
+  responsibleName: string
 
-  /** What business they are in, for grouping and reporting. */
-  industry: string
-  tags: string[]
+  /** Services they use. Ids into the catalogue. */
+  serviceIds: string[]
 
   referral: Referral
-  customFields: CustomField[]
+  custom: CustomValues
 
   clientSince: string | null
   /** Reserved for the StayBrain link. Unused until that integration lands. */
@@ -66,463 +111,208 @@ export interface Client {
 }
 
 /* ------------------------------------------------------------------ *
- * Everything that hangs off one client
- *
- * Stored as subcollections of clients/{clientId} rather than as top-level
- * collections with a clientId field. Two reasons, and both matter more than
- * the slight extra nesting:
- *
- *   - a security rule can say "this belongs to a client" by its path, without
- *     reading the document to find out;
- *   - opening a client reads one subtree instead of six filtered queries.
- * ------------------------------------------------------------------ */
-
-/** How a client pays. Drives the instalment plan and the next-due figure. */
-export const PAYMENT_TERMS = [
-  'one_off',
-  'monthly',
-  'yearly',
-  'instalments',
-  'per_project',
-  'per_result',
-  'custom',
-] as const
-export type PaymentTerm = (typeof PAYMENT_TERMS)[number]
-
-export const PAYMENT_STATUSES = ['unpaid', 'paid', 'waiting'] as const
-export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
-
-/**
- * One thing done for a client: a campaign, a website, an extra design.
- *
- * The heart of the dossier. Profit is stored rather than computed at read
- * time so a total can be summed by the database, and it is recomputed on
- * every save — revenue minus cost, never entered by hand.
- */
-export interface WorkItem {
-  id: string
-  clientId: string
-  date: string
-  title: string
-  serviceId: string | null
-  serviceName: string
-  /** Optional label. Money still belongs to the client; this groups it. */
-  projectId: string | null
-  cost: Money
-  revenue: Money
-  /** revenue.baseMinor - cost.baseMinor. Derived, never typed in. */
-  profitBaseMinor: number
-  dueDate: string | null
-  paymentStatus: PaymentStatus
-  paidDate: string | null
-  note: string
-  createdAt: string
-  createdBy: string
-  updatedAt: string
-}
-
-/** A service this particular client uses, with their agreed terms. */
-export interface ClientService {
-  id: string
-  clientId: string
-  name: string
-  description: string
-  price: Money
-  paymentTerm: PaymentTerm
-  startDate: string | null
-  endDate: string | null
-  status: 'active' | 'paused' | 'ended'
-  note: string
-  createdAt: string
-  updatedAt: string
-}
-
-/** One payment in a plan. */
-export interface Instalment {
-  id: string
-  clientId: string
-  /** 1 of 4, 2 of 4 — kept explicit so the order survives a deletion. */
-  sequence: number
-  total: number
-  amount: Money
-  dueDate: string
-  status: PaymentStatus
-  paidDate: string | null
-  note: string
-  createdAt: string
-  updatedAt: string
-}
-
-/** A discount or special arrangement, kept as history rather than overwritten. */
-export interface SpecialOffer {
-  id: string
-  clientId: string
-  title: string
-  regularPrice: Money
-  agreedPrice: Money
-  /** regular - agreed, in base minor units. */
-  discountBaseMinor: number
-  validUntil: string | null
-  note: string
-  active: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export const ACTIVITY_TYPES = [
-  'call',
-  'meeting',
-  'email',
-  'message',
-  'offer',
-  'report',
-  'other',
-] as const
-export type ActivityType = (typeof ACTIVITY_TYPES)[number]
-
-/** One touchpoint. The timeline of the relationship. */
-export interface ClientActivity {
-  id: string
-  clientId: string
-  date: string
-  type: ActivityType
-  title: string
-  detail: string
-  createdAt: string
-  createdBy: string
-  createdByName: string
-}
-
-/** Internal note. Visible to the team, never to the client. */
-export interface ClientNote {
-  id: string
-  clientId: string
-  content: string
-  pinned: boolean
-  createdAt: string
-  createdBy: string
-  createdByName: string
-  updatedAt: string
-}
-
-/* ------------------------------------------------------------------ *
- * Custom fields
- *
- * Stored on the client document as a list rather than as loose keys, so a
- * field can be renamed or removed without a migration and two clients can
- * carry entirely different ones.
- * ------------------------------------------------------------------ */
-
-export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'choice', 'money'] as const
-export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number]
-
-export interface CustomField {
-  id: string
-  label: string
-  type: CustomFieldType
-  value: string
-  /** Only for `choice`. */
-  options: string[]
-}
-
-/* ------------------------------------------------------------------ *
- * Who brought the client in
- * ------------------------------------------------------------------ */
-
-export const CLIENT_SOURCES = ['direct', 'referral', 'other'] as const
-export type ClientSource = (typeof CLIENT_SOURCES)[number]
-
-/**
- * The referral arrangement.
- *
- * Commission is computed from the work recorded against the client, not typed
- * in, so it cannot drift from what was actually earned. `fixedAmount` overrides
- * the percentage when it is set, because some arrangements are a flat fee.
- */
-export interface Referral {
-  source: ClientSource
-  /** Free text: this may be somebody outside the company. */
-  referrerName: string
-  /** Set when the referrer is an employee, so it can link to their profile. */
-  referrerUid: string | null
-  percent: number
-  fixedAmountMinor: number | null
-  /** What the percentage applies to. */
-  basis: 'revenue' | 'profit'
-  status: PaymentStatus
-  note: string
-}
-
-export const EMPTY_REFERRAL: Referral = {
-  source: 'direct',
-  referrerName: '',
-  referrerUid: null,
-  percent: 0,
-  fixedAmountMinor: null,
-  basis: 'revenue',
-  status: 'unpaid',
-  note: '',
-}
-
-/* ------------------------------------------------------------------ *
- * Projects
- * ------------------------------------------------------------------ */
-
-/**
- * How a project is paid for.
- *
- * The distinction matters more than it looks: one-off work is revenue that
- * happens once, monthly work is revenue that keeps arriving. An agency lives
- * on the second kind, and mixing them into a single "value" hides how much of
- * the business is actually stable.
- */
-export const BILLING_TYPES = ['one_off', 'monthly'] as const
-export type BillingType = (typeof BILLING_TYPES)[number]
-
-export const PROJECT_STATUSES = [
-  'draft',
-  'active',
-  'on_hold',
-  'completed',
-  'cancelled',
-] as const
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
-
-export interface Project {
-  id: string
-  clientId: string
-  name: string
-  description: string
-  billing: BillingType
-  /** Total for one-off work; the monthly figure for a retainer. */
-  value: Money
-  status: ProjectStatus
-  startDate: string | null
-  endDate: string | null
-  /** Which employee runs it. */
-  ownerUid: string | null
-  ownerName: string
-  /** Everyone working on it, so it can appear in their workspace. */
-  teamUids: string[]
-  priority: TaskPriority
-  serviceId: string | null
-  serviceName: string
-  contractId: string | null
-  milestones: Milestone[]
-  createdAt: string
-  createdBy: string
-  updatedAt: string
-}
-
-/**
- * A checkpoint inside a project.
- *
- * Progress is counted from these and from the project's tasks rather than
- * typed in, so "80% done" always means something specific.
- */
-export interface Milestone {
-  id: string
-  title: string
-  dueDate: string | null
-  done: boolean
-}
-
-/* ------------------------------------------------------------------ *
- * Services — the price list
- * ------------------------------------------------------------------ */
-
-export const PRICING_MODELS = ['fixed', 'hourly', 'monthly', 'commission', 'custom'] as const
-export type PricingModel = (typeof PRICING_MODELS)[number]
-
-export interface Service {
-  id: string
-  name: string
-  description: string
-  /** Free text so a new line of business does not need a code change. */
-  category: string
-  pricingModel: PricingModel
-  defaultPrice: Money
-  /** "per month", "per page", "per hour" — free text, it only ever prints. */
-  unit: string
-  status: 'active' | 'inactive'
-  createdAt: string
-  updatedAt: string
-}
-
-/* ------------------------------------------------------------------ *
- * Money out
- * ------------------------------------------------------------------ */
-
-export const EXPENSE_CATEGORIES = [
-  'tools',
-  'subcontractor',
-  'advertising',
-  'hosting',
-  'salary',
-  'office',
-  'other',
-] as const
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
-
-export interface ExpenseEntry {
-  id: string
-  /** Attached to a project when it belongs to one; otherwise a running cost. */
-  projectId: string | null
-  clientId: string | null
-  description: string
-  amount: Money
-  date: string
-  category: ExpenseCategory
-  /** True for costs that repeat every month, so they can be projected. */
-  recurring: boolean
-  createdAt: string
-  createdBy: string
-  updatedAt: string
-}
-
-/* ------------------------------------------------------------------ *
  * Leads
  *
  * Kept apart from clients on purpose. A lead is a conversation that may go
  * nowhere; a client is a relationship with money in it. Mixing them fills the
- * client list with people who never bought anything, and makes every figure
+ * client list with people who never bought anything and makes every figure
  * about "our clients" quietly wrong.
- *
- * Winning a lead copies its details into a new client rather than converting
- * the record, so the pipeline keeps its own history of what was tried.
  * ------------------------------------------------------------------ */
 
 export const LEAD_STAGES = [
   'new',
   'contacted',
-  'interested',
-  'offer_sent',
+  'qualified',
+  'proposal',
   'negotiation',
   'won',
   'lost',
 ] as const
 export type LeadStage = (typeof LEAD_STAGES)[number]
 
-/** Stages that are still live, for the pipeline view and the counts. */
+/** Stages still in play, for the pipeline and the counts. */
 export const OPEN_STAGES: readonly LeadStage[] = [
   'new',
   'contacted',
-  'interested',
-  'offer_sent',
+  'qualified',
+  'proposal',
   'negotiation',
 ]
 
-export interface Lead {
+export interface Lead extends SoftDeletable {
   id: string
   name: string
   company: string
+  /** What they want, in a line. */
+  description: string
   email: string
   phone: string
   city: string
   country: string
   source: ClientSource
   sourceDetail: string
+  /** Set when an affiliate submitted this lead through their panel. */
+  affiliateId: string | null
+  affiliateName: string
   /** What the work would be worth if it lands. */
   estimatedValue: Money | null
+  serviceId: string | null
   serviceInterest: string
   stage: LeadStage
   /** Who is working it. Performance and "my leads" both read this. */
   assigneeUid: string | null
   assigneeName: string
-  priority: TaskPriority
+  priority: Priority
+  /**
+   * When somebody last actually spoke to them. Separate from `updatedAt`,
+   * because editing a note is not contact and a pipeline that confuses the two
+   * will tell you a cold lead is warm.
+   */
+  lastContactedAt: string | null
   /** The one thing to do next. A pipeline without this is just a list. */
   nextStep: string
   nextContactDate: string | null
   notes: string
   lostReason: string
-  /** Set when the lead was won and a client was created from it. */
+  custom: CustomValues
+  /** Set when the lead was converted, so the trail survives. */
   clientId: string | null
+  saleId: string | null
   createdAt: string
   createdBy: string
   updatedAt: string
 }
 
 /* ------------------------------------------------------------------ *
- * Tasks
+ * Projects
  * ------------------------------------------------------------------ */
 
-export const TASK_STATUSES = ['todo', 'doing', 'review', 'blocked', 'done', 'cancelled'] as const
-export type TaskStatus = (typeof TASK_STATUSES)[number]
-
-export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
-export type TaskPriority = (typeof TASK_PRIORITIES)[number]
+export const PROJECT_STATUSES = [
+  'planning',
+  'active',
+  'on_hold',
+  'at_risk',
+  'completed',
+  'cancelled',
+] as const
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 
 /**
- * A piece of work assigned to somebody.
+ * A checkpoint inside a project.
  *
- * Client and project are both optional. Plenty of real work belongs to nobody
- * in particular — fix the website, chase an invoice — and forcing every task
- * under a project is how task lists start being avoided.
+ * Progress is counted from these rather than typed in, so "80% done" always
+ * means something specific. A project with no milestones reports no progress
+ * rather than nought — "cannot tell" and "nothing done" are different answers.
  */
-export interface Task {
+export interface Milestone {
   id: string
   title: string
-  description: string
-  clientId: string | null
-  projectId: string | null
-  assigneeUid: string | null
-  assigneeName: string
-  status: TaskStatus
-  priority: TaskPriority
   dueDate: string | null
-  completedAt: string | null
-  /** Planned and actual effort, in minutes. Zero means not tracked. */
-  estimatedMinutes: number
-  actualMinutes: number
-  checklist: ChecklistItem[]
-  /** Repeats after completion; blank when it does not. */
-  repeat: TaskRepeat
+  done: boolean
+  doneAt: string | null
+}
+
+export interface Project extends SoftDeletable {
+  id: string
+  name: string
+  /** Data URI cover image, resized in the browser. */
+  coverUrl: string | null
+  description: string
+  /** Why it exists. The line that stops a project drifting. */
+  objective: string
+  status: ProjectStatus
+  priority: Priority
+  startDate: string | null
+  endDate: string | null
+
+  /** Which employee runs it. */
+  ownerUid: string | null
+  ownerName: string
+  /** Everyone working on it, so it appears in their workspace. */
+  teamUids: string[]
+
+  /**
+   * The clients this project is for. Many, not one — see the note at the top
+   * of this file.
+   */
+  clientIds: string[]
+
+  serviceId: string | null
+  serviceName: string
+  /** What was set aside for it. Revenue is read from the sales attached. */
+  budget: Money | null
+  milestones: Milestone[]
+  notes: string
+  custom: CustomValues
+
   createdAt: string
   createdBy: string
-  createdByName: string
   updatedAt: string
 }
 
-export const TASK_REPEATS = ['', 'daily', 'weekly', 'monthly'] as const
-export type TaskRepeat = (typeof TASK_REPEATS)[number]
+/* ------------------------------------------------------------------ *
+ * Services — the catalogue
+ * ------------------------------------------------------------------ */
 
-/** Days added when a repeating task is completed and re-opened. */
-export const REPEAT_DAYS: Record<Exclude<TaskRepeat, ''>, number> = {
-  daily: 1,
-  weekly: 7,
-  monthly: 30,
+export const PRICING_MODELS = ['fixed', 'hourly', 'monthly', 'per_unit', 'custom'] as const
+export type PricingModel = (typeof PRICING_MODELS)[number]
+
+export interface Service extends SoftDeletable {
+  id: string
+  name: string
+  /** One line, for the list and for pickers. */
+  description: string
+  /** The full explanation, for whoever has to sell it. */
+  details: string
+  /** Free text so a new line of business needs no code change. */
+  category: string
+  pricingModel: PricingModel
+  defaultPrice: Money
+  /** "per month", "per page", "per hour" — free text, it only ever prints. */
+  unit: string
+
+  /**
+   * How this service is normally paid for.
+   *
+   * Copied onto a sale when one is made, and editable there: a structure is a
+   * default, not a rule, because somebody will always agree something else.
+   */
+  payment: PaymentStructure
+
+  /** Default commission for affiliates who sell it, as a percentage. */
+  commissionPercent: number
+  status: 'active' | 'inactive'
+  notes: string
+  custom: CustomValues
+  createdAt: string
+  createdBy: string
+  updatedAt: string
 }
 
-export interface ChecklistItem {
-  id: string
-  text: string
-  done: boolean
-}
+/* ------------------------------------------------------------------ *
+ * Notes
+ *
+ * One flat collection, attachable to anything. This is what replaced the task
+ * module: a note is enough to track "call them back Tuesday" without a second
+ * system to keep up to date, and a note pinned to a client is where somebody
+ * actually looks for it.
+ * ------------------------------------------------------------------ */
 
-/** A comment on a task, stored under `tasks/{id}/comments`. */
-export interface TaskComment {
+export const NOTE_ENTITIES = ['client', 'lead', 'project', 'sale', 'employee'] as const
+export type NoteEntity = (typeof NOTE_ENTITIES)[number]
+
+export interface Note {
   id: string
+  entity: NoteEntity
+  entityId: string
   body: string
+  /** Pinned notes sort first and show on the record's overview. */
+  pinned: boolean
+  /** An optional reminder date, which is as close to a task as this gets. */
+  dueDate: string | null
+  done: boolean
   authorUid: string
   authorName: string
   createdAt: string
-}
-
-/* ------------------------------------------------------------------ *
- * Derived figures
- * ------------------------------------------------------------------ */
-
-/**
- * What a project actually did, in base currency minor units.
- *
- * `earned` counts everything issued or paid; `received` counts only what
- * arrived. An agency that watches only the first runs out of cash while its
- * reports look healthy.
- */
-export interface ProjectResult {
-  projectId: string
-  earnedMinor: number
-  receivedMinor: number
-  spentMinor: number
-  profitMinor: number
+  updatedAt: string
 }

@@ -19,8 +19,8 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
-import { fetchLeads, fetchProjects, fetchServiceCatalogue, fetchTasks } from '@/api/operations'
-import { fetchContracts, fetchSales } from '@/api/revenue'
+import { fetchLeads, fetchProjects, fetchServices } from '@/api/operations'
+import { fetchSales } from '@/api/sales'
 import { useAuthStore } from '@/stores/auth'
 import type { EmployeePublic } from '@/types/domain'
 import { PERMISSIONS, type Permission } from '@/types/permissions'
@@ -63,7 +63,7 @@ interface PageEntry {
 
 const PAGES: PageEntry[] = [
   { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
-  { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
+  { to: '/workspace', labelKey: 'workspace.title', icon: 'briefcase' },
   {
     to: '/clients',
     labelKey: 'modules.clients',
@@ -71,46 +71,12 @@ const PAGES: PageEntry[] = [
     permission: PERMISSIONS.CLIENTS_VIEW,
     internalOnly: true,
   },
+  { to: '/leads', labelKey: 'modules.leads', icon: 'target', permission: PERMISSIONS.LEADS_VIEW },
   {
-    to: '/employees',
-    labelKey: 'nav.employees',
-    icon: 'users',
-    permission: PERMISSIONS.EMPLOYEES_VIEW,
-    internalOnly: true,
-  },
-  {
-    to: '/requests',
-    labelKey: 'nav.requests',
-    icon: 'inbox',
-    permission: PERMISSIONS.REQUESTS_VIEW,
-    internalOnly: true,
-  },
-  {
-    to: '/roles',
-    labelKey: 'nav.roles',
-    icon: 'shield',
-    permission: PERMISSIONS.ROLES_VIEW,
-    internalOnly: true,
-  },
-  {
-    to: '/organization',
-    labelKey: 'nav2.organization',
-    icon: 'building',
-    permission: PERMISSIONS.DEPARTMENTS_MANAGE,
-    internalOnly: true,
-  },
-  {
-    to: '/audit',
-    labelKey: 'nav.audit',
-    icon: 'scroll',
-    permission: PERMISSIONS.AUDIT_VIEW,
-    internalOnly: true,
-  },
-  {
-    to: '/leads',
-    labelKey: 'modules.leads',
-    icon: 'target',
-    permission: PERMISSIONS.LEADS_VIEW,
+    to: '/projects',
+    labelKey: 'modules.projects',
+    icon: 'layers',
+    permission: PERMISSIONS.PROJECTS_VIEW,
     internalOnly: true,
   },
   {
@@ -121,34 +87,13 @@ const PAGES: PageEntry[] = [
     internalOnly: true,
   },
   {
-    to: '/projects',
-    labelKey: 'modules.projects',
-    icon: 'layers',
-    permission: PERMISSIONS.PROJECTS_VIEW,
-    internalOnly: true,
-  },
-  { to: '/tasks', labelKey: 'modules.tasks', icon: 'check', internalOnly: true },
-  {
     to: '/services',
     labelKey: 'modules.services',
     icon: 'spark',
     permission: PERMISSIONS.SERVICES_VIEW,
     internalOnly: true,
   },
-  {
-    to: '/contracts',
-    labelKey: 'modules.contracts',
-    icon: 'contract',
-    permission: PERMISSIONS.CONTRACTS_VIEW,
-    internalOnly: true,
-  },
-  {
-    to: '/affiliates',
-    labelKey: 'modules.affiliateProgram',
-    icon: 'gift',
-    permission: PERMISSIONS.AFFILIATES_VIEW,
-    internalOnly: true,
-  },
+  { to: '/affiliates', labelKey: 'modules.affiliateProgram', icon: 'gift' },
   {
     to: '/finance',
     labelKey: 'modules.finance',
@@ -157,10 +102,24 @@ const PAGES: PageEntry[] = [
     internalOnly: true,
   },
   {
+    to: '/employees',
+    labelKey: 'nav.employees',
+    icon: 'users',
+    permission: PERMISSIONS.EMPLOYEES_VIEW,
+    internalOnly: true,
+  },
+  {
     to: '/goals',
     labelKey: 'modules.goals',
     icon: 'flag',
     permission: PERMISSIONS.GOALS_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/bonuses',
+    labelKey: 'modules.bonuses',
+    icon: 'gift',
+    permission: PERMISSIONS.BONUSES_VIEW,
     internalOnly: true,
   },
   {
@@ -178,21 +137,57 @@ const PAGES: PageEntry[] = [
     internalOnly: true,
   },
   {
-    to: '/chat',
-    labelKey: 'chat.title',
-    icon: 'chat',
-    permission: PERMISSIONS.CHAT_USE,
-    internalOnly: true,
-  },
-  {
     to: '/analytics',
     labelKey: 'modules.analytics',
     icon: 'chart',
     permission: PERMISSIONS.ANALYTICS_VIEW,
     internalOnly: true,
   },
+  { to: '/notifications', labelKey: 'notifications.title', icon: 'bell' },
   { to: '/profile', labelKey: 'nav.profile', icon: 'user' },
   { to: '/settings', labelKey: 'nav.settings', icon: 'settings' },
+  {
+    to: '/settings/roles',
+    labelKey: 'nav.roles',
+    icon: 'shield',
+    permission: PERMISSIONS.ROLES_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/settings/organization',
+    labelKey: 'nav2.organization',
+    icon: 'building',
+    permission: PERMISSIONS.DEPARTMENTS_MANAGE,
+    internalOnly: true,
+  },
+  {
+    to: '/settings/requests',
+    labelKey: 'nav.requests',
+    icon: 'inbox',
+    permission: PERMISSIONS.REQUESTS_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/settings/fields',
+    labelKey: 'fields.title',
+    icon: 'edit',
+    permission: PERMISSIONS.FIELDS_MANAGE,
+    internalOnly: true,
+  },
+  {
+    to: '/settings/recycle',
+    labelKey: 'recycle.title',
+    icon: 'trash',
+    permission: PERMISSIONS.RECYCLE_VIEW,
+    internalOnly: true,
+  },
+  {
+    to: '/settings/audit',
+    labelKey: 'nav.audit',
+    icon: 'scroll',
+    permission: PERMISSIONS.AUDIT_VIEW,
+    internalOnly: true,
+  },
 ]
 
 const availablePages = computed(() =>
@@ -252,15 +247,13 @@ async function ensureLoaded(): Promise<void> {
   if (loaded.value) return
   loaded.value = true
 
-  const [staff, clients, leads, sales, projects, tasks, contracts, services] = await Promise.all([
+  const [staff, clients, leads, sales, projects, services] = await Promise.all([
     canSeePeople.value ? fetchEmployees().catch(() => []) : Promise.resolve([]),
     fetchClients().catch(() => []),
     fetchLeads().catch(() => []),
     fetchSales().catch(() => []),
     fetchProjects().catch(() => []),
-    fetchTasks().catch(() => []),
-    fetchContracts().catch(() => []),
-    fetchServiceCatalogue().catch(() => []),
+    fetchServices().catch(() => []),
   ])
 
   people.value = staff
@@ -271,7 +264,7 @@ async function ensureLoaded(): Promise<void> {
       to: `/clients/${c.id}`,
       icon: 'building',
       label: c.name,
-      sub: [c.contactName, c.city].filter(Boolean).join(' · '),
+      sub: [c.contactName, c.city, c.description].filter(Boolean).join(' · '),
       groupKey: 'modules.clients',
     })),
     ...leads.map((l) => ({
@@ -287,41 +280,23 @@ async function ensureLoaded(): Promise<void> {
       to: '/sales',
       icon: 'trending',
       label: x.title,
-      sub: x.clientName,
+      sub: [x.clientName, x.serviceName].filter(Boolean).join(' · '),
       groupKey: 'modules.sales',
     })),
     ...projects.map((pr) => ({
       id: `project-${pr.id}`,
-      to: '/projects',
+      to: `/projects/${pr.id}`,
       icon: 'layers',
       label: pr.name,
-      sub: pr.description,
+      sub: pr.objective || pr.description,
       groupKey: 'modules.projects',
-    })),
-    ...tasks
-      .filter((tk) => tk.status !== 'done' && tk.status !== 'cancelled')
-      .map((tk) => ({
-        id: `task-${tk.id}`,
-        to: '/tasks',
-        icon: 'check',
-        label: tk.title,
-        sub: tk.assigneeName ?? '',
-        groupKey: 'modules.tasks',
-      })),
-    ...contracts.map((c) => ({
-      id: `contract-${c.id}`,
-      to: '/contracts',
-      icon: 'contract',
-      label: `${c.number} · ${c.clientName}`,
-      sub: c.serviceName,
-      groupKey: 'modules.contracts',
     })),
     ...services.map((sv) => ({
       id: `service-${sv.id}`,
       to: '/services',
       icon: 'spark',
       label: sv.name,
-      sub: sv.category ?? '',
+      sub: sv.category || sv.description,
       groupKey: 'modules.services',
     })),
   ]

@@ -2,15 +2,20 @@
 /**
  * The dashboard.
  *
- * Built around one question — what is true right now, and what needs doing —
- * rather than around whatever numbers happen to be easy to count. Alerts come
- * first because they are the only part that asks for a decision; the figures
- * are context for them.
+ * The CEO should be able to open this and understand the business. So it is
+ * arranged as an answer to three questions, in order:
  *
- * It is permission-aware without branching into two dashboards. Every read
- * returns empty when the rules refuse it, so a person who may not see finance
- * gets the same page with the money cards absent — not an error, and not a
- * second implementation to keep in step with this one.
+ *   What needs attention?   Alerts, first, because they ask for a decision.
+ *   Where does the money stand?  Income, expenses, profit — for the period.
+ *   Is it growing?          Charts, with the previous period for comparison.
+ *
+ * Zero is shown as zero. A day with no revenue is information, and hiding it
+ * behind an empty state would make the page lie by omission.
+ *
+ * Permission-aware without branching into two dashboards: every read returns
+ * empty when the rules refuse it, so somebody who may not see finance gets
+ * this page with the money section absent — not an error, and not a second
+ * implementation to keep in step.
  */
 
 import { computed, onMounted, ref } from 'vue'
@@ -18,32 +23,36 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import PeriodPicker from '@/components/PeriodPicker.vue'
 import RankChart from '@/components/ui/RankChart.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
-import { fetchAuditLog } from '@/api/audit'
 import { fetchRequests } from '@/api/approval'
-import { expiringSoon } from '@/api/revenue'
+import { fetchRecentActivity } from '@/api/records'
 import {
   EMPTY_SNAPSHOT,
   companyFigures,
+  conversionOf,
   goalProgress,
+  incomeByService,
   loadSnapshot,
-  monthlySeries,
   periodOf,
   previousPeriod,
-  revenueByService,
+  seriesOver,
   slice,
+  soldByChannel,
   trend,
-  type PeriodKey,
+  type Period,
   type Snapshot,
 } from '@/api/metrics'
+import { balanceOf } from '@/types/revenue'
 import { formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { OPEN_STAGES } from '@/types/business'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
-import type { AuditLogEntry, RegistrationRequest } from '@/types/domain'
+import type { ActivityEntry } from '@/types/records'
+import type { RegistrationRequest } from '@/types/domain'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -51,23 +60,25 @@ const { t, locale } = useI18n()
 
 const loading = ref(true)
 const snap = ref<Snapshot>(EMPTY_SNAPSHOT)
-const activity = ref<AuditLogEntry[]>([])
+const activity = ref<ActivityEntry[]>([])
 const requests = ref<RegistrationRequest[]>([])
-const periodKey = ref<PeriodKey>('month')
+const period = ref<Period>(periodOf('month'))
 
 const today = new Date().toISOString().slice(0, 10)
 
 const canMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
-const canAudit = computed(() => auth.hasPermission(PERMISSIONS.AUDIT_VIEW))
 const canRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
 const isAffiliate = computed(() => auth.access?.accountType === 'affiliate')
 
-const period = computed(() => periodOf(periodKey.value))
 const current = computed(() => slice(snap.value, period.value))
 const earlier = computed(() => slice(snap.value, previousPeriod(period.value)))
 
 const figures = computed(() => companyFigures(current.value, snap.value))
 const before = computed(() => companyFigures(earlier.value, snap.value))
+
+/* Today is always shown alongside the chosen period — it is the one figure
+ * the CEO wants without changing a filter. */
+const dayFigures = computed(() => companyFigures(slice(snap.value, periodOf('today')), snap.value))
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -85,7 +96,7 @@ const subtitle = computed(() => {
   return canMoney.value ? t('dashboard.subtitleOwner') : t('dashboard.subtitleEmployee')
 })
 
-/* ---- Alerts: the only part that asks for a decision ------------------ */
+/* ---- Alerts ---------------------------------------------------------- */
 
 interface Alert {
   key: string
@@ -99,55 +110,40 @@ interface Alert {
 const alerts = computed<Alert[]>(() => {
   const out: Alert[] = []
 
-  const overdueWork = snap.value.work.filter(
-    (w) => w.paymentStatus !== 'paid' && w.dueDate && w.dueDate < today,
-  )
-  if (overdueWork.length && canMoney.value) {
-    out.push({
-      key: 'overdue',
-      label: t('dashboard.overduePayments'),
-      count: overdueWork.length,
-      detail: money(overdueWork.reduce((n, w) => n + w.revenue.baseMinor, 0)),
-      link: '/finance',
-      tone: 'critical',
-    })
-  }
+  if (canMoney.value) {
+    const overdue = snap.value.transactions.filter(
+      (tx) => tx.status !== 'paid' && tx.dueDate && tx.dueDate < today,
+    )
+    if (overdue.length) {
+      out.push({
+        key: 'overdue',
+        label: t('dashboard.overduePayments'),
+        count: overdue.length,
+        detail: money(overdue.reduce((n, tx) => n + tx.amount.baseMinor, 0)),
+        link: '/finance',
+        tone: 'critical',
+      })
+    }
 
-  const lateTasks = snap.value.tasks.filter(
-    (task) =>
-      task.status !== 'done' &&
-      task.status !== 'cancelled' &&
-      task.dueDate &&
-      task.dueDate < today &&
-      (task.assigneeUid === auth.uid || auth.hasPermission(PERMISSIONS.TASKS_VIEW_ALL)),
-  )
-  if (lateTasks.length) {
-    out.push({
-      key: 'tasks',
-      label: t('dashboard.overdueTasksAlert'),
-      count: lateTasks.length,
-      detail: lateTasks[0]?.title ?? '',
-      link: '/tasks',
-      tone: 'warn',
-    })
-  }
-
-  const expiring = expiringSoon(snap.value.contracts)
-  if (expiring.length) {
-    out.push({
-      key: 'contracts',
-      label: t('dashboard.expiringContracts'),
-      count: expiring.length,
-      detail: expiring[0] ? `${expiring[0].number} · ${expiring[0].clientName}` : '',
-      link: '/contracts',
-      tone: 'warn',
-    })
+    const advanceDue = snap.value.sales.filter(
+      (s) => balanceOf(s, snap.value.transactions).advanceDue,
+    )
+    if (advanceDue.length) {
+      out.push({
+        key: 'advance',
+        label: t('dashboard.advanceDue'),
+        count: advanceDue.length,
+        detail: advanceDue[0]?.title ?? '',
+        link: '/sales',
+        tone: 'warn',
+      })
+    }
   }
 
   /* A lead untouched for a fortnight is a lead nobody is working. */
-  const cutoff = new Date(Date.now() - 14 * 86_400_000).toISOString()
+  const cutoff = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10)
   const stale = snap.value.leads.filter(
-    (l) => OPEN_STAGES.includes(l.stage) && (l.updatedAt ?? l.createdAt ?? '') < cutoff,
+    (l) => OPEN_STAGES.includes(l.stage) && (l.lastContactedAt ?? '') < cutoff,
   )
   if (stale.length) {
     out.push({
@@ -160,13 +156,43 @@ const alerts = computed<Alert[]>(() => {
     })
   }
 
+  const lateProjects = snap.value.projects.filter(
+    (p) =>
+      p.endDate &&
+      p.endDate < today &&
+      p.status !== 'completed' &&
+      p.status !== 'cancelled',
+  )
+  if (lateProjects.length) {
+    out.push({
+      key: 'projects',
+      label: t('dashboard.lateProjects'),
+      count: lateProjects.length,
+      detail: lateProjects[0]?.name ?? '',
+      link: '/projects',
+      tone: 'warn',
+    })
+  }
+
+  const pendingWork = snap.value.work.filter((w) => w.status === 'submitted')
+  if (pendingWork.length && auth.hasPermission(PERMISSIONS.BONUSES_APPROVE)) {
+    out.push({
+      key: 'work',
+      label: t('dashboard.workToReview'),
+      count: pendingWork.length,
+      detail: pendingWork[0]?.title ?? '',
+      link: '/bonuses',
+      tone: 'warn',
+    })
+  }
+
   if (requests.value.length) {
     out.push({
       key: 'requests',
       label: t('dashboard.pendingRequests'),
       count: requests.value.length,
       detail: t('dashboard.review'),
-      link: '/requests',
+      link: '/settings?tab=requests',
       tone: 'warn',
     })
   }
@@ -174,7 +200,7 @@ const alerts = computed<Alert[]>(() => {
   return out
 })
 
-/* ---- Figures --------------------------------------------------------- */
+/* ---- Cards ----------------------------------------------------------- */
 
 interface Card {
   key: string
@@ -182,30 +208,56 @@ interface Card {
   value: string
   delta: number | null
   link?: string
+  hint?: string
 }
+
+const todayCards = computed<Card[]>(() =>
+  canMoney.value
+    ? [
+        {
+          key: 'today-income',
+          label: t('dashboard.todayIncome'),
+          value: money(dayFigures.value.incomeBaseMinor),
+          delta: null,
+        },
+        {
+          key: 'today-expense',
+          label: t('dashboard.todayExpenses'),
+          value: money(dayFigures.value.expenseBaseMinor),
+          delta: null,
+        },
+        {
+          key: 'today-profit',
+          label: t('dashboard.todayProfit'),
+          value: money(dayFigures.value.profitBaseMinor),
+          delta: null,
+        },
+      ]
+    : [],
+)
 
 const moneyCards = computed<Card[]>(() =>
   canMoney.value
     ? [
         {
-          key: 'revenue',
-          label: t('finance.revenue'),
-          value: money(figures.value.revenueBaseMinor),
-          delta: trend(figures.value.revenueBaseMinor, before.value.revenueBaseMinor),
+          key: 'income',
+          label: t('finance.income'),
+          value: money(figures.value.incomeBaseMinor),
+          delta: trend(figures.value.incomeBaseMinor, before.value.incomeBaseMinor),
           link: '/finance',
         },
         {
-          key: 'net',
-          label: t('finance.netProfit'),
-          value: money(figures.value.netProfitBaseMinor),
-          delta: trend(figures.value.netProfitBaseMinor, before.value.netProfitBaseMinor),
+          key: 'expense',
+          label: t('finance.expenses'),
+          value: money(figures.value.expenseBaseMinor),
+          delta: trend(figures.value.expenseBaseMinor, before.value.expenseBaseMinor),
           link: '/finance',
         },
         {
-          key: 'cash',
-          label: t('dashboard.cashFlow'),
-          value: money(figures.value.cashFlowBaseMinor),
-          delta: trend(figures.value.cashFlowBaseMinor, before.value.cashFlowBaseMinor),
+          key: 'profit',
+          label: t('finance.profit'),
+          value: money(figures.value.profitBaseMinor),
+          delta: trend(figures.value.profitBaseMinor, before.value.profitBaseMinor),
           link: '/finance',
         },
         {
@@ -213,13 +265,28 @@ const moneyCards = computed<Card[]>(() =>
           label: t('finance.outstanding'),
           value: money(figures.value.outstandingBaseMinor),
           delta: null,
-          link: '/finance',
+          link: '/sales',
+          hint: t('dashboard.outstandingHint'),
         },
       ]
     : [],
 )
 
 const workCards = computed<Card[]>(() => [
+  {
+    key: 'sold',
+    label: t('sales.sold'),
+    value: short(figures.value.soldBaseMinor),
+    delta: trend(figures.value.soldBaseMinor, before.value.soldBaseMinor),
+    link: '/sales',
+  },
+  {
+    key: 'sales',
+    label: t('sales.count'),
+    value: String(figures.value.salesCount),
+    delta: trend(figures.value.salesCount, before.value.salesCount),
+    link: '/sales',
+  },
   {
     key: 'clients',
     label: t('dashboard.activeClients'),
@@ -235,11 +302,11 @@ const workCards = computed<Card[]>(() => [
     link: '/leads',
   },
   {
-    key: 'pipeline',
-    label: t('dashboard.pipeline'),
-    value: short(figures.value.pipelineBaseMinor),
+    key: 'openLeads',
+    label: t('dashboard.openLeads'),
+    value: String(figures.value.openLeads),
     delta: null,
-    link: '/sales',
+    link: '/leads',
   },
   {
     key: 'projects',
@@ -248,33 +315,35 @@ const workCards = computed<Card[]>(() => [
     delta: null,
     link: '/projects',
   },
-  {
-    key: 'tasks',
-    label: t('dashboard.openTasks'),
-    value: String(figures.value.openTasks),
-    delta: null,
-    link: '/tasks',
-  },
-  {
-    key: 'contracts',
-    label: t('dashboard.activeContracts'),
-    value: String(figures.value.activeContracts),
-    delta: null,
-    link: '/contracts',
-  },
 ])
 
-const months = computed(() => monthlySeries(snap.value, 12))
+/* ---- Charts ---------------------------------------------------------- */
 
-const chart = computed(() => ({
-  labels: months.value.map((m) => m.label.slice(5)),
+const points = computed(() => seriesOver(current.value, period.value))
+
+const moneyChart = computed(() => ({
+  labels: points.value.map((p) => p.label),
   series: [
-    { key: 'revenue', label: t('finance.revenue'), values: months.value.map((m) => m.revenue) },
-    { key: 'profit', label: t('finance.netProfit'), values: months.value.map((m) => m.profit) },
+    { key: 'income', label: t('finance.income'), values: points.value.map((p) => p.income) },
+    { key: 'expense', label: t('finance.expenses'), values: points.value.map((p) => p.expense) },
+    { key: 'profit', label: t('finance.profit'), values: points.value.map((p) => p.profit) },
   ],
 }))
 
-const services = computed(() => revenueByService(current.value))
+const activityChart = computed(() => ({
+  labels: points.value.map((p) => p.label),
+  series: [
+    { key: 'sales', label: t('sales.count'), values: points.value.map((p) => p.salesCount) },
+    { key: 'leads', label: t('dashboard.newLeads'), values: points.value.map((p) => p.leads) },
+  ],
+}))
+
+const byService = computed(() => incomeByService(current.value))
+const byChannel = computed(() =>
+  soldByChannel(current.value).map((r) => ({ ...r, label: t(`saleChannel.${r.key}`) })),
+)
+
+const conversion = computed(() => conversionOf(current.value))
 
 const goals = computed(() =>
   snap.value.goals
@@ -288,14 +357,15 @@ const hasAnything = computed(
   () =>
     snap.value.clients.length > 0 ||
     snap.value.leads.length > 0 ||
-    snap.value.tasks.length > 0,
+    snap.value.sales.length > 0 ||
+    snap.value.transactions.length > 0,
 )
 
 async function load(): Promise<void> {
   loading.value = true
   const [s, a, r] = await Promise.all([
     loadSnapshot(),
-    canAudit.value ? fetchAuditLog(12).catch(() => []) : Promise.resolve([]),
+    fetchRecentActivity(12).catch(() => []),
     canRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
   ])
   snap.value = s
@@ -313,17 +383,6 @@ onMounted(load)
       <div>
         <h1 class="page-title">{{ greeting }}</h1>
         <p class="page-subtitle">{{ subtitle }}</p>
-      </div>
-      <div class="segmented">
-        <button
-          v-for="key in (['week', 'month', 'quarter', 'year'] as PeriodKey[])"
-          :key="key"
-          type="button"
-          :class="{ 'is-on': periodKey === key }"
-          @click="periodKey = key"
-        >
-          {{ t(`period.${key}`) }}
-        </button>
       </div>
     </header>
 
@@ -362,15 +421,33 @@ onMounted(load)
       <div v-if="!hasAnything" class="card">
         <div class="empty">
           <span class="empty-icon"><AppIcon name="dashboard" :size="20" /></span>
-          <p class="empty-title">{{ t('clients.empty') }}</p>
-          <p class="empty-text">{{ t('clients.emptyHint') }}</p>
-          <button class="btn btn-primary" @click="router.push('/clients')">
-            {{ t('clients.newClient') }}
-          </button>
+          <p class="empty-title">{{ t('dashboard.emptyTitle') }}</p>
+          <p class="empty-text">{{ t('dashboard.emptyHint') }}</p>
+          <div class="empty-actions">
+            <button class="btn btn-primary" @click="router.push('/services')">
+              {{ t('services.newService') }}
+            </button>
+            <button class="btn btn-secondary" @click="router.push('/clients')">
+              {{ t('clients.newClient') }}
+            </button>
+          </div>
         </div>
       </div>
 
       <template v-else>
+        <!-- Today ----------------------------------------------------- -->
+        <template v-if="todayCards.length">
+          <h2 class="section-title">{{ t('period.today') }}</h2>
+          <div class="cards">
+            <article v-for="card in todayCards" :key="card.key" class="card figure">
+              <span class="figure-label">{{ card.label }}</span>
+              <span class="figure-value">{{ card.value }}</span>
+            </article>
+          </div>
+        </template>
+
+        <PeriodPicker v-model="period" />
+
         <!-- Money ------------------------------------------------------ -->
         <template v-if="moneyCards.length">
           <h2 class="section-title">{{ t('dashboard.money') }}</h2>
@@ -388,6 +465,7 @@ onMounted(load)
                 <AppIcon :name="card.delta >= 0 ? 'arrowUp' : 'arrowDown'" :size="12" />
                 {{ Math.abs(card.delta) }}%
               </span>
+              <span v-if="card.hint" class="figure-hint">{{ card.hint }}</span>
             </button>
           </div>
         </template>
@@ -414,31 +492,62 @@ onMounted(load)
         </div>
 
         <!-- Charts ----------------------------------------------------- -->
-        <div v-if="canMoney" class="pair">
+        <section v-if="canMoney" class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('finance.overTime') }}</h2>
+            <button class="btn btn-ghost btn-sm" @click="router.push('/analytics')">
+              {{ t('dashboard.seeAll') }}
+            </button>
+          </div>
+          <div class="card-body">
+            <TimeChart
+              :labels="moneyChart.labels"
+              :series="moneyChart.series"
+              :format="money"
+              :height="210"
+              :area="false"
+            />
+          </div>
+        </section>
+
+        <div class="pair">
           <section class="card">
             <div class="card-header">
-              <h2 class="card-title">{{ t('analytics.revenueOverTime') }}</h2>
-              <button class="btn btn-ghost btn-sm" @click="router.push('/analytics')">
-                {{ t('dashboard.seeAll') }}
-              </button>
+              <h2 class="card-title">{{ t('dashboard.salesAndLeads') }}</h2>
             </div>
             <div class="card-body">
               <TimeChart
-                :labels="chart.labels"
-                :series="chart.series"
-                :format="money"
-                :height="190"
+                :labels="activityChart.labels"
+                :series="activityChart.series"
+                :height="170"
                 :area="false"
               />
+              <p class="tertiary small">{{ t('analytics.conversion') }}: {{ conversion }}%</p>
+            </div>
+          </section>
+
+          <section v-if="canMoney" class="card">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('finance.byService') }}</h2>
+            </div>
+            <div class="card-body">
+              <RankChart
+                v-if="byService.length"
+                :rows="byService"
+                :format="short"
+                :limit="6"
+                :other-label="t('analytics.unattributed')"
+              />
+              <p v-else class="tertiary small">{{ t('analytics.noData') }}</p>
             </div>
           </section>
 
           <section class="card">
             <div class="card-header">
-              <h2 class="card-title">{{ t('analytics.byService') }}</h2>
+              <h2 class="card-title">{{ t('finance.bySource') }}</h2>
             </div>
             <div class="card-body">
-              <RankChart v-if="services.length" :rows="services" :format="short" :limit="6" />
+              <RankChart v-if="byChannel.length" :rows="byChannel" :format="short" :limit="6" />
               <p v-else class="tertiary small">{{ t('analytics.noData') }}</p>
             </div>
           </section>
@@ -473,12 +582,9 @@ onMounted(load)
             </ul>
           </section>
 
-          <section v-if="canAudit" class="card">
+          <section class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('dashboard.recentActivity') }}</h2>
-              <button class="btn btn-ghost btn-sm" @click="router.push('/audit')">
-                {{ t('dashboard.seeAll') }}
-              </button>
             </div>
 
             <p v-if="activity.length === 0" class="card-body tertiary small">
@@ -491,8 +597,8 @@ onMounted(load)
                 <span class="activity-body">
                   <span class="activity-text truncate">
                     <strong>{{ entry.actorName }}</strong>
-                    · {{ t(`auditAction.${entry.action}`) }}
-                    <span class="tertiary">{{ entry.targetLabel }}</span>
+                    · {{ t(`activityKind.${entry.kind}`) }}
+                    <span class="tertiary">{{ entry.entityLabel }}</span>
                   </span>
                   <span class="activity-time tertiary">{{ formatRelative(entry.createdAt) }}</span>
                 </span>
@@ -507,17 +613,17 @@ onMounted(load)
             <h2 class="card-title">{{ t('dashboard.quickActions') }}</h2>
           </div>
           <div class="card-body quick">
-            <button class="btn btn-secondary" @click="router.push('/tasks')">
-              <AppIcon name="check" :size="15" /> {{ t('tasks.newTask') }}
-            </button>
             <button class="btn btn-secondary" @click="router.push('/leads')">
               <AppIcon name="target" :size="15" /> {{ t('leads.newLead') }}
             </button>
             <button class="btn btn-secondary" @click="router.push('/clients')">
               <AppIcon name="building" :size="15" /> {{ t('clients.newClient') }}
             </button>
+            <button class="btn btn-secondary" @click="router.push('/sales')">
+              <AppIcon name="trending" :size="15" /> {{ t('sales.newSale') }}
+            </button>
             <button v-if="canMoney" class="btn btn-secondary" @click="router.push('/finance')">
-              <AppIcon name="wallet" :size="15" /> {{ t('payments.newPayment') }}
+              <AppIcon name="wallet" :size="15" /> {{ t('finance.newIncome') }}
             </button>
             <button class="btn btn-secondary" @click="router.push('/workspace')">
               <AppIcon name="briefcase" :size="15" /> {{ t('workspace.title') }}
@@ -530,13 +636,9 @@ onMounted(load)
 </template>
 
 <style scoped>
-.segmented { display: inline-flex; padding: 2px; gap: 2px; background: var(--bg-inset); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
-.segmented button { padding: 0 var(--space-3); height: 30px; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 550; color: var(--text-tertiary); }
-.segmented button.is-on { background: var(--bg-surface-3); color: var(--text-primary); box-shadow: var(--shadow-sm); }
-
 .section-title { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
 
-.alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--space-3); }
+.alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); }
 .alert-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); text-align: left; }
 .alert-card:hover { border-color: var(--border-strong); }
 .alert-card.t-critical { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger-500); }
@@ -554,11 +656,13 @@ onMounted(load)
   font-size: var(--text-sm); font-weight: 550;
 }
 
+.empty-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
+
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); text-align: left; }
-.figure:hover { border-color: var(--border-strong); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.figure-hint { font-size: 10px; color: var(--text-tertiary); }
 .delta { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); font-weight: 600; }
 
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); }

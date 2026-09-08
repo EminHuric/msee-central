@@ -261,14 +261,19 @@ try {
    */
   for (const [label, path] of [
     ['sales', 'sales'],
-    ['contracts', 'contracts'],
-    ['invoices', 'invoices'],
-    ['payments', 'payments'],
+    ['transactions', 'transactions'],
     ['affiliates', 'affiliates'],
     ['commissions', 'commissions'],
     ['goals', 'goals'],
     ['leads', 'leads'],
-    ['tasks', 'tasks'],
+    ['projects', 'projects'],
+    ['services', 'services'],
+    ['bonus programmes', 'bonusPrograms'],
+    ['bonus awards', 'bonusAwards'],
+    ['incentive work', 'incentiveWork'],
+    ['notes', 'notes'],
+    ['activity', 'activity'],
+    ['custom fields', 'customFields'],
     ['calendar entries', 'calendarEvents'],
   ]) {
     await mustDeny(`applicant CANNOT read ${label}`, () => getDoc(doc(db, path, 'any-record')))
@@ -276,34 +281,6 @@ try {
 
   await mustDeny("applicant CANNOT read somebody else's notifications", () =>
     getDoc(doc(db, 'notifications', 'someone-else', 'items', 'any-item')),
-  )
-
-  await mustDeny('applicant CANNOT read a chat thread', () =>
-    getDoc(doc(db, 'chatThreads', 'any-thread')),
-  )
-
-  /*
-   * The one public write in the system, and the checks that keep it narrow.
-   * A referral click may be created by anybody; it may not carry anything
-   * beyond a code and a time, and it may never be read back.
-   */
-  await mustAllow('anybody CAN record a referral click', () =>
-    setDoc(doc(db, 'referralClicks', `rules-click-${stamp}`), {
-      code: 'rules-test',
-      at: new Date().toISOString(),
-    }),
-  )
-
-  await mustDeny('a referral click CANNOT carry extra fields', () =>
-    setDoc(doc(db, 'referralClicks', `rules-click-payload-${stamp}`), {
-      code: 'rules-test',
-      at: new Date().toISOString(),
-      smuggled: 'anything at all',
-    }),
-  )
-
-  await mustDeny('a referral click CANNOT be read back', () =>
-    getDoc(doc(db, 'referralClicks', `rules-click-${stamp}`)),
   )
 
   await mustDeny('applicant CANNOT create a client', () =>
@@ -443,13 +420,62 @@ try {
     }),
   )
 
-  /* A contract is history. Cancel it; the rules refuse to erase it. */
-  await mustDeny('co-owner CANNOT delete a contract', () =>
-    deleteDoc(doc(db, 'contracts', 'any-contract')),
+  /*
+   * Deleting is soft. Destroying a record for good is `recycle_bin.purge`,
+   * which this account holds — so the interesting proof is the one below:
+   * an award may not be created for yourself, whatever else you can do.
+   */
+  await mustDeny('co-owner CANNOT award themselves a bonus', () =>
+    setDoc(doc(db, 'bonusAwards', `rules-award-${stamp}`), {
+      id: `rules-award-${stamp}`,
+      employeeUid: ownerUid,
+      employeeName: 'Rules Owner',
+      source: 'manual',
+      sourceId: '',
+      sourceLabel: '',
+      milestoneId: '',
+      reason: 'forged',
+      amountBaseMinor: 500000,
+      rewardLabel: '',
+      status: 'earned',
+      earnedDate: '2026-01-01',
+      approvedBy: null,
+      approvedAt: null,
+      paidAt: null,
+      note: '',
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
   )
 
-  await mustDeny('co-owner CANNOT read a chat thread they are not in', () =>
-    getDoc(doc(db, 'chatThreads', 'a-thread-they-are-not-in')),
+  /*
+   * An award may only be created in a state that has not been approved.
+   * Creating one already `paid` would be writing yourself a cheque in one
+   * step, which is precisely what the ladder exists to prevent.
+   */
+  await mustDeny('co-owner CANNOT create an already-paid award', () =>
+    setDoc(doc(db, 'bonusAwards', `rules-award-paid-${stamp}`), {
+      id: `rules-award-paid-${stamp}`,
+      employeeUid: 'somebody-else',
+      employeeName: 'Somebody Else',
+      source: 'manual',
+      sourceId: '',
+      sourceLabel: '',
+      milestoneId: '',
+      reason: 'forged',
+      amountBaseMinor: 500000,
+      rewardLabel: '',
+      status: 'paid',
+      earnedDate: '2026-01-01',
+      approvedBy: null,
+      approvedAt: null,
+      paidAt: null,
+      note: '',
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
   )
 
   await mustDeny('co-owner CANNOT appoint another owner', () =>
@@ -560,9 +586,69 @@ try {
 
   await mustDeny('affiliate CANNOT read projects', () => getDoc(doc(db, 'projects', 'any-project')))
 
-  await mustDeny('affiliate CANNOT read income', () => getDoc(doc(db, 'income', 'any-entry')))
+  await mustDeny('affiliate CANNOT read transactions', () =>
+    getDoc(doc(db, 'transactions', 'any-entry')),
+  )
 
-  await mustDeny('affiliate CANNOT read expenses', () => getDoc(doc(db, 'expenses', 'any-entry')))
+  /*
+   * The one thing an outside partner may do: submit a lead that names them.
+   * Everything else in the business half is refused by isInternal(), which is
+   * what this whole phase exists to prove — this account holds every
+   * permission in the system.
+   */
+  await mustAllow('affiliate CAN submit a lead', () =>
+    setDoc(doc(db, 'leads', `rules-lead-${stamp}`), {
+      id: `rules-lead-${stamp}`,
+      name: 'Rules Test',
+      company: 'Rules Test Co',
+      description: '',
+      email: '',
+      phone: '',
+      city: '',
+      country: '',
+      source: 'affiliate',
+      sourceDetail: '',
+      affiliateId: null,
+      affiliateName: '',
+      estimatedValue: null,
+      serviceId: null,
+      serviceInterest: '',
+      stage: 'new',
+      assigneeUid: null,
+      assigneeName: '',
+      priority: 'normal',
+      lastContactedAt: null,
+      nextStep: '',
+      nextContactDate: null,
+      notes: '',
+      lostReason: '',
+      custom: {},
+      clientId: null,
+      saleId: null,
+      deletedAt: null,
+      deletedBy: null,
+      deletedByName: '',
+      createdAt: new Date().toISOString(),
+      createdBy: affiliateUid,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('affiliate CAN read the lead they submitted', () =>
+    getDoc(doc(db, 'leads', `rules-lead-${stamp}`)),
+  )
+
+  /* Submitting one does not make them a salesperson. */
+  await mustDeny('affiliate CANNOT read a lead somebody else submitted', () =>
+    getDoc(doc(db, 'leads', 'a-lead-they-did-not-submit')),
+  )
+
+  await mustDeny('affiliate CANNOT assign a lead to an employee', () =>
+    setDoc(
+      doc(db, 'leads', `rules-lead-assigned-${stamp}`),
+      { id: 'x', assigneeUid: 'somebody', createdBy: affiliateUid, stage: 'new' },
+    ),
+  )
 
   /*
    * The whole business side is internal, whatever permissions an affiliate
@@ -572,12 +658,13 @@ try {
    */
   for (const [label, path] of [
     ['sales', 'sales'],
-    ['contracts', 'contracts'],
-    ['invoices', 'invoices'],
-    ['payments', 'payments'],
-    ['leads', 'leads'],
-    ['tasks', 'tasks'],
+    ['transactions', 'transactions'],
+    ['services', 'services'],
     ['goals', 'goals'],
+    ['bonus programmes', 'bonusPrograms'],
+    ['incentive work', 'incentiveWork'],
+    ['notes', 'notes'],
+    ['activity', 'activity'],
     ['calendar entries', 'calendarEvents'],
   ]) {
     await mustDeny(`affiliate CANNOT read ${label}`, () => getDoc(doc(db, path, 'any-record')))

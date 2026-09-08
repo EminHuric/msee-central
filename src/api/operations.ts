@@ -1,23 +1,33 @@
 /**
- * Leads, projects, tasks, the service catalogue and overheads.
+ * Leads, projects and the service catalogue.
  *
- * One module rather than five near-identical ones. They are all flat
- * collections with the same shape of read and write, and splitting them would
- * produce five files differing only in a string.
+ * One module rather than three near-identical ones: they are flat collections
+ * with the same shape of read and write, and splitting them would produce
+ * three files differing only in a string.
  *
- * What they have in common beyond CRUD: none of them owns money. Money earned
- * from a client lives in that client's ledger, and a project or service is a
- * label on an entry there. That is what keeps one euro from existing in three
- * tables.
+ * The one thing that is not boilerplate here is conversion — turning a lead
+ * into a client, and optionally into a sale at the same time. That is the
+ * hinge the whole system turns on, and it is careful to leave the lead
+ * standing: a pipeline that forgets what it converted cannot tell you where
+ * your customers came from.
  */
 
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore'
-
 import { logAudit } from './audit'
+import { logActivity, remove } from './records'
 import { notify } from './notifications'
-import { actor, newId, readAll, readOne, remove, write } from './store'
-import { getDb } from '@/lib/firebase'
-import { REPEAT_DAYS, type ExpenseEntry, type Lead, type LeadStage, type Project, type Service, type Task, type TaskComment, type TaskStatus } from '@/types/business'
+import { actor, readAll, readOne, readWhere, today, where, write } from './store'
+import { saveClient, blankClient } from './clients'
+import { blankSale, saveSale, structureFromService } from './sales'
+import {
+  NO_REFERRAL,
+  type Client,
+  type Lead,
+  type LeadStage,
+  type Project,
+  type Service,
+} from '@/types/business'
+import { NO_STRUCTURE } from '@/types/revenue'
+import { moneyOf } from './sales'
 
 /* ------------------------------------------------------------------ *
  * Leads
@@ -25,24 +35,79 @@ import { REPEAT_DAYS, type ExpenseEntry, type Lead, type LeadStage, type Project
 
 export const fetchLeads = () => readAll<Lead>('leads')
 
+export const fetchLead = (id: string) => readOne<Lead>('leads', id)
+
+/** The leads one affiliate submitted, for their own panel. */
+export const fetchLeadsBy = (uid: string) =>
+  readWhere<Lead>('leads', where('createdBy', '==', uid))
+
+export function blankLead(assigneeUid: string | null, assigneeName: string): Lead {
+  return {
+    id: '',
+    name: '',
+    company: '',
+    description: '',
+    email: '',
+    phone: '',
+    city: '',
+    country: '',
+    source: 'direct',
+    sourceDetail: '',
+    affiliateId: null,
+    affiliateName: '',
+    estimatedValue: null,
+    serviceId: null,
+    serviceInterest: '',
+    stage: 'new',
+    assigneeUid,
+    assigneeName,
+    priority: 'normal',
+    lastContactedAt: null,
+    nextStep: '',
+    nextContactDate: null,
+    notes: '',
+    lostReason: '',
+    custom: {},
+    clientId: null,
+    saleId: null,
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+  }
+}
+
 export async function saveLead(input: Lead, previousAssignee?: string | null): Promise<string> {
   const isNew = !input.id
   const id = await write('leads', input)
+  const label = input.company || input.name
 
   await logAudit({
     action: isNew ? 'lead.created' : 'lead.updated',
     targetType: 'lead',
     targetId: id,
-    targetLabel: input.company || input.name,
-    metadata: { stage: input.stage, assignee: input.assigneeUid },
+    targetLabel: label,
+    metadata: { stage: input.stage, assignee: input.assigneeUid, source: input.source },
+  })
+
+  await logActivity({
+    entity: 'leads',
+    entityId: id,
+    entityLabel: label,
+    kind: isNew ? 'created' : 'updated',
+    summary: input.serviceInterest || input.description,
+    detail: input.stage,
   })
 
   /* Handing somebody a lead without telling them is how leads go cold. */
-  if (input.assigneeUid && input.assigneeUid !== previousAssignee) {
+  const me = actor()
+  if (input.assigneeUid && input.assigneeUid !== previousAssignee && input.assigneeUid !== me.uid) {
     await notify(input.assigneeUid, {
-      kind: 'lead_new',
+      kind: 'lead_assigned',
       priority: 'important',
-      title: input.company || input.name,
+      title: label,
       body: input.serviceInterest,
       link: '/leads',
     })
@@ -54,6 +119,7 @@ export async function saveLead(input: Lead, previousAssignee?: string | null): P
 /** Move a lead along the pipeline without opening the whole editor. */
 export async function setLeadStage(lead: Lead, stage: LeadStage): Promise<void> {
   await write('leads', { ...lead, stage })
+
   await logAudit({
     action: 'lead.updated',
     targetType: 'lead',
@@ -61,9 +127,131 @@ export async function setLeadStage(lead: Lead, stage: LeadStage): Promise<void> 
     targetLabel: lead.company || lead.name,
     metadata: { from: lead.stage, to: stage },
   })
+
+  await logActivity({
+    entity: 'leads',
+    entityId: lead.id,
+    entityLabel: lead.company || lead.name,
+    kind: 'status_changed',
+    summary: stage,
+    detail: lead.stage,
+  })
 }
 
-export const deleteLead = (id: string) => remove('leads', id)
+/**
+ * Mark that somebody actually spoke to them.
+ *
+ * Separate from any other edit on purpose: `updatedAt` moves when a note is
+ * corrected, and a pipeline that treats that as contact will tell you a cold
+ * lead is warm.
+ */
+export async function markContacted(lead: Lead): Promise<void> {
+  await write('leads', {
+    ...lead,
+    lastContactedAt: today(),
+    stage: lead.stage === 'new' ? 'contacted' : lead.stage,
+  })
+
+  await logActivity({
+    entity: 'leads',
+    entityId: lead.id,
+    entityLabel: lead.company || lead.name,
+    kind: 'contacted',
+    summary: today(),
+  })
+}
+
+export const deleteLead = (lead: Lead) => remove('leads', lead.id, lead.company || lead.name)
+
+/**
+ * Convert a lead into a client, and optionally into a sale at the same time.
+ *
+ * The lead is not moved or deleted. It is marked won, stamped with the ids it
+ * produced, and left standing — deleting it would erase where the client came
+ * from, which is the one thing a pipeline exists to remember.
+ */
+export async function convertLead(
+  lead: Lead,
+  options: {
+    service?: Service | null
+    /** When set, a sale of this value is created alongside the client. */
+    saleValue?: number
+    saleCurrency?: 'RSD' | 'EUR'
+    responsibleUid?: string | null
+    responsibleName?: string
+  } = {},
+): Promise<{ clientId: string; saleId: string | null }> {
+  const me = actor()
+
+  const clientId = await saveClient({
+    ...blankClient(),
+    name: lead.company || lead.name,
+    description: lead.description,
+    contactName: lead.company ? lead.name : '',
+    email: lead.email,
+    phone: lead.phone,
+    city: lead.city,
+    country: lead.country,
+    status: 'active',
+    notes: lead.notes,
+    responsibleUid: options.responsibleUid ?? lead.assigneeUid ?? me.uid,
+    responsibleName: options.responsibleName ?? lead.assigneeName,
+    serviceIds: lead.serviceId ? [lead.serviceId] : [],
+    clientSince: today(),
+    referral: lead.affiliateId
+      ? {
+          source: 'affiliate',
+          referrerName: lead.affiliateName,
+          affiliateId: lead.affiliateId,
+          note: '',
+        }
+      : { ...NO_REFERRAL, source: lead.source, referrerName: lead.sourceDetail },
+  })
+
+  let saleId: string | null = null
+
+  if (options.saleValue && options.saleValue > 0) {
+    const value = moneyOf(options.saleValue, options.saleCurrency ?? 'RSD', 1, today())
+
+    saleId = await saveSale({
+      ...blankSale(lead.assigneeUid ?? me.uid, lead.assigneeName || me.name),
+      title: `${lead.company || lead.name}${lead.serviceInterest ? ` — ${lead.serviceInterest}` : ''}`,
+      clientId,
+      clientName: lead.company || lead.name,
+      serviceId: lead.serviceId,
+      serviceName: options.service?.name ?? lead.serviceInterest,
+      leadId: lead.id,
+      affiliateId: lead.affiliateId,
+      affiliateName: lead.affiliateName,
+      value,
+      payment: options.service
+        ? structureFromService(options.service, value.baseMinor)
+        : { ...NO_STRUCTURE },
+      channel: lead.affiliateId ? 'affiliate' : 'inbound',
+    })
+  }
+
+  await write('leads', { ...lead, stage: 'won', clientId, saleId })
+
+  await logAudit({
+    action: 'lead.converted',
+    targetType: 'lead',
+    targetId: lead.id,
+    targetLabel: lead.company || lead.name,
+    metadata: { clientId, saleId },
+  })
+
+  await logActivity({
+    entity: 'leads',
+    entityId: lead.id,
+    entityLabel: lead.company || lead.name,
+    kind: 'converted',
+    summary: lead.company || lead.name,
+    detail: saleId ? 'client + sale' : 'client',
+  })
+
+  return { clientId, saleId }
+}
 
 /* ------------------------------------------------------------------ *
  * Projects
@@ -73,27 +261,41 @@ export const fetchProjects = () => readAll<Project>('projects')
 
 export const fetchProject = (id: string) => readOne<Project>('projects', id)
 
-export async function fetchProjectsFor(clientId: string): Promise<Project[]> {
-  try {
-    const snap = await getDocs(
-      query(collection(getDb(), 'projects'), where('clientId', '==', clientId)),
-    )
-    return snap.docs.map((d) => ({ ...(d.data() as Project), id: d.id }))
-  } catch {
-    return []
+/** Projects one client belongs to. An array membership, not an equality. */
+export const fetchProjectsFor = (clientId: string) =>
+  readWhere<Project>('projects', where('clientIds', 'array-contains', clientId))
+
+export function blankProject(ownerUid: string | null, ownerName: string): Project {
+  return {
+    id: '',
+    name: '',
+    coverUrl: null,
+    description: '',
+    objective: '',
+    status: 'planning',
+    priority: 'normal',
+    startDate: today(),
+    endDate: null,
+    ownerUid,
+    ownerName,
+    teamUids: [],
+    clientIds: [],
+    serviceId: null,
+    serviceName: '',
+    budget: null,
+    milestones: [],
+    notes: '',
+    custom: {},
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
   }
 }
 
-export async function fetchTasksFor(field: 'projectId' | 'clientId', id: string): Promise<Task[]> {
-  try {
-    const snap = await getDocs(query(collection(getDb(), 'tasks'), where(field, '==', id)))
-    return snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
-  } catch {
-    return []
-  }
-}
-
-export async function saveProject(input: Project): Promise<string> {
+export async function saveProject(input: Project, previousTeam: string[] = []): Promise<string> {
   const isNew = !input.id
   const id = await write('projects', input)
 
@@ -102,164 +304,86 @@ export async function saveProject(input: Project): Promise<string> {
     targetType: 'project',
     targetId: id,
     targetLabel: input.name,
-    metadata: { clientId: input.clientId, status: input.status },
+    metadata: {
+      status: input.status,
+      clients: input.clientIds?.length ?? 0,
+      team: input.teamUids?.length ?? 0,
+    },
   })
 
-  return id
-}
+  await logActivity({
+    entity: 'projects',
+    entityId: id,
+    entityLabel: input.name,
+    kind: isNew ? 'created' : 'updated',
+    summary: input.objective || input.description,
+    detail: input.status,
+  })
 
-/* ------------------------------------------------------------------ *
- * Tasks
- * ------------------------------------------------------------------ */
-
-export const fetchTasks = () => readAll<Task>('tasks', 'createdAt')
-
-/**
- * A blank task with every field present.
- *
- * Exists so no screen has to cast a half-built object into a Task: a missing
- * field is not a type error you catch, it is a document written without it and
- * a `undefined` somewhere three screens away.
- */
-export function blankTask(assigneeUid: string | null, assigneeName: string): Task {
-  return {
-    id: '',
-    title: '',
-    description: '',
-    clientId: null,
-    projectId: null,
-    assigneeUid,
-    assigneeName,
-    status: 'todo',
-    priority: 'normal',
-    dueDate: null,
-    completedAt: null,
-    estimatedMinutes: 0,
-    actualMinutes: 0,
-    checklist: [],
-    repeat: '',
-    createdAt: '',
-    createdBy: '',
-    createdByName: '',
-    updatedAt: '',
-  }
-}
-
-export async function saveTask(input: Task, previousAssignee?: string | null): Promise<string> {
-  const isNew = !input.id
+  /* Anybody newly on the team is told; the rest are not told again. */
   const me = actor()
+  const added = (input.teamUids ?? []).filter((uid) => !previousTeam.includes(uid))
 
-  const id = await write('tasks', {
-    ...input,
-    // Stamped when it lands on done, cleared if it comes back off.
-    completedAt: input.status === 'done' ? (input.completedAt ?? new Date().toISOString()) : null,
-    createdByName: input.createdByName || me.name,
-  })
-
-  await logAudit({
-    action: isNew ? 'task.created' : 'task.updated',
-    targetType: 'task',
-    targetId: id,
-    targetLabel: input.title,
-    metadata: { status: input.status, assignee: input.assigneeUid },
-  })
-
-  /* Only when it changed hands, so editing your own task is silent. */
-  if (input.assigneeUid && input.assigneeUid !== previousAssignee && input.assigneeUid !== me.uid) {
-    await notify(input.assigneeUid, {
-      kind: 'task_assigned',
-      priority: input.priority === 'urgent' ? 'important' : 'normal',
-      title: input.title,
-      body: input.dueDate ?? '',
-      link: '/tasks',
+  for (const uid of added) {
+    if (uid === me.uid) continue
+    await notify(uid, {
+      kind: 'project_assigned',
+      priority: 'normal',
+      title: input.name,
+      body: input.objective,
+      link: `/projects/${id}`,
     })
   }
 
   return id
 }
 
-/**
- * Flip a task's state from a checkbox, without opening the editor.
- *
- * Completing a repeating task opens the next one rather than editing this one:
- * the record of what was done stays, and the work still comes back.
- */
-export async function setTaskStatus(task: Task, status: TaskStatus): Promise<void> {
-  await saveTask({ ...task, status }, task.assigneeUid)
-
-  if (status === 'done' && task.repeat && task.dueDate) {
-    const days = REPEAT_DAYS[task.repeat]
-    const next = new Date(Date.parse(task.dueDate) + days * 86_400_000).toISOString().slice(0, 10)
-
-    await saveTask(
-      {
-        ...task,
-        id: '',
-        status: 'todo',
-        completedAt: null,
-        actualMinutes: 0,
-        checklist: (task.checklist ?? []).map((c) => ({ ...c, done: false })),
-        dueDate: next,
-      },
-      task.assigneeUid,
-    )
-  }
-}
-
-/* ---- Task comments -------------------------------------------------- */
-
-export async function fetchTaskComments(taskId: string): Promise<TaskComment[]> {
-  try {
-    const snap = await getDocs(collection(getDb(), 'tasks', taskId, 'comments'))
-    return snap.docs
-      .map((d) => ({ ...(d.data() as TaskComment), id: d.id }))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  } catch {
-    return []
-  }
-}
-
-export async function addTaskComment(taskId: string, body: string): Promise<void> {
-  const text = body.trim()
-  if (!text) return
-
-  const me = actor()
-  const id = newId()
-
-  await setDoc(doc(getDb(), 'tasks', taskId, 'comments', id), {
-    id,
-    body: text,
-    authorUid: me.uid,
-    authorName: me.name,
-    createdAt: new Date().toISOString(),
-  } satisfies TaskComment)
-}
-
-export const deleteTask = (id: string) => remove('tasks', id)
+export const deleteProject = (project: Project) => remove('projects', project.id, project.name)
 
 /**
- * How a task reads today.
+ * How far along a project is.
  *
- * Overdue is deliberately computed rather than stored: a task does not become
- * late by being written to, it becomes late by the date passing.
+ * Counted from milestones. A project without any reports null rather than
+ * nought: "no way to tell" and "nothing done" are different answers, and
+ * showing an empty bar for the first is a lie the manager will act on.
  */
-export type TaskBucket = 'overdue' | 'today' | 'week' | 'later' | 'done' | 'someday'
-
-export function bucketOf(task: Task, today = new Date().toISOString().slice(0, 10)): TaskBucket {
-  if (task.status === 'done') return 'done'
-  if (!task.dueDate) return 'someday'
-  if (task.dueDate < today) return 'overdue'
-  if (task.dueDate === today) return 'today'
-
-  const days = (Date.parse(task.dueDate) - Date.parse(today)) / 86_400_000
-  return days <= 7 ? 'week' : 'later'
+export function projectProgress(project: Project): number | null {
+  const milestones = project.milestones ?? []
+  if (milestones.length === 0) return null
+  return Math.round((milestones.filter((m) => m.done).length / milestones.length) * 100)
 }
 
 /* ------------------------------------------------------------------ *
- * Service catalogue
+ * Services
  * ------------------------------------------------------------------ */
 
-export const fetchServiceCatalogue = () => readAll<Service>('services', 'name', 'asc')
+export const fetchServices = () => readAll<Service>('services', 'name', 'asc')
+
+export const fetchService = (id: string) => readOne<Service>('services', id)
+
+export function blankService(): Service {
+  return {
+    id: '',
+    name: '',
+    description: '',
+    details: '',
+    category: '',
+    pricingModel: 'fixed',
+    defaultPrice: moneyOf(0, 'RSD'),
+    unit: '',
+    payment: { ...NO_STRUCTURE },
+    commissionPercent: 0,
+    status: 'active',
+    notes: '',
+    custom: {},
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+  }
+}
 
 export async function saveService(input: Service): Promise<string> {
   const isNew = !input.id
@@ -270,34 +394,19 @@ export async function saveService(input: Service): Promise<string> {
     targetType: 'settings',
     targetId: id,
     targetLabel: input.name,
-    metadata: { entity: 'service', new: isNew, status: input.status },
+    metadata: {
+      entity: 'service',
+      new: isNew,
+      status: input.status,
+      price: input.defaultPrice.baseMinor,
+      payment: input.payment?.model,
+    },
   })
 
   return id
 }
 
-/* ------------------------------------------------------------------ *
- * Overheads
- *
- * Costs that belong to no client: tools, salaries, rent. Anything spent on a
- * specific piece of work is recorded on that work item instead, so it can be
- * set against what the work earned.
- * ------------------------------------------------------------------ */
+export const deleteService = (service: Service) => remove('services', service.id, service.name)
 
-export const fetchExpenses = () => readAll<ExpenseEntry>('expenses', 'date')
-
-export async function saveExpense(input: ExpenseEntry): Promise<string> {
-  const id = await write('expenses', input)
-
-  await logAudit({
-    action: 'expense.recorded',
-    targetType: 'expense',
-    targetId: id,
-    targetLabel: input.description,
-    metadata: { category: input.category, amount: input.amount.baseMinor },
-  })
-
-  return id
-}
-
-export const deleteExpense = (id: string) => remove('expenses', id)
+/** Re-exported so a screen needing a client shape does not import two modules. */
+export type { Client }

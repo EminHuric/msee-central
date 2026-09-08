@@ -3,7 +3,7 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import { i18n } from './i18n'
-import router from './router'
+import { router } from './router'
 import { installAuthGuard } from './router/guards'
 import { useAuthStore } from './stores/auth'
 

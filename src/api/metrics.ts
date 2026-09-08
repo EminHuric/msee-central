@@ -1,55 +1,42 @@
 /**
  * The derivation engine.
  *
- * Every figure the dashboard, analytics, goals and performance screens show is
- * computed here from one snapshot of the underlying records. Four screens
- * asking four different questions of the same data is a feature; four screens
- * each doing their own arithmetic is how a company ends up with two revenue
- * numbers and an argument about which one is right.
+ * Every figure the dashboard, analytics, goals, performance and workspace show
+ * is computed here from one snapshot of the underlying records. Five screens
+ * asking five questions of the same data is a feature; five screens each doing
+ * their own arithmetic is how a company ends up with two revenue numbers and
+ * an argument about which is right.
  *
  * Nothing in this file is stored. If a number here is wrong, the fix is in the
- * record it came from — there is no cached total to clear and no nightly job
- * to re-run.
+ * record it came from — there is no cached total to clear and no nightly job.
  *
- * One snapshot serves a whole page: `loadSnapshot()` fetches once, every
- * function below reads from it, and a screen that only needs part of it pays
- * for the rest in one parallel round-trip rather than in five sequential ones.
+ * The distinction the whole file rests on: **sold is not collected.** A sale is
+ * what somebody agreed to pay; income is what arrived. Revenue figures come
+ * from transactions, never from sales, because a business that counts the
+ * first as the second runs out of cash while its reports look healthy.
  */
 
-import { fetchAllWork } from './clientDossier'
 import { fetchClients } from './clients'
 import { fetchGoals } from './company'
-import { fetchAffiliates, fetchAffiliate } from './affiliates'
-import { fetchExpenses, fetchLeads, fetchProjects, fetchServiceCatalogue, fetchTasks } from './operations'
-import {
-  fetchCommissions,
-  fetchContracts,
-  fetchInvoices,
-  fetchPayments,
-  fetchSales,
-} from './revenue'
-import type {
-  Client,
-  ExpenseEntry,
-  Lead,
-  Project,
-  Service,
-  Task,
-  WorkItem,
-} from '@/types/business'
-import { OPEN_STAGES } from '@/types/business'
+import { fetchAffiliates } from './affiliates'
+import { fetchCommissions, fetchTransactions } from './finance'
+import { fetchLeads, fetchProjects, fetchServices } from './operations'
+import { fetchSales } from './sales'
+import { fetchAwards, fetchIncentiveWork, fetchProgrammes } from './rewards'
+import { OPEN_STAGES, type Client, type Lead, type Project, type Service } from '@/types/business'
 import type { Goal, GoalMetric, KpiMetric } from '@/types/company'
 import { MONEY_METRICS } from '@/types/company'
 import {
   INCOME_TYPES,
-  OPEN_SALE_STAGES,
+  OUTGOING_TYPES,
+  balanceOf,
   type Affiliate,
   type Commission,
-  type Contract,
-  type Invoice,
-  type Payment,
   type Sale,
+  type Transaction,
 } from '@/types/revenue'
+import type { BonusAward, BonusProgramme, IncentiveWork } from '@/types/rewards'
+import { OWED_STATUSES } from '@/types/rewards'
 
 /* ------------------------------------------------------------------ *
  * The snapshot
@@ -59,92 +46,82 @@ export interface Snapshot {
   clients: Client[]
   leads: Lead[]
   sales: Sale[]
-  contracts: Contract[]
-  invoices: Invoice[]
-  payments: Payment[]
-  work: WorkItem[]
-  expenses: ExpenseEntry[]
+  transactions: Transaction[]
   projects: Project[]
-  tasks: Task[]
   services: Service[]
   affiliates: Affiliate[]
   commissions: Commission[]
   goals: Goal[]
+  programmes: BonusProgramme[]
+  awards: BonusAward[]
+  work: IncentiveWork[]
 }
 
 export const EMPTY_SNAPSHOT: Snapshot = {
   clients: [],
   leads: [],
   sales: [],
-  contracts: [],
-  invoices: [],
-  payments: [],
-  work: [],
-  expenses: [],
+  transactions: [],
   projects: [],
-  tasks: [],
   services: [],
   affiliates: [],
   commissions: [],
   goals: [],
+  programmes: [],
+  awards: [],
+  work: [],
 }
 
 /**
  * Load everything the derived screens need, in parallel.
  *
- * Each read already returns `[]` when the rules refuse it, so a person who may
+ * Each read already returns `[]` when the rules refuse it, so somebody who may
  * not see finance gets a dashboard with the parts they may see rather than an
- * error page. Permission is decided by the rules; this only decides how a
- * refusal looks.
+ * error page. Permission is decided by the rules; this decides how a refusal
+ * looks.
  */
 export async function loadSnapshot(): Promise<Snapshot> {
   const [
     clients,
     leads,
     sales,
-    contracts,
-    invoices,
-    payments,
-    work,
-    expenses,
+    transactions,
     projects,
-    tasks,
     services,
     affiliates,
     commissions,
     goals,
+    programmes,
+    awards,
+    work,
   ] = await Promise.all([
     fetchClients().catch(() => []),
     fetchLeads().catch(() => []),
     fetchSales().catch(() => []),
-    fetchContracts().catch(() => []),
-    fetchInvoices().catch(() => []),
-    fetchPayments().catch(() => []),
-    fetchAllWork(1000).catch(() => []),
-    fetchExpenses().catch(() => []),
+    fetchTransactions().catch(() => []),
     fetchProjects().catch(() => []),
-    fetchTasks().catch(() => []),
-    fetchServiceCatalogue().catch(() => []),
+    fetchServices().catch(() => []),
     fetchAffiliates().catch(() => []),
     fetchCommissions().catch(() => []),
     fetchGoals().catch(() => []),
+    fetchProgrammes().catch(() => []),
+    fetchAwards().catch(() => []),
+    fetchIncentiveWork().catch(() => []),
   ])
 
   return {
     clients,
     leads,
     sales,
-    contracts,
-    invoices,
-    payments,
-    work,
-    expenses,
+    transactions,
     projects,
-    tasks,
     services,
     affiliates,
     commissions,
     goals,
+    programmes,
+    awards,
+    work,
   }
 }
 
@@ -152,7 +129,17 @@ export async function loadSnapshot(): Promise<Snapshot> {
  * Periods
  * ------------------------------------------------------------------ */
 
-export type PeriodKey = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom'
+export type PeriodKey =
+  | 'today'
+  | 'yesterday'
+  | 'last7'
+  | 'last30'
+  | 'month'
+  | 'prev_month'
+  | 'quarter'
+  | 'year'
+  | 'all'
+  | 'custom'
 
 export interface Period {
   from: string
@@ -161,6 +148,7 @@ export interface Period {
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
+const shift = (days: number, base = new Date()) => iso(new Date(base.getTime() + days * 86_400_000))
 
 /** A named period as concrete dates, so every comparison uses the same rule. */
 export function periodOf(key: PeriodKey, now = new Date()): Period {
@@ -170,14 +158,25 @@ export function periodOf(key: PeriodKey, now = new Date()): Period {
     case 'today':
       return { from: to, to, key }
 
-    case 'week': {
-      /* Monday-based, matching the calendar. */
-      const back = (now.getDay() + 6) % 7
-      return { from: iso(new Date(now.getTime() - back * 86_400_000)), to, key }
+    case 'yesterday': {
+      const day = shift(-1, now)
+      return { from: day, to: day, key }
     }
+
+    case 'last7':
+      return { from: shift(-6, now), to, key }
+
+    case 'last30':
+      return { from: shift(-29, now), to, key }
 
     case 'month':
       return { from: `${to.slice(0, 7)}-01`, to, key }
+
+    case 'prev_month': {
+      const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+      const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0))
+      return { from: iso(first), to: iso(last), key }
+    }
 
     case 'quarter': {
       const q = Math.floor(now.getMonth() / 3) * 3
@@ -195,17 +194,17 @@ export function periodOf(key: PeriodKey, now = new Date()): Period {
 /**
  * The equivalent stretch immediately before a period, for the trend arrow.
  *
- * Measured in days rather than in calendar units so that "this month" on the
- * 3rd compares against the first three days of last month, not against a full
+ * Measured in days rather than calendar units, so "this month" on the 3rd
+ * compares against the first three days of last month and not against a full
  * month that will always look bigger.
  */
 export function previousPeriod(period: Period): Period {
   const from = Date.parse(period.from)
   const to = Date.parse(period.to)
-  const span = Math.max(1, to - from)
+  const span = Math.max(86_400_000, to - from + 86_400_000)
 
   return {
-    from: iso(new Date(from - span - 86_400_000)),
+    from: iso(new Date(from - span)),
     to: iso(new Date(from - 86_400_000)),
     key: 'custom',
   }
@@ -219,13 +218,11 @@ export function slice(snap: Snapshot, p: Period): Snapshot {
   return {
     ...snap,
     leads: snap.leads.filter((l) => within(l.createdAt?.slice(0, 10), p)),
-    sales: snap.sales.filter((s) => within(s.createdAt?.slice(0, 10), p)),
-    payments: snap.payments.filter((x) => within(x.date, p)),
-    work: snap.work.filter((w) => within(w.date, p)),
-    expenses: snap.expenses.filter((e) => within(e.date, p)),
-    invoices: snap.invoices.filter((i) => within(i.issueDate, p)),
+    sales: snap.sales.filter((s) => within(s.saleDate, p)),
+    transactions: snap.transactions.filter((t) => within(t.date, p)),
     clients: snap.clients.filter((c) => within(c.createdAt?.slice(0, 10), p)),
     commissions: snap.commissions.filter((c) => within(c.earnedDate, p)),
+    awards: snap.awards.filter((a) => within(a.earnedDate, p)),
   }
 }
 
@@ -234,92 +231,73 @@ export function slice(snap: Snapshot, p: Period): Snapshot {
  * ------------------------------------------------------------------ */
 
 export interface CompanyFigures {
-  /** Billed on the work ledger — what the company earned by delivering. */
-  revenueBaseMinor: number
-  /** Cash that actually arrived, from typed payments. */
-  collectedBaseMinor: number
-  /** What delivering it cost. */
-  deliveryCostBaseMinor: number
-  /** Costs belonging to no client. */
-  overheadsBaseMinor: number
-  grossProfitBaseMinor: number
-  netProfitBaseMinor: number
+  /** Money that arrived, from transactions marked paid. */
+  incomeBaseMinor: number
+  expenseBaseMinor: number
+  profitBaseMinor: number
+  /** What was agreed in the period — sold, not collected. */
+  soldBaseMinor: number
+  salesCount: number
+  /** Owed across every sale, whenever it was made. */
   outstandingBaseMinor: number
   overdueBaseMinor: number
-  cashFlowBaseMinor: number
+  /** Sales still waiting on the advance they were sold on. */
+  advanceDueCount: number
 
   activeClients: number
   newClients: number
   newLeads: number
   openLeads: number
   activeProjects: number
-  openTasks: number
-  overdueTasks: number
-  wonSales: number
-  pipelineBaseMinor: number
-  activeContracts: number
-  affiliateRevenueBaseMinor: number
-  commissionsPendingBaseMinor: number
+  commissionsOwedBaseMinor: number
+  bonusesOwedBaseMinor: number
 }
 
 /**
  * The company at a glance.
  *
- * Revenue and collected are separate figures, and the gap between them is the
- * single most useful number an agency has: it is the money it has earned but
- * not been given.
+ * `snap` is the period; `all` is everything, and the two are separate
+ * arguments because some figures are period figures and some are not. Money
+ * owed from last year is still owed today, so receivables ignore the filter —
+ * hiding them would be the one number on the page that lies.
  */
 export function companyFigures(snap: Snapshot, all: Snapshot = snap): CompanyFigures {
   const today = iso(new Date())
+  const paid = snap.transactions.filter((tx) => tx.status === 'paid')
 
-  const revenue = snap.work.reduce((n, w) => n + w.revenue.baseMinor, 0)
-  const deliveryCost = snap.work.reduce((n, w) => n + w.cost.baseMinor, 0)
-  const overheads = snap.expenses.reduce((n, e) => n + e.amount.baseMinor, 0)
+  const income = paid
+    .filter((tx) => INCOME_TYPES.includes(tx.type))
+    .reduce((n, tx) => n + tx.amount.baseMinor, 0)
 
-  const income = snap.payments.filter((p) => INCOME_TYPES.includes(p.type))
-  const outgoing = snap.payments.filter((p) => p.type === 'expense' || p.type === 'refund')
-  const collected = income.reduce((n, p) => n + p.amount.baseMinor, 0)
+  const expense = paid
+    .filter((tx) => OUTGOING_TYPES.includes(tx.type))
+    .reduce((n, tx) => n + tx.amount.baseMinor, 0)
 
-  /* Receivables ignore the period: money owed from last year is still owed. */
-  const unpaid = all.work.filter((w) => w.paymentStatus !== 'paid')
-
-  const affiliateSaleIds = new Set(
-    all.sales.filter((s) => s.affiliateId).map((s) => s.id),
-  )
+  const allBalances = all.sales.map((sale) => balanceOf(sale, all.transactions))
 
   return {
-    revenueBaseMinor: revenue,
-    collectedBaseMinor: collected,
-    deliveryCostBaseMinor: deliveryCost,
-    overheadsBaseMinor: overheads,
-    grossProfitBaseMinor: revenue - deliveryCost,
-    netProfitBaseMinor: revenue - deliveryCost - overheads,
-    outstandingBaseMinor: unpaid.reduce((n, w) => n + w.revenue.baseMinor, 0),
-    overdueBaseMinor: unpaid
-      .filter((w) => w.dueDate && w.dueDate < today)
-      .reduce((n, w) => n + w.revenue.baseMinor, 0),
-    cashFlowBaseMinor: collected - outgoing.reduce((n, p) => n + p.amount.baseMinor, 0),
+    incomeBaseMinor: income,
+    expenseBaseMinor: expense,
+    profitBaseMinor: income - expense,
+    soldBaseMinor: snap.sales.reduce((n, s) => n + s.value.baseMinor, 0),
+    salesCount: snap.sales.length,
+    outstandingBaseMinor: allBalances.reduce((n, b) => n + b.remainingBaseMinor, 0),
+    overdueBaseMinor: all.transactions
+      .filter((tx) => tx.status !== 'paid' && tx.dueDate && tx.dueDate < today)
+      .reduce((n, tx) => n + tx.amount.baseMinor, 0),
+    advanceDueCount: allBalances.filter((b) => b.advanceDue).length,
 
     activeClients: all.clients.filter((c) => c.status === 'active' && !c.archived).length,
     newClients: snap.clients.length,
     newLeads: snap.leads.length,
     openLeads: all.leads.filter((l) => OPEN_STAGES.includes(l.stage)).length,
     activeProjects: all.projects.filter((p) => p.status === 'active').length,
-    openTasks: all.tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length,
-    overdueTasks: all.tasks.filter(
-      (t) => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today,
-    ).length,
-    wonSales: snap.sales.filter((s) => s.stage === 'won').length,
-    pipelineBaseMinor: all.sales
-      .filter((s) => OPEN_SALE_STAGES.includes(s.stage))
-      .reduce((n, s) => n + s.value.baseMinor, 0),
-    activeContracts: all.contracts.filter((c) => c.status === 'active').length,
-    affiliateRevenueBaseMinor: snap.payments
-      .filter((p) => p.affiliateId || (p.saleId && affiliateSaleIds.has(p.saleId)))
-      .reduce((n, p) => n + p.amount.baseMinor, 0),
-    commissionsPendingBaseMinor: all.commissions
+    commissionsOwedBaseMinor: all.commissions
       .filter((c) => c.status === 'pending' || c.status === 'approved')
       .reduce((n, c) => n + c.amountBaseMinor, 0),
+    bonusesOwedBaseMinor: all.awards
+      .filter((a) => OWED_STATUSES.includes(a.status))
+      .reduce((n, a) => n + a.amountBaseMinor, 0),
   }
 }
 
@@ -335,47 +313,70 @@ export function trend(current: number, previous: number): number | null {
 
 export interface SeriesPoint {
   label: string
-  revenue: number
-  cost: number
-  overheads: number
+  income: number
+  expense: number
   profit: number
-  collected: number
+  sold: number
+  salesCount: number
+  leads: number
 }
 
-/** Revenue, cost and profit by month, oldest first — the shape of the year. */
-export function monthlySeries(snap: Snapshot, months = 12): SeriesPoint[] {
+/**
+ * Buckets over a period, by day or by month.
+ *
+ * Which one is chosen from the length of the period rather than by the caller:
+ * a week of monthly buckets is one bar, and a year of daily ones is 365 marks
+ * nobody can read.
+ */
+export function seriesOver(snap: Snapshot, period: Period): SeriesPoint[] {
+  const from = Date.parse(period.from)
+  const to = Date.parse(period.to)
+  const days = Math.round((to - from) / 86_400_000) + 1
+  const byDay = days <= 62
+
   const buckets = new Map<string, SeriesPoint>()
+  const keyOf = (date: string) => (byDay ? date : date.slice(0, 7))
 
-  const now = new Date()
-  for (let i = months - 1; i >= 0; i -= 1) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
-    const key = d.toISOString().slice(0, 7)
-    buckets.set(key, { label: key, revenue: 0, cost: 0, overheads: 0, profit: 0, collected: 0 })
+  if (byDay) {
+    for (let i = 0; i < Math.max(1, Math.min(days, 400)); i += 1) {
+      const key = iso(new Date(from + i * 86_400_000))
+      buckets.set(key, blankPoint(key.slice(5)))
+    }
+  } else {
+    const start = new Date(from)
+    for (let i = 0; i < 60; i += 1) {
+      const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1))
+      if (d.getTime() > to) break
+      buckets.set(iso(d).slice(0, 7), blankPoint(iso(d).slice(0, 7)))
+    }
   }
 
-  const touch = (key: string) => buckets.get(key)
+  for (const tx of snap.transactions) {
+    const row = buckets.get(keyOf(tx.date))
+    if (!row || tx.status !== 'paid') continue
+    if (INCOME_TYPES.includes(tx.type)) row.income += tx.amount.baseMinor
+    if (OUTGOING_TYPES.includes(tx.type)) row.expense += tx.amount.baseMinor
+  }
 
-  for (const w of snap.work) {
-    const row = touch(w.date.slice(0, 7))
+  for (const sale of snap.sales) {
+    const row = buckets.get(keyOf(sale.saleDate))
     if (!row) continue
-    row.revenue += w.revenue.baseMinor
-    row.cost += w.cost.baseMinor
+    row.sold += sale.value.baseMinor
+    row.salesCount += 1
   }
 
-  for (const e of snap.expenses) {
-    const row = touch(e.date.slice(0, 7))
-    if (row) row.overheads += e.amount.baseMinor
+  for (const lead of snap.leads) {
+    const row = buckets.get(keyOf((lead.createdAt ?? '').slice(0, 10)))
+    if (row) row.leads += 1
   }
 
-  for (const p of snap.payments) {
-    if (!INCOME_TYPES.includes(p.type)) continue
-    const row = touch(p.date.slice(0, 7))
-    if (row) row.collected += p.amount.baseMinor
-  }
-
-  for (const row of buckets.values()) row.profit = row.revenue - row.cost - row.overheads
+  for (const row of buckets.values()) row.profit = row.income - row.expense
 
   return [...buckets.values()]
+}
+
+function blankPoint(label: string): SeriesPoint {
+  return { label, income: 0, expense: 0, profit: 0, sold: 0, salesCount: 0, leads: 0 }
 }
 
 export interface Breakdown {
@@ -387,35 +388,27 @@ export interface Breakdown {
 
 const rank = (rows: Breakdown[]) => rows.sort((a, b) => b.value - a.value)
 
-/** Revenue by client, biggest first. */
-export function revenueByClient(snap: Snapshot): Breakdown[] {
-  const names = new Map(snap.clients.map((c) => [c.id, c.name]))
+/**
+ * Income by service.
+ *
+ * Attributed through the transaction's own service when it has one, and
+ * through its sale when it does not. Money with neither is grouped as
+ * unattributed rather than spread around, because guessing makes the figure
+ * useless to the person deciding what to sell more of.
+ */
+export function incomeByService(snap: Snapshot): Breakdown[] {
+  const saleService = new Map(snap.sales.map((s) => [s.id, { id: s.serviceId, name: s.serviceName }]))
   const map = new Map<string, Breakdown>()
 
-  for (const w of snap.work) {
-    const row = map.get(w.clientId) ?? {
-      key: w.clientId,
-      label: names.get(w.clientId) ?? w.clientId,
-      value: 0,
-      count: 0,
-    }
-    row.value += w.revenue.baseMinor
-    row.count += 1
-    map.set(w.clientId, row)
-  }
+  for (const tx of snap.transactions) {
+    if (tx.status !== 'paid' || !INCOME_TYPES.includes(tx.type)) continue
 
-  return rank([...map.values()])
-}
+    const fromSale = tx.saleId ? saleService.get(tx.saleId) : null
+    const key = tx.serviceId ?? fromSale?.id ?? 'unattributed'
+    const label = tx.serviceName || fromSale?.name || ''
 
-/** Revenue by service, falling back to the item's own name when untagged. */
-export function revenueByService(snap: Snapshot): Breakdown[] {
-  const map = new Map<string, Breakdown>()
-
-  for (const w of snap.work) {
-    const key = w.serviceId ?? w.serviceName?.trim() ?? w.title
-    const label = w.serviceName?.trim() || w.title
     const row = map.get(key) ?? { key, label, value: 0, count: 0 }
-    row.value += w.revenue.baseMinor
+    row.value += tx.amount.baseMinor
     row.count += 1
     map.set(key, row)
   }
@@ -423,20 +416,46 @@ export function revenueByService(snap: Snapshot): Breakdown[] {
   return rank([...map.values()])
 }
 
-/**
- * Revenue by employee.
- *
- * Attributed through the sale that produced it, because a work item does not
- * know who sold it. Work with no sale behind it is grouped as unattributed
- * rather than spread around, since guessing would make the figure useless.
- */
-export function revenueByEmployee(snap: Snapshot): Breakdown[] {
+export function incomeByClient(snap: Snapshot): Breakdown[] {
+  const map = new Map<string, Breakdown>()
+
+  for (const tx of snap.transactions) {
+    if (tx.status !== 'paid' || !INCOME_TYPES.includes(tx.type) || !tx.clientId) continue
+    const row = map.get(tx.clientId) ?? {
+      key: tx.clientId,
+      label: tx.clientName,
+      value: 0,
+      count: 0,
+    }
+    row.value += tx.amount.baseMinor
+    row.count += 1
+    map.set(tx.clientId, row)
+  }
+
+  return rank([...map.values()])
+}
+
+/** Sold value by the channel it came through — where business actually comes from. */
+export function soldByChannel(snap: Snapshot): Breakdown[] {
   const map = new Map<string, Breakdown>()
 
   for (const sale of snap.sales) {
-    if (sale.stage !== 'won') continue
+    const row = map.get(sale.channel) ?? { key: sale.channel, label: sale.channel, value: 0, count: 0 }
+    row.value += sale.value.baseMinor
+    row.count += 1
+    map.set(sale.channel, row)
+  }
+
+  return rank([...map.values()])
+}
+
+/** Sold value by the person credited with it. */
+export function soldByEmployee(snap: Snapshot): Breakdown[] {
+  const map = new Map<string, Breakdown>()
+
+  for (const sale of snap.sales) {
     const key = sale.ownerUid ?? 'unattributed'
-    const row = map.get(key) ?? { key, label: sale.ownerName || '—', value: 0, count: 0 }
+    const row = map.get(key) ?? { key, label: sale.ownerName || '', value: 0, count: 0 }
     row.value += sale.value.baseMinor
     row.count += 1
     map.set(key, row)
@@ -445,18 +464,18 @@ export function revenueByEmployee(snap: Snapshot): Breakdown[] {
   return rank([...map.values()])
 }
 
-/** How many leads reached each stage, in pipeline order. */
+/** How many leads sit at each stage, for the funnel. */
 export function leadFunnel(snap: Snapshot): Breakdown[] {
   const map = new Map<string, number>()
   for (const lead of snap.leads) map.set(lead.stage, (map.get(lead.stage) ?? 0) + 1)
   return [...map.entries()].map(([key, count]) => ({ key, label: key, value: count, count }))
 }
 
-/** Won deals as a share of everything closed, for the period given. */
+/** Won as a share of everything closed. Open leads are not failures yet. */
 export function conversionOf(snap: Snapshot): number {
-  const closed = snap.sales.filter((s) => s.stage === 'won' || s.stage === 'lost')
+  const closed = snap.leads.filter((l) => l.stage === 'won' || l.stage === 'lost')
   if (closed.length === 0) return 0
-  return Math.round((closed.filter((s) => s.stage === 'won').length / closed.length) * 100)
+  return Math.round((closed.filter((l) => l.stage === 'won').length / closed.length) * 100)
 }
 
 /* ------------------------------------------------------------------ *
@@ -477,53 +496,67 @@ export interface GoalProgress {
  *
  * Counted from the records inside the goal's own dates, so progress moves as
  * work happens and nobody has to remember to update it. `manual` is the one
- * exception, and the only metric where a person types the number.
+ * exception and the only metric where a person types the number.
  *
  * "On track" compares progress against time elapsed rather than against the
  * deadline alone: a goal at 40% with 30% of the period gone is fine; the same
- * goal with 80% gone is not, and saying so before the deadline is the entire
- * value of tracking it.
+ * goal with 80% gone is not, and saying so while there is still time to act is
+ * the entire value of tracking it.
  */
 export function goalProgress(goal: Goal, snap: Snapshot): GoalProgress {
   const period: Period = { from: goal.startDate, to: goal.endDate, key: 'custom' }
-  const inWindow = slice(snap, period)
+  const win = slice(snap, period)
+  const owners = goal.ownerUids ?? []
 
-  const mine = <T extends { ownerUid?: string | null; assigneeUid?: string | null }>(rows: T[]) =>
-    goal.scope === 'individual' && goal.ownerUid
-      ? rows.filter((r) => r.ownerUid === goal.ownerUid || r.assigneeUid === goal.ownerUid)
-      : rows
+  const mineOnly = <T extends { ownerUid?: string | null; assigneeUid?: string | null }>(rows: T[]) =>
+    owners.length === 0
+      ? rows
+      : rows.filter(
+          (r) =>
+            (r.ownerUid && owners.includes(r.ownerUid)) ||
+            (r.assigneeUid && owners.includes(r.assigneeUid)),
+        )
 
-  const serviceMatch = (serviceId: string | null | undefined) =>
-    !goal.serviceId || serviceId === goal.serviceId
+  const serviceMatch = (id: string | null | undefined) => !goal.serviceId || id === goal.serviceId
 
   const current = ((): number => {
     switch (goal.metric) {
       case 'revenue':
-        return inWindow.work
-          .filter((w) => serviceMatch(w.serviceId))
-          .reduce((n, w) => n + w.revenue.baseMinor, 0)
+      case 'collected':
+        return win.transactions
+          .filter(
+            (tx) =>
+              tx.status === 'paid' && INCOME_TYPES.includes(tx.type) && serviceMatch(tx.serviceId),
+          )
+          .reduce((n, tx) => n + tx.amount.baseMinor, 0)
 
-      case 'profit':
+      case 'profit': {
+        const paid = win.transactions.filter((tx) => tx.status === 'paid')
         return (
-          inWindow.work.reduce((n, w) => n + w.profitBaseMinor, 0) -
-          inWindow.expenses.reduce((n, e) => n + e.amount.baseMinor, 0)
+          paid
+            .filter((tx) => INCOME_TYPES.includes(tx.type))
+            .reduce((n, tx) => n + tx.amount.baseMinor, 0) -
+          paid
+            .filter((tx) => OUTGOING_TYPES.includes(tx.type))
+            .reduce((n, tx) => n + tx.amount.baseMinor, 0)
         )
+      }
 
       case 'new_clients':
-        return inWindow.clients.length
+        return win.clients.length
 
       case 'new_leads':
-        return mine(inWindow.leads).length
+        return mineOnly(win.leads).length
 
       case 'leads_converted':
-        return mine(inWindow.leads).filter((l) => l.stage === 'won').length
+        return mineOnly(win.leads).filter((l) => l.stage === 'won').length
 
-      case 'sales_won':
-        return mine(inWindow.sales).filter((s) => s.stage === 'won').length
+      case 'sales_count':
+        return mineOnly(win.sales).filter((s) => serviceMatch(s.serviceId)).length
 
       case 'sales_value':
-        return mine(inWindow.sales)
-          .filter((s) => s.stage === 'won' && serviceMatch(s.serviceId))
+        return mineOnly(win.sales)
+          .filter((s) => serviceMatch(s.serviceId))
           .reduce((n, s) => n + s.value.baseMinor, 0)
 
       case 'projects_completed':
@@ -531,16 +564,8 @@ export function goalProgress(goal: Goal, snap: Snapshot): GoalProgress {
           (p) => p.status === 'completed' && within(p.endDate, period),
         ).length
 
-      case 'tasks_completed':
-        return snap.tasks.filter(
-          (t) =>
-            t.status === 'done' &&
-            within(t.completedAt?.slice(0, 10), period) &&
-            (goal.scope !== 'individual' || !goal.ownerUid || t.assigneeUid === goal.ownerUid),
-        ).length
-
       case 'affiliate_revenue':
-        return inWindow.commissions.reduce((n, c) => n + c.baseAmountBaseMinor, 0)
+        return win.commissions.reduce((n, c) => n + c.baseAmountBaseMinor, 0)
 
       default:
         return goal.manualValue ?? 0
@@ -548,24 +573,20 @@ export function goalProgress(goal: Goal, snap: Snapshot): GoalProgress {
   })()
 
   const target = goal.target || 1
-  const percent = Math.min(999, Math.round((current / target) * 100))
-
   const start = Date.parse(goal.startDate)
   const end = Date.parse(goal.endDate)
-  const now = Date.now()
-  const elapsed = end > start ? Math.min(1, Math.max(0, (now - start) / (end - start))) : 1
+  const elapsed = end > start ? Math.min(1, Math.max(0, (Date.now() - start) / (end - start))) : 1
 
   return {
     goal,
     current,
-    percent,
+    percent: Math.min(999, Math.round((current / target) * 100)),
     isMoney: MONEY_METRICS.includes(goal.metric),
     onTrack: current / target >= elapsed - 0.05,
-    daysLeft: Math.ceil((end - now) / 86_400_000),
+    daysLeft: Math.ceil((end - Date.now()) / 86_400_000),
   }
 }
 
-/** Which metrics a goal type counts in money, for formatting. */
 export const isMoneyMetric = (metric: GoalMetric) => MONEY_METRICS.includes(metric)
 
 /* ------------------------------------------------------------------ *
@@ -577,47 +598,44 @@ export type KpiValues = Record<KpiMetric, number>
 /**
  * One person's numbers.
  *
- * No score and no ranking: a developer's task count and a salesperson's
- * revenue are not the same axis, and averaging them into one figure would
- * produce a number that is precise and meaningless. The role decides which of
- * these are shown; this function computes all of them.
+ * No score and no ranking: a developer's project count and a salesperson's
+ * revenue are not the same axis, and averaging them produces a figure that is
+ * precise and meaningless. The role decides which of these are shown; this
+ * computes all of them.
  */
 export function kpisFor(uid: string, snap: Snapshot, period: Period): KpiValues {
-  const inWindow = slice(snap, period)
-  const today = iso(new Date())
+  const win = slice(snap, period)
 
-  const myLeads = inWindow.leads.filter((l) => l.assigneeUid === uid || l.createdBy === uid)
-  const mySales = inWindow.sales.filter((s) => s.ownerUid === uid)
-  const myTasks = snap.tasks.filter((t) => t.assigneeUid === uid)
-
-  const wonSaleIds = new Set(mySales.filter((s) => s.stage === 'won').map((s) => s.id))
+  const myLeads = win.leads.filter((l) => l.assigneeUid === uid || l.createdBy === uid)
+  const mySales = win.sales.filter((s) => s.ownerUid === uid)
+  const mySaleIds = new Set(mySales.map((s) => s.id))
+  const affiliateIds = new Set(
+    snap.affiliates.filter((a) => a.employeeUid === uid).map((a) => a.id),
+  )
 
   return {
     leads_created: myLeads.length,
     leads_converted: myLeads.filter((l) => l.stage === 'won').length,
-    sales_won: mySales.filter((s) => s.stage === 'won').length,
-    sales_value: mySales
-      .filter((s) => s.stage === 'won')
-      .reduce((n, s) => n + s.value.baseMinor, 0),
-    revenue_generated: inWindow.payments
+    sales_count: mySales.length,
+    sales_value: mySales.reduce((n, s) => n + s.value.baseMinor, 0),
+    revenue_collected: win.transactions
       .filter(
-        (p) =>
-          INCOME_TYPES.includes(p.type) &&
-          (p.employeeUid === uid || (p.saleId && wonSaleIds.has(p.saleId))),
+        (tx) =>
+          tx.status === 'paid' &&
+          INCOME_TYPES.includes(tx.type) &&
+          (tx.employeeUid === uid || (tx.saleId && mySaleIds.has(tx.saleId))),
       )
-      .reduce((n, p) => n + p.amount.baseMinor, 0),
-    tasks_completed: myTasks.filter(
-      (t) => t.status === 'done' && within(t.completedAt?.slice(0, 10), period),
-    ).length,
-    tasks_overdue: myTasks.filter(
-      (t) => t.status !== 'done' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today,
-    ).length,
+      .reduce((n, tx) => n + tx.amount.baseMinor, 0),
+    new_clients: win.clients.filter((c) => c.responsibleUid === uid).length,
     projects_completed: snap.projects.filter(
       (p) => p.status === 'completed' && (p.ownerUid === uid || p.teamUids?.includes(uid)),
     ).length,
-    commission_generated: inWindow.commissions
-      .filter((c) => snap.affiliates.find((a) => a.id === c.affiliateId)?.employeeUid === uid)
+    commission_generated: win.commissions
+      .filter((c) => affiliateIds.has(c.affiliateId))
       .reduce((n, c) => n + c.amountBaseMinor, 0),
+    bonuses_earned: win.awards
+      .filter((a) => a.employeeUid === uid && a.status !== 'rejected' && a.status !== 'cancelled')
+      .reduce((n, a) => n + a.amountBaseMinor, 0),
   }
 }
 
@@ -625,39 +643,21 @@ export function kpisFor(uid: string, snap: Snapshot, period: Period): KpiValues 
  * Projects
  * ------------------------------------------------------------------ */
 
-/**
- * How far along a project is.
- *
- * Milestones first when it has them, otherwise tasks. A project with neither
- * reports null rather than zero: "no way to tell" and "nothing done" are
- * different answers, and showing an empty progress bar for the first one is a
- * lie the manager will act on.
- */
-export function projectProgress(project: Project, tasks: Task[]): number | null {
-  const milestones = project.milestones ?? []
-  if (milestones.length > 0) {
-    return Math.round((milestones.filter((m) => m.done).length / milestones.length) * 100)
-  }
-
-  const mine = tasks.filter((t) => t.projectId === project.id && t.status !== 'cancelled')
-  if (mine.length === 0) return null
-
-  return Math.round((mine.filter((t) => t.status === 'done').length / mine.length) * 100)
-}
-
-/** What a project earned, cost and is still owed, from the client ledger. */
-export function projectFigures(projectId: string, work: WorkItem[]) {
-  const mine = work.filter((w) => w.projectId === projectId)
+/** What a project earned and is owed, from the sales attached to it. */
+export function projectFigures(projectId: string, snap: Snapshot) {
+  const sales = snap.sales.filter((s) => s.projectId === projectId)
+  const balances = sales.map((s) => balanceOf(s, snap.transactions))
 
   return {
-    earnedBaseMinor: mine.reduce((n, w) => n + w.revenue.baseMinor, 0),
-    spentBaseMinor: mine.reduce((n, w) => n + w.cost.baseMinor, 0),
-    profitBaseMinor: mine.reduce((n, w) => n + w.profitBaseMinor, 0),
-    unpaidBaseMinor: mine
-      .filter((w) => w.paymentStatus !== 'paid')
-      .reduce((n, w) => n + w.revenue.baseMinor, 0),
+    salesCount: sales.length,
+    soldBaseMinor: sales.reduce((n, s) => n + s.value.baseMinor, 0),
+    collectedBaseMinor: balances.reduce((n, b) => n + b.paidBaseMinor, 0),
+    outstandingBaseMinor: balances.reduce((n, b) => n + b.remainingBaseMinor, 0),
+    costBaseMinor: snap.transactions
+      .filter(
+        (tx) =>
+          tx.projectId === projectId && tx.status === 'paid' && OUTGOING_TYPES.includes(tx.type),
+      )
+      .reduce((n, tx) => n + tx.amount.baseMinor, 0),
   }
 }
-
-/** The affiliate record for an employee, when they have one. */
-export const affiliateOf = fetchAffiliate

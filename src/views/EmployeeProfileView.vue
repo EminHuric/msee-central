@@ -38,6 +38,8 @@ import { formatDate } from '@/i18n'
 import { BASE_CURRENCY, formatMoney } from '@/types/money'
 import { DEFAULT_KPIS, MONEY_KPIS, type KpiMetric } from '@/types/company'
 import { OPEN_STAGES } from '@/types/business'
+import { earningsFor } from '@/api/rewards'
+import { affiliateOwners } from '@/api/affiliates'
 import { useAuthStore } from '@/stores/auth'
 import type { Department, Position } from '@/types/domain'
 import { PERMISSIONS } from '@/types/permissions'
@@ -113,14 +115,6 @@ const partial = computed(() => detail.value !== null && !detail.value.sawEveryth
  */
 const snapshot = ref<Snapshot>(EMPTY_SNAPSHOT)
 
-const myTasks = computed(() =>
-  snapshot.value.tasks
-    .filter((task) => task.assigneeUid === uid.value && task.status !== 'cancelled')
-    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')),
-)
-
-const openTasks = computed(() => myTasks.value.filter((task) => task.status !== 'done'))
-
 const myLeads = computed(() =>
   snapshot.value.leads.filter(
     (l) => l.assigneeUid === uid.value && OPEN_STAGES.includes(l.stage),
@@ -128,7 +122,13 @@ const myLeads = computed(() =>
 )
 
 const mySales = computed(() =>
-  snapshot.value.sales.filter((x) => x.ownerUid === uid.value && x.stage !== 'lost'),
+  snapshot.value.sales
+    .filter((x) => x.ownerUid === uid.value)
+    .sort((a, b) => b.saleDate.localeCompare(a.saleDate)),
+)
+
+const myClients = computed(() =>
+  snapshot.value.clients.filter((c) => c.responsibleUid === uid.value),
 )
 
 const myProjects = computed(() =>
@@ -140,21 +140,47 @@ const myProjects = computed(() =>
 
 const myGoals = computed(() =>
   snapshot.value.goals
-    .filter((g) => g.status === 'active' && g.ownerUid === uid.value)
+    .filter((g) => g.status === 'active' && (g.ownerUids ?? []).includes(uid.value))
     .map((g) => goalProgress(g, snapshot.value)),
 )
 
+const myAwards = computed(() =>
+  snapshot.value.awards
+    .filter((a) => a.employeeUid === uid.value)
+    .sort((a, b) => b.earnedDate.localeCompare(a.earnedDate)),
+)
+
 const kpis = computed(() => kpisFor(uid.value, snapshot.value, periodOf('month')))
+
+/** What this person has been given, and what is still owed to them. */
+const earnings = computed(() =>
+  earningsFor(
+    uid.value,
+    snapshot.value.awards,
+    snapshot.value.commissions,
+    affiliateOwners(snapshot.value.affiliates),
+  ),
+)
 
 const canSeeWork = computed(
   () => auth.uid === uid.value || auth.hasPermission(PERMISSIONS.PERFORMANCE_VIEW_ALL),
 )
 
+/**
+ * Earnings are stricter than the rest.
+ *
+ * What somebody is paid is theirs. A colleague who can see their sales still
+ * cannot see their bonuses without the permission that says so.
+ */
+const canSeeEarnings = computed(
+  () => auth.uid === uid.value || auth.hasPermission(PERMISSIONS.EARNINGS_VIEW_ALL),
+)
+
 const hasWork = computed(
   () =>
-    myTasks.value.length > 0 ||
     myLeads.value.length > 0 ||
     mySales.value.length > 0 ||
+    myClients.value.length > 0 ||
     myProjects.value.length > 0 ||
     myGoals.value.length > 0,
 )
@@ -381,39 +407,39 @@ watch(uid, load)
           <!-- What they are actually doing --------------------------- -->
           <section v-if="canSeeWork" class="card">
             <div class="card-header">
-              <h2 class="card-title">{{ t('workspace.myTasks') }}</h2>
-              <span class="badge badge-plain">{{ openTasks.length }}</span>
+              <h2 class="card-title">{{ t('performance.title') }}</h2>
+              <span class="tertiary small">{{ t('period.month') }}</span>
             </div>
 
             <div class="card-body">
               <dl class="kpis">
                 <div v-for="metric in DEFAULT_KPIS" :key="metric">
                   <dt>{{ t(`kpi.${metric}`) }}</dt>
-                  <dd :class="{ neg: metric === 'tasks_overdue' && kpis[metric] > 0 }">
-                    {{ kpiValue(metric) }}
-                  </dd>
+                  <dd>{{ kpiValue(metric) }}</dd>
                 </div>
               </dl>
             </div>
 
-            <p v-if="!hasWork" class="card-body tertiary small">{{ t('workspace.noTasks') }}</p>
+            <p v-if="!hasWork" class="card-body tertiary small">{{ t('employees.noWork') }}</p>
 
             <template v-else>
-              <template v-if="openTasks.length">
-                <p class="group-title">{{ t('workspace.myTasks') }}</p>
+              <template v-if="myClients.length">
+                <p class="group-title">{{ t('workspace.myClients') }}</p>
                 <ul class="work-list">
-                  <li v-for="task in openTasks.slice(0, 6)" :key="task.id">
-                    <span class="work-main">{{ task.title }}</span>
-                    <span v-if="task.dueDate" class="tertiary">{{ formatDate(task.dueDate) }}</span>
+                  <li v-for="c in myClients.slice(0, 6)" :key="c.id">
+                    <span class="work-main">{{ c.name }}</span>
+                    <span class="badge badge-plain">{{ t(`clientStatus.${c.status}`) }}</span>
                   </li>
                 </ul>
               </template>
 
-              <template v-if="myProjects.length">
-                <p class="group-title">{{ t('workspace.myProjects') }}</p>
+              <template v-if="mySales.length">
+                <p class="group-title">{{ t('workspace.mySales') }}</p>
                 <ul class="work-list">
-                  <li v-for="pr in myProjects.slice(0, 5)" :key="pr.id">
-                    <span class="work-main">{{ pr.name }}</span>
+                  <li v-for="d in mySales.slice(0, 6)" :key="d.id">
+                    <span class="work-main">{{ d.title }}</span>
+                    <span class="tertiary small">{{ formatDate(d.saleDate) }}</span>
+                    <span class="work-value">{{ money(d.value.baseMinor) }}</span>
                   </li>
                 </ul>
               </template>
@@ -423,17 +449,16 @@ watch(uid, load)
                 <ul class="work-list">
                   <li v-for="l in myLeads.slice(0, 5)" :key="l.id">
                     <span class="work-main">{{ l.company || l.name }}</span>
-                    <span class="tertiary">{{ t(`leadStage.${l.stage}`) }}</span>
+                    <span class="tertiary small">{{ t(`leadStage.${l.stage}`) }}</span>
                   </li>
                 </ul>
               </template>
 
-              <template v-if="mySales.length">
-                <p class="group-title">{{ t('workspace.mySales') }}</p>
+              <template v-if="myProjects.length">
+                <p class="group-title">{{ t('workspace.myProjects') }}</p>
                 <ul class="work-list">
-                  <li v-for="d in mySales.slice(0, 5)" :key="d.id">
-                    <span class="work-main">{{ d.title }}</span>
-                    <span class="work-value">{{ money(d.value.baseMinor) }}</span>
+                  <li v-for="pr in myProjects.slice(0, 5)" :key="pr.id">
+                    <span class="work-main">{{ pr.name }}</span>
                   </li>
                 </ul>
               </template>
@@ -448,6 +473,58 @@ watch(uid, load)
                 </ul>
               </template>
             </template>
+          </section>
+
+          <!-- Earnings ----------------------------------------------- -->
+          <section v-if="canSeeEarnings" class="card">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('earnings.title') }}</h2>
+            </div>
+
+            <dl class="kpis wide">
+              <div>
+                <dt>{{ t('earnings.month') }}</dt>
+                <dd>{{ money(earnings.monthBaseMinor) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('earnings.year') }}</dt>
+                <dd>{{ money(earnings.yearBaseMinor) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('earnings.owed') }}</dt>
+                <dd class="warn">{{ money(earnings.owedBaseMinor) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('earnings.paid') }}</dt>
+                <dd class="pos">{{ money(earnings.paidBaseMinor) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('earnings.commission') }}</dt>
+                <dd>{{ money(earnings.commissionPaidBaseMinor) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('earnings.pending') }}</dt>
+                <dd class="tertiary">{{ money(earnings.pendingBaseMinor) }}</dd>
+              </div>
+            </dl>
+
+            <p v-if="myAwards.length === 0" class="card-body tertiary small">
+              {{ t('earnings.noAwards') }}
+            </p>
+
+            <ul v-else class="work-list">
+              <li v-for="a in myAwards.slice(0, 10)" :key="a.id">
+                <span class="work-main">{{ a.reason || a.sourceLabel }}</span>
+                <span class="tertiary small">{{ formatDate(a.earnedDate) }}</span>
+                <span class="badge" :class="`as-${a.status}`">
+                  {{ t(`awardStatus.${a.status}`) }}
+                </span>
+                <span class="work-value">
+                  {{ a.amountBaseMinor ? money(a.amountBaseMinor) : a.rewardLabel }}
+                </span>
+              </li>
+            </ul>
+            <p class="card-body tertiary small">{{ t('earnings.earnedNotPaid') }}</p>
           </section>
         </div>
       </div>
@@ -612,4 +689,12 @@ watch(uid, load)
 .neg { color: var(--danger-500); }
 .warn { color: var(--warn-500); }
 .small { font-size: var(--text-xs); }
+
+.kpis.wide { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); padding: var(--space-4) var(--space-5); }
+.work-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.as-paid { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
+.as-pending, .as-cancelled { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
+.as-earned { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); color: var(--text-brand); }
+.as-approved { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
+.as-rejected { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
 </style>

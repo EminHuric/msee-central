@@ -33,14 +33,14 @@ import {
 
 import { getDb } from '@/lib/firebase'
 import { actor, newId } from './store'
-import type { Task } from '@/types/business'
+import type { Note, Project } from '@/types/business'
 import type {
   AppNotification,
   NotificationKind,
   NotificationPreferences,
   NotificationPriority,
 } from '@/types/company'
-import type { Contract, Invoice } from '@/types/revenue'
+import type { Transaction } from '@/types/revenue'
 
 /* ------------------------------------------------------------------ *
  * Stored notifications
@@ -144,11 +144,13 @@ export async function savePreferences(prefs: NotificationPreferences): Promise<v
  * ------------------------------------------------------------------ */
 
 export interface DerivedSource {
-  tasks: Task[]
-  invoices: Invoice[]
-  contracts: Contract[]
-  /** Unpaid work items, as {clientId, clientName, title, dueDate, amount}. */
-  overdueWork: { id: string; clientId: string; label: string; dueDate: string; amount: number }[]
+  /** Anything expected and not yet paid. */
+  transactions: Transaction[]
+  projects: Project[]
+  /** Reminder notes belonging to the person this is for. */
+  notes: Note[]
+  /** Sales still waiting on the advance they were sold on. */
+  advanceDue: { id: string; label: string; clientName: string }[]
   uid: string
 }
 
@@ -156,9 +158,10 @@ export interface DerivedSource {
  * Everything that is true right now because of a date.
  *
  * Returned with ids that are stable for the same underlying record, so the
- * list does not reshuffle between renders, and with no `read` state — these
+ * list does not reshuffle between renders, and with no read state — these
  * cannot be dismissed, because the only way to clear one is to deal with the
- * thing it is about.
+ * thing it is about. That is what stops a notification centre becoming a
+ * graveyard of deadlines that were met weeks ago.
  */
 export function deriveNotifications(source: DerivedSource): AppNotification[] {
   const now = new Date().toISOString().slice(0, 10)
@@ -172,67 +175,67 @@ export function deriveNotifications(source: DerivedSource): AppNotification[] {
     title: string,
     body: string,
     link: string | null,
-  ) => out.push({ id, kind, priority, title, body, link, read: false, createdAt: now, actorName: '' })
+  ) =>
+    out.push({ id, kind, priority, title, body, link, read: false, createdAt: now, actorName: '' })
 
-  for (const task of source.tasks) {
-    if (task.status === 'done' || task.status === 'cancelled' || !task.dueDate) continue
-    if (task.assigneeUid !== source.uid) continue
+  for (const tx of source.transactions) {
+    if (tx.status === 'paid' || !tx.dueDate) continue
 
-    if (task.dueDate < now) {
-      add(`task-late-${task.id}`, 'task_overdue', 'important', task.title, task.dueDate, '/tasks')
-    } else if (task.dueDate <= soon) {
-      add(`task-soon-${task.id}`, 'project_deadline', 'normal', task.title, task.dueDate, '/tasks')
-    }
-  }
-
-  for (const item of source.overdueWork) {
-    add(
-      `work-late-${item.id}`,
-      'payment_overdue',
-      'critical',
-      item.label,
-      item.dueDate,
-      `/clients/${item.clientId}`,
-    )
-  }
-
-  for (const invoice of source.invoices) {
-    if (invoice.status === 'paid' || invoice.status === 'cancelled') continue
-    if (invoice.dueDate && invoice.dueDate < now) {
+    if (tx.dueDate < now) {
       add(
-        `inv-late-${invoice.id}`,
+        `tx-late-${tx.id}`,
         'payment_overdue',
         'critical',
-        `${invoice.number} · ${invoice.clientName}`,
-        invoice.dueDate,
+        tx.description || tx.clientName,
+        tx.dueDate,
+        '/finance',
+      )
+    } else if (tx.dueDate <= soon) {
+      add(
+        `tx-soon-${tx.id}`,
+        'payment_received',
+        'normal',
+        tx.description || tx.clientName,
+        tx.dueDate,
         '/finance',
       )
     }
   }
 
-  for (const contract of source.contracts) {
-    const when = contract.renewalDate ?? contract.endDate
-    if (!when || contract.status === 'cancelled' || contract.status === 'expired') continue
+  for (const sale of source.advanceDue) {
+    add(`adv-${sale.id}`, 'payment_overdue', 'important', sale.label, sale.clientName, '/sales')
+  }
 
-    if (when < now) {
+  for (const project of source.projects) {
+    if (!project.endDate) continue
+    if (project.status === 'completed' || project.status === 'cancelled') continue
+    if (project.ownerUid !== source.uid && !project.teamUids?.includes(source.uid)) continue
+
+    if (project.endDate < now) {
       add(
-        `con-exp-${contract.id}`,
-        'contract_expiring',
+        `proj-late-${project.id}`,
+        'project_deadline',
         'important',
-        `${contract.number} · ${contract.clientName}`,
-        when,
-        '/contracts',
+        project.name,
+        project.endDate,
+        `/projects/${project.id}`,
       )
-    } else if (when <= soon) {
+    } else if (project.endDate <= soon) {
       add(
-        `con-soon-${contract.id}`,
-        'contract_expiring',
+        `proj-soon-${project.id}`,
+        'project_deadline',
         'normal',
-        `${contract.number} · ${contract.clientName}`,
-        when,
-        '/contracts',
+        project.name,
+        project.endDate,
+        `/projects/${project.id}`,
       )
     }
+  }
+
+  for (const note of source.notes) {
+    if (note.done || !note.dueDate || note.authorUid !== source.uid) continue
+    if (note.dueDate > now) continue
+    add(`note-${note.id}`, 'lead_stale', 'normal', note.body.slice(0, 80), note.dueDate, null)
   }
 
   const rank: Record<NotificationPriority, number> = {

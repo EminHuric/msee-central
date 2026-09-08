@@ -2,21 +2,19 @@
 /**
  * Finance.
  *
- * Four different questions, kept apart because conflating them is how a
- * company loses track of what it is owed:
+ * One ledger with a type on every row. Income, other income, expense, refund
+ * and transfer are the same kind of fact pointing in different directions, and
+ * keeping them in separate tables meant assembling every total twice and
+ * getting a slightly different answer each time.
  *
- *   Revenue      what the work was worth — read from the client ledger
- *   Invoiced     what we have actually asked to be paid
- *   Collected    what has arrived, from typed payments
- *   Overheads    what we spent on nothing in particular
+ * The rule the page exists to enforce: **an arriving amount is not
+ * automatically revenue.** A refund leaves, a transfer moves between our own
+ * accounts, and only `income` and `other_income` count towards what the
+ * company earned. Choosing the type is required, not inferred.
  *
- * Only overheads, invoices and payments are entered here. Revenue is never
- * typed on this screen: it belongs to the work item that earned it, and a
- * second door into the same number is a second version of it.
- *
- * `type` on a payment exists because not every arriving amount is income. A
- * refund leaves, a transfer moves between our own accounts, and counting
- * either as revenue overstates what the company earned.
+ * Nothing here is marked paid on your behalf either. A pending row is money
+ * expected; folding it into income is how a business talks itself into
+ * spending what it has not been given.
  */
 
 import { computed, onMounted, ref } from 'vue'
@@ -27,60 +25,45 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RankChart from '@/components/ui/RankChart.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
-import { fetchAllWork, saveWorkItem } from '@/api/clientDossier'
+import PeriodPicker from '@/components/PeriodPicker.vue'
+import { fetchAffiliates } from '@/api/affiliates'
 import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
-import { deleteExpense, fetchExpenses, saveExpense, fetchServiceCatalogue } from '@/api/operations'
-import { fetchAffiliates } from '@/api/affiliates'
+import { fetchProjects, fetchServices } from '@/api/operations'
+import { fetchSales, moneyOf } from '@/api/sales'
 import {
-  deletePayment,
-  fetchContracts,
-  fetchInvoices,
-  fetchPayments,
-  fetchSales,
-  invoiceFromWork,
-  invoiceOutstanding,
-  moneyOf,
-  nextInvoiceNumber,
-  saveInvoice,
-  savePayment,
-  setInvoiceStatus,
-} from '@/api/revenue'
+  blankTransaction,
+  deleteTransaction,
+  fetchTransactions,
+  saveTransaction,
+  totalsOf,
+} from '@/api/finance'
 import {
   EMPTY_SNAPSHOT,
-  companyFigures,
-  monthlySeries,
+  incomeByClient,
+  incomeByService,
   periodOf,
   previousPeriod,
-  revenueByClient,
-  revenueByService,
+  seriesOver,
   slice,
+  soldByChannel,
   trend,
-  type PeriodKey,
+  type Period,
   type Snapshot,
 } from '@/api/metrics'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import {
-  EXPENSE_CATEGORIES,
-  type Client,
-  type ExpenseCategory,
-  type ExpenseEntry,
-  type Service,
-  type WorkItem,
-} from '@/types/business'
+import type { Client, Project, Service } from '@/types/business'
 import {
   INCOME_TYPES,
-  INVOICE_STATUSES,
+  PAYMENT_STATES,
+  TRANSACTION_CATEGORIES,
   TRANSACTION_TYPES,
   type Affiliate,
-  type Contract,
-  type Invoice,
-  type InvoiceStatus,
-  type Payment,
   type Sale,
+  type Transaction,
   type TransactionType,
 } from '@/types/revenue'
 import {
@@ -99,31 +82,35 @@ const ui = useUiStore()
 const router = useRouter()
 const { t, locale } = useI18n()
 
-type Tab = 'overview' | 'receivables' | 'invoices' | 'payments' | 'expenses'
+type Tab = 'overview' | 'ledger'
 
 const tab = ref<Tab>('overview')
-const periodKey = ref<PeriodKey>('year')
+const period = ref<Period>(periodOf('month'))
+
 const loading = ref(true)
 const saving = ref(false)
 
-const work = ref<WorkItem[]>([])
-const expenses = ref<ExpenseEntry[]>([])
+const transactions = ref<Transaction[]>([])
+const sales = ref<Sale[]>([])
 const clients = ref<Client[]>([])
 const services = ref<Service[]>([])
-const invoices = ref<Invoice[]>([])
-const payments = ref<Payment[]>([])
-const contracts = ref<Contract[]>([])
-const sales = ref<Sale[]>([])
-const affiliates = ref<Affiliate[]>([])
+const projects = ref<Project[]>([])
 const people = ref<EmployeePublic[]>([])
+const affiliates = ref<Affiliate[]>([])
 
-const pendingExpense = ref<ExpenseEntry | null>(null)
-const pendingPayment = ref<Payment | null>(null)
+const search = ref('')
+const typeFilter = ref<TransactionType | ''>('')
+const statusFilter = ref('')
+const clientFilter = ref('')
 
-const canManage = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_MANAGE))
-const today = new Date().toISOString().slice(0, 10)
+const draft = ref<Transaction | null>(null)
+const draftAmount = ref(0)
+const draftCurrency = ref<CurrencyCode>(BASE_CURRENCY)
+const pendingDelete = ref<Transaction | null>(null)
 
-const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])))
+const canCreate = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_CREATE))
+const canEdit = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_EDIT))
+const canDelete = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_DELETE))
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -132,442 +119,206 @@ function short(minor: number): string {
   return formatMoneyShort(minor, BASE_CURRENCY, locale.value)
 }
 
-/* ---- Derived figures ------------------------------------------------- */
+/* ---- Derived --------------------------------------------------------- */
 
 const snapshot = computed<Snapshot>(() => ({
   ...EMPTY_SNAPSHOT,
   clients: clients.value,
-  work: work.value,
-  expenses: expenses.value,
-  invoices: invoices.value,
-  payments: payments.value,
-  contracts: contracts.value,
-  sales: sales.value,
   services: services.value,
-  affiliates: affiliates.value,
+  sales: sales.value,
+  transactions: transactions.value,
 }))
 
-const period = computed(() => periodOf(periodKey.value))
 const current = computed(() => slice(snapshot.value, period.value))
-const before = computed(() => slice(snapshot.value, previousPeriod(period.value)))
+const earlier = computed(() => slice(snapshot.value, previousPeriod(period.value)))
 
-const figures = computed(() => companyFigures(current.value, snapshot.value))
-const priorFigures = computed(() => companyFigures(before.value, snapshot.value))
+const totals = computed(() => totalsOf(current.value.transactions))
+const before = computed(() => totalsOf(earlier.value.transactions))
 
-const months = computed(() => monthlySeries(snapshot.value, 12))
+const series = computed(() => {
+  const points = seriesOver(current.value, period.value)
+  return {
+    labels: points.map((p) => p.label),
+    money: [
+      { key: 'income', label: t('finance.income'), values: points.map((p) => p.income) },
+      { key: 'expense', label: t('finance.expenses'), values: points.map((p) => p.expense) },
+      { key: 'profit', label: t('finance.profit'), values: points.map((p) => p.profit) },
+    ],
+  }
+})
 
-const moneyChart = computed(() => ({
-  labels: months.value.map((m) => m.label.slice(5)),
-  series: [
-    { key: 'revenue', label: t('finance.revenue'), values: months.value.map((m) => m.revenue) },
-    { key: 'collected', label: t('contracts.paid'), values: months.value.map((m) => m.collected) },
-    { key: 'costs', label: t('finance.overheads'), values: months.value.map((m) => m.overheads + m.cost) },
-  ],
-}))
-
-const byClient = computed(() => revenueByClient(current.value))
-const byService = computed(() => revenueByService(current.value))
-
-const receivables = computed(() =>
-  work.value
-    .filter((w) => w.paymentStatus !== 'paid')
-    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')),
+const byService = computed(() => incomeByService(current.value))
+const byClient = computed(() => incomeByClient(current.value))
+const byChannel = computed(() =>
+  soldByChannel(current.value).map((r) => ({ ...r, label: t(`saleChannel.${r.key}`) })),
 )
-
-const periodExpenses = computed(() => current.value.expenses)
-const periodPayments = computed(() => current.value.payments)
 
 const headline = computed(() => [
   {
-    key: 'revenue',
-    label: t('finance.revenue'),
-    value: money(figures.value.revenueBaseMinor),
-    delta: trend(figures.value.revenueBaseMinor, priorFigures.value.revenueBaseMinor),
+    key: 'income',
+    label: t('finance.income'),
+    value: money(totals.value.incomeBaseMinor),
+    delta: trend(totals.value.incomeBaseMinor, before.value.incomeBaseMinor),
   },
   {
-    key: 'collected',
-    label: t('contracts.paid'),
-    value: money(figures.value.collectedBaseMinor),
-    delta: trend(figures.value.collectedBaseMinor, priorFigures.value.collectedBaseMinor),
+    key: 'expense',
+    label: t('finance.expenses'),
+    value: money(totals.value.expenseBaseMinor),
+    delta: trend(totals.value.expenseBaseMinor, before.value.expenseBaseMinor),
   },
   {
-    key: 'overheads',
-    label: t('finance.overheads'),
-    value: money(figures.value.overheadsBaseMinor),
-    delta: trend(figures.value.overheadsBaseMinor, priorFigures.value.overheadsBaseMinor),
-  },
-  {
-    key: 'net',
-    label: t('finance.netProfit'),
-    value: money(figures.value.netProfitBaseMinor),
-    delta: trend(figures.value.netProfitBaseMinor, priorFigures.value.netProfitBaseMinor),
+    key: 'profit',
+    label: t('finance.profit'),
+    value: money(totals.value.profitBaseMinor),
+    delta: trend(totals.value.profitBaseMinor, before.value.profitBaseMinor),
     accent: true,
-    hint: t('finance.netHint'),
+  },
+  {
+    key: 'pending',
+    label: t('finance.expected'),
+    value: money(totals.value.pendingInBaseMinor),
+    delta: null,
+    hint: t('finance.expectedHint'),
   },
 ])
 
-/* ---- Overheads editor ------------------------------------------------ */
+const ledger = computed(() => {
+  const term = search.value.trim().toLowerCase()
 
-interface ExpenseDraft {
-  id: string
-  description: string
-  amount: number
-  currency: CurrencyCode
-  date: string
-  category: ExpenseCategory
-  recurring: boolean
-}
-
-const expenseDraft = ref<ExpenseDraft | null>(null)
-
-function newExpense(): void {
-  expenseDraft.value = {
-    id: '',
-    description: '',
-    amount: 0,
-    currency: BASE_CURRENCY,
-    date: today,
-    category: 'tools',
-    recurring: false,
-  }
-}
-
-function editExpense(entry: ExpenseEntry): void {
-  expenseDraft.value = {
-    id: entry.id,
-    description: entry.description,
-    amount: fromMinor(entry.amount.minor, entry.amount.currency),
-    currency: entry.amount.currency,
-    date: entry.date,
-    category: entry.category,
-    recurring: entry.recurring ?? false,
-  }
-}
-
-async function commitExpense(): Promise<void> {
-  const d = expenseDraft.value
-  if (!d || saving.value) return
-  if (!d.description.trim()) {
-    ui.notify('danger', t('finance.description'))
-    return
-  }
-
-  saving.value = true
-  try {
-    await saveExpense({
-      id: d.id,
-      projectId: null,
-      clientId: null,
-      description: d.description.trim(),
-      amount: moneyOf(d.amount, d.currency, 1, d.date),
-      date: d.date,
-      category: d.category,
-      recurring: d.recurring,
-    } as ExpenseEntry)
-    ui.notify('ok', t('finance.saved'))
-    expenseDraft.value = null
-    await load()
-  } catch {
-    ui.notify('danger', t('finance.saveFailed'))
-  } finally {
-    saving.value = false
-  }
-}
-
-/* ---- Invoice composer ------------------------------------------------ */
-
-interface InvoiceDraft {
-  clientId: string
-  number: string
-  issueDate: string
-  dueDate: string
-  selected: string[]
-  contractId: string | null
-}
-
-const invoiceDraft = ref<InvoiceDraft | null>(null)
-
-function newInvoice(): void {
-  invoiceDraft.value = {
-    clientId: clients.value[0]?.id ?? '',
-    number: nextInvoiceNumber(invoices.value),
-    issueDate: today,
-    dueDate: new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10),
-    selected: [],
-    contractId: null,
-  }
-}
-
-/** Unpaid work for the chosen client that no invoice already covers. */
-const billable = computed(() => {
-  const d = invoiceDraft.value
-  if (!d?.clientId) return []
-  const billed = new Set(
-    invoices.value.filter((i) => i.status !== 'cancelled').flatMap((i) => i.workItemIds ?? []),
-  )
-  return work.value.filter(
-    (w) => w.clientId === d.clientId && w.paymentStatus !== 'paid' && !billed.has(w.id),
-  )
+  return current.value.transactions
+    .filter((tx) => {
+      if (typeFilter.value && tx.type !== typeFilter.value) return false
+      if (statusFilter.value && tx.status !== statusFilter.value) return false
+      if (clientFilter.value && tx.clientId !== clientFilter.value) return false
+      if (!term) return true
+      return `${tx.description} ${tx.clientName} ${tx.serviceName} ${tx.method}`
+        .toLowerCase()
+        .includes(term)
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
 })
 
-const invoiceTotal = computed(() => {
-  const d = invoiceDraft.value
-  if (!d) return 0
-  return billable.value
-    .filter((w) => d.selected.includes(w.id))
-    .reduce((n, w) => n + w.revenue.baseMinor, 0)
-})
-
-function toggleItem(id: string): void {
-  const list = invoiceDraft.value?.selected
-  if (!list) return
-  const i = list.indexOf(id)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(id)
-}
-
-async function commitInvoice(): Promise<void> {
-  const d = invoiceDraft.value
-  if (!d || saving.value) return
-  if (!d.clientId) {
-    ui.notify('danger', t('invoices.selectClient'))
-    return
-  }
-  if (d.selected.length === 0) {
-    ui.notify('danger', t('invoices.selectItems'))
-    return
-  }
-
-  const items = billable.value.filter((w) => d.selected.includes(w.id))
-
-  saving.value = true
-  try {
-    const invoice = invoiceFromWork(items, {
-      clientId: d.clientId,
-      clientName: clientNames.value.get(d.clientId) ?? '',
-      number: d.number.trim(),
-      issueDate: d.issueDate,
-      dueDate: d.dueDate,
-    })
-
-    await saveInvoice({ ...invoice, contractId: d.contractId })
-
-    /* The work items take the invoice's due date, so one date governs both. */
-    for (const item of items) {
-      await saveWorkItem(d.clientId, clientNames.value.get(d.clientId) ?? '', {
-        id: item.id,
-        date: item.date,
-        title: item.title,
-        serviceId: item.serviceId,
-        serviceName: item.serviceName,
-        projectId: item.projectId ?? null,
-        cost: item.cost,
-        revenue: item.revenue,
-        dueDate: d.dueDate,
-        paymentStatus: item.paymentStatus,
-        paidDate: item.paidDate,
-        note: item.note,
-      })
-    }
-
-    ui.notify('ok', t('invoices.saved'))
-    invoiceDraft.value = null
-    await load()
-  } catch {
-    ui.notify('danger', t('invoices.saveFailed'))
-  } finally {
-    saving.value = false
-  }
-}
-
-/* ---- Payment editor -------------------------------------------------- */
-
-interface PaymentDraft {
-  id: string
-  type: TransactionType
-  description: string
-  amount: number
-  currency: CurrencyCode
-  date: string
-  method: string
-  clientId: string | null
-  invoiceId: string | null
-  saleId: string | null
-  employeeUid: string | null
-  affiliateId: string | null
-  contractId: string | null
-}
-
-const paymentDraft = ref<PaymentDraft | null>(null)
-
-function newPayment(invoice?: Invoice): void {
-  paymentDraft.value = {
-    id: '',
-    type: 'revenue',
-    description: invoice ? invoice.number : '',
-    amount: invoice ? fromMinor(invoiceOutstanding(invoice), BASE_CURRENCY) : 0,
-    currency: BASE_CURRENCY,
-    date: today,
-    method: '',
-    clientId: invoice?.clientId ?? null,
-    invoiceId: invoice?.id ?? null,
-    saleId: null,
-    employeeUid: null,
-    affiliateId: null,
-    contractId: invoice?.contractId ?? null,
-  }
-}
-
-function editPayment(payment: Payment): void {
-  paymentDraft.value = {
-    id: payment.id,
-    type: payment.type,
-    description: payment.description,
-    amount: fromMinor(payment.amount.minor, payment.amount.currency),
-    currency: payment.amount.currency,
-    date: payment.date,
-    method: payment.method ?? '',
-    clientId: payment.clientId,
-    invoiceId: payment.invoiceId,
-    saleId: payment.saleId,
-    employeeUid: payment.employeeUid,
-    affiliateId: payment.affiliateId,
-    contractId: payment.contractId,
-  }
-}
-
-/**
- * Record a payment.
- *
- * Saving credits the invoice and, when an affiliate is named, creates the
- * commission — pending, never approved, because whether somebody is paid is a
- * decision a person makes and a different permission guards it.
- */
-async function commitPayment(): Promise<void> {
-  const d = paymentDraft.value
-  if (!d || saving.value) return
-  if (!d.description.trim()) {
-    ui.notify('danger', t('payments.description'))
-    return
-  }
-
-  saving.value = true
-  try {
-    const invoice = invoices.value.find((i) => i.id === d.invoiceId) ?? null
-    const affiliate = affiliates.value.find((a) => a.id === d.affiliateId) ?? null
-    const sale = sales.value.find((s) => s.id === d.saleId) ?? null
-
-    await savePayment(
-      {
-        id: d.id,
-        invoiceId: d.invoiceId,
-        clientId: d.clientId,
-        clientName: clientNames.value.get(d.clientId ?? '') ?? '',
-        contractId: d.contractId,
-        projectId: null,
-        serviceId: sale?.serviceId ?? invoice?.serviceId ?? null,
-        saleId: d.saleId,
-        employeeUid: d.employeeUid,
-        affiliateId: d.affiliateId,
-        type: d.type,
-        description: d.description.trim(),
-        amount: moneyOf(d.amount, d.currency, 1, d.date),
-        date: d.date,
-        method: d.method.trim(),
-        notes: '',
-      } as Payment,
-      { invoice, affiliate },
-    )
-
-    ui.notify('ok', t('payments.saved'))
-    paymentDraft.value = null
-    await load()
-  } catch {
-    ui.notify('danger', t('payments.saveFailed'))
-  } finally {
-    saving.value = false
-  }
-}
-
-/**
- * Change an invoice's status.
- *
- * Cancelling releases the work it billed: those items become billable again,
- * because the alternative is work that can never be invoiced by anybody.
- */
-async function changeInvoiceStatus(invoice: Invoice, status: InvoiceStatus): Promise<void> {
-  try {
-    await setInvoiceStatus(invoice, status)
-    ui.notify('ok', t('invoices.saved'))
-    await load()
-  } catch {
-    ui.notify('danger', t('invoices.saveFailed'))
-  }
-}
-
-/** Mark one ledger item settled, straight from the receivables list. */
-async function markPaid(item: WorkItem): Promise<void> {
-  const name = clientNames.value.get(item.clientId) ?? ''
-  try {
-    await saveWorkItem(item.clientId, name, {
-      id: item.id,
-      date: item.date,
-      title: item.title,
-      serviceId: item.serviceId,
-      serviceName: item.serviceName,
-      projectId: item.projectId ?? null,
-      cost: item.cost,
-      revenue: item.revenue,
-      dueDate: item.dueDate,
-      paymentStatus: 'paid',
-      paidDate: today,
-      note: item.note,
-    })
-    await load()
-  } catch {
-    ui.notify('danger', t('finance.saveFailed'))
-  }
-}
-
-async function confirmDeleteExpense(): Promise<void> {
-  if (!pendingExpense.value) return
-  await deleteExpense(pendingExpense.value.id)
-  pendingExpense.value = null
-  await load()
-}
-
-async function confirmDeletePayment(): Promise<void> {
-  if (!pendingPayment.value) return
-  await deletePayment(pendingPayment.value)
-  pendingPayment.value = null
-  await load()
-}
+/* ---- Editor ---------------------------------------------------------- */
 
 async function load(): Promise<void> {
   loading.value = true
-  const [w, e, c, inv, pay, ct, sl, aff, sv, ppl] = await Promise.all([
-    fetchAllWork(1000),
-    fetchExpenses().catch(() => []),
-    fetchClients().catch(() => []),
-    fetchInvoices().catch(() => []),
-    fetchPayments().catch(() => []),
-    fetchContracts().catch(() => []),
+  const [tx, sl, c, sv, pr, p, a] = await Promise.all([
+    fetchTransactions(),
     fetchSales().catch(() => []),
-    fetchAffiliates().catch(() => []),
-    fetchServiceCatalogue().catch(() => []),
+    fetchClients().catch(() => []),
+    fetchServices().catch(() => []),
+    fetchProjects().catch(() => []),
     fetchEmployees().catch(() => []),
+    fetchAffiliates().catch(() => []),
   ])
-  work.value = w
-  expenses.value = e
-  clients.value = c
-  invoices.value = inv
-  payments.value = pay
-  contracts.value = ct
+  transactions.value = tx
   sales.value = sl
-  affiliates.value = aff
+  clients.value = c
   services.value = sv
-  people.value = ppl
+  projects.value = pr
+  people.value = p
+  affiliates.value = a
   loading.value = false
+}
+
+function startNew(type: TransactionType = 'income'): void {
+  draft.value = blankTransaction(type)
+  draftAmount.value = 0
+  draftCurrency.value = BASE_CURRENCY
+  tab.value = 'ledger'
+}
+
+function startEdit(tx: Transaction): void {
+  draft.value = { ...tx }
+  draftAmount.value = fromMinor(tx.amount.minor, tx.amount.currency)
+  draftCurrency.value = tx.amount.currency
+}
+
+function onClientChange(id: string): void {
+  if (!draft.value) return
+  draft.value.clientId = id || null
+  draft.value.clientName = clients.value.find((c) => c.id === id)?.name ?? ''
+}
+
+function onServiceChange(id: string): void {
+  if (!draft.value) return
+  draft.value.serviceId = id || null
+  draft.value.serviceName = services.value.find((s) => s.id === id)?.name ?? ''
+}
+
+function onEmployeeChange(uid: string): void {
+  if (!draft.value) return
+  const person = people.value.find((p) => p.uid === uid)
+  draft.value.employeeUid = uid || null
+  draft.value.employeeName = person ? `${person.firstName} ${person.lastName}` : ''
+}
+
+/** Choosing a sale fills the client, service and a sensible description. */
+function onSaleChange(id: string): void {
+  const d = draft.value
+  if (!d) return
+
+  d.saleId = id || null
+  const sale = sales.value.find((s) => s.id === id)
+  if (!sale) return
+
+  d.clientId = sale.clientId
+  d.clientName = sale.clientName
+  d.serviceId = sale.serviceId
+  d.serviceName = sale.serviceName
+  d.projectId = sale.projectId
+  d.affiliateId = sale.affiliateId
+  d.employeeUid = sale.ownerUid
+  d.employeeName = sale.ownerName
+  if (!d.description) d.description = sale.title
+}
+
+async function commit(): Promise<void> {
+  const d = draft.value
+  if (!d || saving.value) return
+  if (!d.description.trim()) {
+    ui.notify('danger', t('finance.descriptionRequired'))
+    return
+  }
+
+  const sale = sales.value.find((s) => s.id === d.saleId) ?? null
+  const affiliate = affiliates.value.find((a) => a.id === d.affiliateId) ?? null
+
+  saving.value = true
+  try {
+    await saveTransaction(
+      {
+        ...d,
+        description: d.description.trim(),
+        amount: moneyOf(draftAmount.value, draftCurrency.value, 1, d.date),
+      },
+      { sale, affiliate, existing: transactions.value },
+    )
+    ui.notify('ok', t('finance.saved'))
+    draft.value = null
+    await load()
+  } catch {
+    ui.notify('danger', t('finance.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+/** Marking something paid is the act that turns expected money into income. */
+async function markPaid(tx: Transaction): Promise<void> {
+  const sale = sales.value.find((s) => s.id === tx.saleId) ?? null
+  const affiliate = affiliates.value.find((a) => a.id === tx.affiliateId) ?? null
+
+  await saveTransaction({ ...tx, status: 'paid' }, { sale, affiliate, existing: transactions.value })
+  await load()
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!pendingDelete.value) return
+  await deleteTransaction(pendingDelete.value)
+  ui.notify('ok', t('recycle.movedToBin'))
+  pendingDelete.value = null
+  await load()
 }
 
 onMounted(load)
@@ -580,22 +331,19 @@ onMounted(load)
         <h1 class="page-title">{{ t('finance.title') }}</h1>
         <p class="page-subtitle">{{ t('finance.subtitle') }}</p>
       </div>
-      <div v-if="canManage" class="head-actions">
-        <button v-if="tab === 'expenses'" class="btn btn-primary" @click="newExpense">
-          <AppIcon name="plus" :size="16" /> {{ t('finance.newExpense') }}
+      <div v-if="canCreate" class="head-actions">
+        <button class="btn btn-secondary" @click="startNew('expense')">
+          <AppIcon name="minus" :size="15" /> {{ t('finance.newExpense') }}
         </button>
-        <button v-else-if="tab === 'invoices'" class="btn btn-primary" @click="newInvoice">
-          <AppIcon name="plus" :size="16" /> {{ t('invoices.newInvoice') }}
-        </button>
-        <button v-else-if="tab === 'payments'" class="btn btn-primary" @click="newPayment()">
-          <AppIcon name="plus" :size="16" /> {{ t('payments.newPayment') }}
+        <button class="btn btn-primary" @click="startNew('income')">
+          <AppIcon name="plus" :size="16" /> {{ t('finance.newIncome') }}
         </button>
       </div>
     </header>
 
     <div class="tabs" role="tablist">
       <button
-        v-for="key in (['overview', 'receivables', 'invoices', 'payments', 'expenses'] as Tab[])"
+        v-for="key in (['overview', 'ledger'] as Tab[])"
         :key="key"
         type="button"
         role="tab"
@@ -604,33 +352,11 @@ onMounted(load)
         :aria-selected="tab === key"
         @click="tab = key"
       >
-        {{
-          key === 'overview'
-            ? t('finance.tabOverview')
-            : key === 'receivables'
-              ? t('finance.outstanding')
-              : key === 'invoices'
-                ? t('invoices.title')
-                : key === 'payments'
-                  ? t('payments.title')
-                  : t('finance.tabExpenses')
-        }}
+        {{ key === 'overview' ? t('finance.tabOverview') : t('finance.tabLedger') }}
       </button>
     </div>
 
-    <div class="toolbar">
-      <div class="segmented">
-        <button
-          v-for="key in (['month', 'quarter', 'year', 'all'] as PeriodKey[])"
-          :key="key"
-          type="button"
-          :class="{ 'is-on': periodKey === key }"
-          @click="periodKey = key"
-        >
-          {{ t(`period.${key}`) }}
-        </button>
-      </div>
-    </div>
+    <PeriodPicker v-model="period" />
 
     <div v-if="loading" class="card">
       <div class="card-body stack">
@@ -659,41 +385,50 @@ onMounted(load)
 
       <div class="figures two">
         <article class="card figure">
-          <span class="figure-label">{{ t('finance.outstanding') }}</span>
-          <span class="figure-value">{{ money(figures.outstandingBaseMinor) }}</span>
-        </article>
-        <article class="card figure">
           <span class="figure-label">{{ t('finance.overdue') }}</span>
-          <span class="figure-value" :class="{ neg: figures.overdueBaseMinor > 0 }">
-            {{ money(figures.overdueBaseMinor) }}
+          <span class="figure-value" :class="{ neg: totals.overdueBaseMinor > 0 }">
+            {{ money(totals.overdueBaseMinor) }}
           </span>
         </article>
         <article class="card figure">
-          <span class="figure-label">{{ t('dashboard.cashFlow') }}</span>
-          <span class="figure-value" :class="figures.cashFlowBaseMinor >= 0 ? 'pos' : 'neg'">
-            {{ money(figures.cashFlowBaseMinor) }}
-          </span>
+          <span class="figure-label">{{ t('finance.pendingOut') }}</span>
+          <span class="figure-value">{{ money(totals.pendingOutBaseMinor) }}</span>
         </article>
       </div>
 
-      <!-- Overview ------------------------------------------------------ -->
+      <!-- Overview ---------------------------------------------------- -->
       <template v-if="tab === 'overview'">
         <section class="card">
           <div class="card-header">
-            <h2 class="card-title">{{ t('finance.byMonth') }}</h2>
+            <h2 class="card-title">{{ t('finance.overTime') }}</h2>
           </div>
           <div class="card-body">
             <TimeChart
-              :labels="moneyChart.labels"
-              :series="moneyChart.series"
+              :labels="series.labels"
+              :series="series.money"
               :format="money"
-              :height="210"
+              :height="220"
               :area="false"
             />
           </div>
         </section>
 
         <div class="pair">
+          <section class="card">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('finance.byService') }}</h2>
+            </div>
+            <div class="card-body">
+              <RankChart
+                v-if="byService.length"
+                :rows="byService"
+                :format="short"
+                :other-label="t('analytics.unattributed')"
+              />
+              <p v-else class="tertiary small">{{ t('finance.empty') }}</p>
+            </div>
+          </section>
+
           <section class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('finance.byClient') }}</h2>
@@ -706,236 +441,24 @@ onMounted(load)
 
           <section class="card">
             <div class="card-header">
-              <h2 class="card-title">{{ t('finance.byService') }}</h2>
+              <h2 class="card-title">{{ t('finance.bySource') }}</h2>
             </div>
             <div class="card-body">
-              <RankChart v-if="byService.length" :rows="byService" :format="short" />
-              <p v-else class="tertiary small">{{ t('finance.emptyHint') }}</p>
+              <RankChart v-if="byChannel.length" :rows="byChannel" :format="short" />
+              <p v-else class="tertiary small">{{ t('finance.empty') }}</p>
             </div>
           </section>
         </div>
       </template>
 
-      <!-- Receivables --------------------------------------------------- -->
-      <template v-else-if="tab === 'receivables'">
-        <div v-if="receivables.length === 0" class="card">
-          <div class="empty">
-            <span class="empty-icon"><AppIcon name="check" :size="20" /></span>
-            <p class="empty-title">{{ t('finance.empty') }}</p>
-            <p class="empty-text">{{ t('finance.emptyHint') }}</p>
-          </div>
-        </div>
-
-        <section v-else class="card">
-          <div class="card-header">
-            <h2 class="card-title">{{ t('finance.outstanding') }}</h2>
-            <span class="badge badge-plain">{{ receivables.length }}</span>
-          </div>
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>{{ t('dossier.itemTitle') }}</th>
-                  <th>{{ t('table.client') }}</th>
-                  <th>{{ t('table.dueDate') }}</th>
-                  <th class="num">{{ t('table.amount') }}</th>
-                  <th class="col-actions" />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in receivables" :key="item.id">
-                  <td>{{ item.title }}</td>
-                  <td>
-                    <button type="button" class="link" @click="router.push(`/clients/${item.clientId}`)">
-                      {{ clientNames.get(item.clientId) ?? item.clientId }}
-                    </button>
-                  </td>
-                  <td :class="{ late: item.dueDate && item.dueDate < today }">
-                    {{ item.dueDate ? formatDate(item.dueDate) : '—' }}
-                  </td>
-                  <td class="num strong">{{ money(item.revenue.baseMinor) }}</td>
-                  <td class="col-actions">
-                    <button v-if="canManage" class="btn btn-secondary btn-sm" @click="markPaid(item)">
-                      {{ t('contracts.paid') }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
-
-      <!-- Invoices ------------------------------------------------------ -->
-      <template v-else-if="tab === 'invoices'">
-        <section v-if="invoiceDraft" class="card editor">
-          <div class="card-header">
-            <h2 class="card-title">{{ t('invoices.newInvoice') }}</h2>
-            <button
-              class="btn btn-ghost btn-icon"
-              :aria-label="t('common.close')"
-              @click="invoiceDraft = null"
-            >
-              <AppIcon name="close" :size="18" />
-            </button>
-          </div>
-
-          <div class="card-body stack">
-            <div class="field-grid">
-              <div class="field">
-                <label class="field-label" for="i-client">{{ t('table.client') }}</label>
-                <select id="i-client" v-model="invoiceDraft.clientId" class="select">
-                  <option value="">—</option>
-                  <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
-              </div>
-              <div class="field">
-                <label class="field-label" for="i-number">{{ t('invoices.number') }}</label>
-                <input id="i-number" v-model="invoiceDraft.number" class="input" :maxlength="LIMITS.name" />
-              </div>
-              <div class="field">
-                <label class="field-label" for="i-issue">{{ t('invoices.issueDate') }}</label>
-                <input id="i-issue" v-model="invoiceDraft.issueDate" class="input" type="date" />
-              </div>
-              <div class="field">
-                <label class="field-label" for="i-due">{{ t('invoices.dueDate') }}</label>
-                <input id="i-due" v-model="invoiceDraft.dueDate" class="input" type="date" />
-              </div>
-              <div v-if="contracts.length" class="field">
-                <label class="field-label" for="i-contract">{{ t('contracts.title') }}</label>
-                <select id="i-contract" v-model="invoiceDraft.contractId" class="select">
-                  <option :value="null">—</option>
-                  <option
-                    v-for="c in contracts.filter((x) => x.clientId === invoiceDraft!.clientId)"
-                    :key="c.id"
-                    :value="c.id"
-                  >
-                    {{ c.number }}
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <div class="field">
-              <span class="field-label">{{ t('invoices.billable') }}</span>
-              <p class="field-hint">{{ t('invoices.billableHint') }}</p>
-
-              <p v-if="billable.length === 0" class="tertiary small pad">
-                {{ t('invoices.nothingBillable') }}
-              </p>
-
-              <ul v-else class="billable">
-                <li v-for="item in billable" :key="item.id">
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      :checked="invoiceDraft.selected.includes(item.id)"
-                      @change="toggleItem(item.id)"
-                    />
-                    <span class="check-text">
-                      {{ item.title }}
-                      <span class="tertiary">· {{ formatDate(item.date) }}</span>
-                    </span>
-                  </label>
-                  <span class="num strong">{{ money(item.revenue.baseMinor) }}</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="card-footer">
-            <span class="total">{{ t('invoices.amount') }}: <strong>{{ money(invoiceTotal) }}</strong></span>
-            <span class="spacer" />
-            <button class="btn btn-secondary" @click="invoiceDraft = null">{{ t('common.cancel') }}</button>
-            <button class="btn btn-primary" :disabled="saving" @click="commitInvoice">
-              <span v-if="saving" class="spinner" />{{ t('common.save') }}
-            </button>
-          </div>
-        </section>
-
-        <div v-if="invoices.length === 0" class="card">
-          <div class="empty">
-            <span class="empty-icon"><AppIcon name="contract" :size="20" /></span>
-            <p class="empty-title">{{ t('invoices.empty') }}</p>
-            <p class="empty-text">{{ t('invoices.emptyHint') }}</p>
-            <button v-if="canManage" class="btn btn-primary" @click="newInvoice">
-              {{ t('invoices.newInvoice') }}
-            </button>
-          </div>
-        </div>
-
-        <section v-else class="card">
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>{{ t('invoices.number') }}</th>
-                  <th>{{ t('table.client') }}</th>
-                  <th>{{ t('invoices.dueDate') }}</th>
-                  <th class="num">{{ t('invoices.amount') }}</th>
-                  <th class="num">{{ t('invoices.paid') }}</th>
-                  <th class="num">{{ t('invoices.outstanding') }}</th>
-                  <th>{{ t('table.status') }}</th>
-                  <th class="col-actions" />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="inv in invoices" :key="inv.id">
-                  <td class="strong">{{ inv.number }}</td>
-                  <td class="muted">{{ inv.clientName }}</td>
-                  <td class="muted nowrap" :class="{ late: inv.dueDate < today && inv.status !== 'paid' }">
-                    {{ formatDate(inv.dueDate) }}
-                  </td>
-                  <td class="num">{{ money(inv.amount.baseMinor) }}</td>
-                  <td class="num pos">{{ money(inv.paidBaseMinor ?? 0) }}</td>
-                  <td class="num" :class="{ neg: invoiceOutstanding(inv) > 0 }">
-                    {{ money(invoiceOutstanding(inv)) }}
-                  </td>
-                  <td>
-                    <select
-                      v-if="canManage"
-                      class="select tiny"
-                      :class="`iv-${inv.status}`"
-                      :value="inv.status"
-                      :aria-label="t('table.status')"
-                      @change="changeInvoiceStatus(inv, ($event.target as HTMLSelectElement).value as InvoiceStatus)"
-                    >
-                      <option v-for="st in INVOICE_STATUSES" :key="st" :value="st">
-                        {{ t(`invoiceStatus.${st}`) }}
-                      </option>
-                    </select>
-                    <span v-else class="badge" :class="`iv-${inv.status}`">
-                      {{ t(`invoiceStatus.${inv.status}`) }}
-                    </span>
-                  </td>
-                  <td class="col-actions">
-                    <button
-                      v-if="canManage && invoiceOutstanding(inv) > 0"
-                      class="btn btn-secondary btn-sm"
-                      @click="((tab = 'payments'), newPayment(inv))"
-                    >
-                      {{ t('invoices.recordPayment') }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
-
-      <!-- Payments ------------------------------------------------------ -->
-      <template v-else-if="tab === 'payments'">
-        <section v-if="paymentDraft" class="card editor">
+      <!-- Ledger ------------------------------------------------------ -->
+      <template v-else>
+        <section v-if="draft" class="card editor">
           <div class="card-header">
             <h2 class="card-title">
-              {{ paymentDraft.id ? t('payments.editPayment') : t('payments.newPayment') }}
+              {{ draft.id ? t('finance.editRecord') : t('finance.newRecord') }}
             </h2>
-            <button
-              class="btn btn-ghost btn-icon"
-              :aria-label="t('common.close')"
-              @click="paymentDraft = null"
-            >
+            <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
               <AppIcon name="close" :size="18" />
             </button>
           </div>
@@ -943,223 +466,187 @@ onMounted(load)
           <div class="card-body stack">
             <div class="field-grid">
               <div class="field">
-                <label class="field-label" for="p-type">{{ t('payments.type') }}</label>
-                <select id="p-type" v-model="paymentDraft.type" class="select">
+                <label class="field-label" for="f-type">{{ t('finance.type') }}</label>
+                <select id="f-type" v-model="draft.type" class="select">
                   <option v-for="ty in TRANSACTION_TYPES" :key="ty" :value="ty">
                     {{ t(`transactionType.${ty}`) }}
                   </option>
                 </select>
-                <p class="field-hint">{{ t('payments.typeHint') }}</p>
+                <p class="field-hint">{{ t('finance.typeHint') }}</p>
               </div>
 
               <div class="field">
-                <label class="field-label" for="p-desc">
-                  {{ t('payments.description') }}<span class="req">*</span>
+                <label class="field-label" for="f-desc">
+                  {{ t('finance.description') }}<span class="req">*</span>
                 </label>
-                <input id="p-desc" v-model="paymentDraft.description" class="input" :maxlength="LIMITS.position" />
+                <input id="f-desc" v-model="draft.description" class="input" :maxlength="LIMITS.position" />
               </div>
 
               <div class="field">
-                <label class="field-label" for="p-amount">{{ t('payments.amount') }}</label>
-                <input id="p-amount" v-model.number="paymentDraft.amount" class="input" type="number" step="0.01" />
+                <label class="field-label" for="f-amount">{{ t('finance.amount') }}</label>
+                <input id="f-amount" v-model.number="draftAmount" class="input" type="number" step="0.01" />
               </div>
 
               <div class="field">
-                <label class="field-label" for="p-cur">{{ t('table.type') }}</label>
-                <select id="p-cur" v-model="paymentDraft.currency" class="select">
+                <label class="field-label" for="f-cur">{{ t('finance.currency') }}</label>
+                <select id="f-cur" v-model="draftCurrency" class="select">
                   <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
                 </select>
               </div>
 
               <div class="field">
-                <label class="field-label" for="p-date">{{ t('payments.date') }}</label>
-                <input id="p-date" v-model="paymentDraft.date" class="input" type="date" />
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="p-method">{{ t('payments.method') }}</label>
-                <input id="p-method" v-model="paymentDraft.method" class="input" :maxlength="LIMITS.name" />
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="p-client">{{ t('payments.client') }}</label>
-                <select id="p-client" v-model="paymentDraft.clientId" class="select">
-                  <option :value="null">—</option>
-                  <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
-              </div>
-
-              <div v-if="invoices.length" class="field">
-                <label class="field-label" for="p-inv">{{ t('payments.invoice') }}</label>
-                <select id="p-inv" v-model="paymentDraft.invoiceId" class="select">
-                  <option :value="null">—</option>
-                  <option v-for="i in invoices" :key="i.id" :value="i.id">
-                    {{ i.number }} · {{ i.clientName }}
+                <label class="field-label" for="f-cat">{{ t('finance.category') }}</label>
+                <select id="f-cat" v-model="draft.category" class="select">
+                  <option v-for="c in TRANSACTION_CATEGORIES" :key="c" :value="c">
+                    {{ t(`transactionCategory.${c}`) }}
                   </option>
                 </select>
               </div>
 
+              <div class="field">
+                <label class="field-label" for="f-date">{{ t('finance.date') }}</label>
+                <input id="f-date" v-model="draft.date" class="input" type="date" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="f-status">{{ t('finance.paymentStatus') }}</label>
+                <select id="f-status" v-model="draft.status" class="select">
+                  <option v-for="s in PAYMENT_STATES" :key="s" :value="s">
+                    {{ t(`payState.${s}`) }}
+                  </option>
+                </select>
+              </div>
+
+              <div v-if="draft.status !== 'paid'" class="field">
+                <label class="field-label" for="f-due">{{ t('finance.dueDate') }}</label>
+                <input id="f-due" v-model="draft.dueDate" class="input" type="date" />
+              </div>
+
               <div v-if="sales.length" class="field">
-                <label class="field-label" for="p-sale">{{ t('payments.sale') }}</label>
-                <select id="p-sale" v-model="paymentDraft.saleId" class="select">
-                  <option :value="null">—</option>
-                  <option v-for="s in sales" :key="s.id" :value="s.id">{{ s.title }}</option>
+                <label class="field-label" for="f-sale">{{ t('finance.sale') }}</label>
+                <select
+                  id="f-sale"
+                  :value="draft.saleId ?? ''"
+                  class="select"
+                  @change="onSaleChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option v-for="s in sales" :key="s.id" :value="s.id">
+                    {{ s.title }} · {{ s.clientName }}
+                  </option>
                 </select>
               </div>
 
               <div class="field">
-                <label class="field-label" for="p-emp">{{ t('payments.employee') }}</label>
-                <select id="p-emp" v-model="paymentDraft.employeeUid" class="select">
+                <label class="field-label" for="f-client">{{ t('table.client') }}</label>
+                <select
+                  id="f-client"
+                  :value="draft.clientId ?? ''"
+                  class="select"
+                  @change="onClientChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="f-service">{{ t('table.service') }}</label>
+                <select
+                  id="f-service"
+                  :value="draft.serviceId ?? ''"
+                  class="select"
+                  @change="onServiceChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                </select>
+              </div>
+
+              <div v-if="projects.length" class="field">
+                <label class="field-label" for="f-project">{{ t('table.project') }}</label>
+                <select id="f-project" v-model="draft.projectId" class="select">
                   <option :value="null">—</option>
+                  <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="f-emp">{{ t('table.employee') }}</label>
+                <select
+                  id="f-emp"
+                  :value="draft.employeeUid ?? ''"
+                  class="select"
+                  @change="onEmployeeChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
                   <option v-for="p in people" :key="p.uid" :value="p.uid">
                     {{ p.firstName }} {{ p.lastName }}
                   </option>
                 </select>
               </div>
 
-              <div v-if="affiliates.length" class="field">
-                <label class="field-label" for="p-aff">{{ t('payments.affiliate') }}</label>
-                <select id="p-aff" v-model="paymentDraft.affiliateId" class="select">
-                  <option :value="null">—</option>
-                  <option v-for="a in affiliates" :key="a.id" :value="a.id">{{ a.name }}</option>
-                </select>
-                <p class="field-hint">{{ t('payments.affiliateHint') }}</p>
+              <div class="field">
+                <label class="field-label" for="f-method">{{ t('finance.method') }}</label>
+                <input id="f-method" v-model="draft.method" class="input" :maxlength="LIMITS.name" />
               </div>
             </div>
+
+            <div class="field">
+              <label class="field-label" for="f-notes">{{ t('clients.notes') }}</label>
+              <textarea id="f-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+            </div>
+
+            <p v-if="draft.saleId && draft.affiliateId" class="field-hint warn">
+              {{ t('sales.commissionHint') }}
+            </p>
           </div>
 
           <div class="card-footer">
-            <button class="btn btn-secondary" @click="paymentDraft = null">{{ t('common.cancel') }}</button>
-            <button class="btn btn-primary" :disabled="saving" @click="commitPayment">
+            <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving" @click="commit">
               <span v-if="saving" class="spinner" />{{ t('common.save') }}
             </button>
           </div>
         </section>
 
-        <div v-if="periodPayments.length === 0" class="card">
-          <div class="empty">
-            <span class="empty-icon"><AppIcon name="wallet" :size="20" /></span>
-            <p class="empty-title">{{ t('payments.empty') }}</p>
-            <p class="empty-text">{{ t('payments.emptyHint') }}</p>
-            <button v-if="canManage" class="btn btn-primary" @click="newPayment()">
-              {{ t('payments.newPayment') }}
-            </button>
+        <div class="toolbar">
+          <div class="search toolbar-grow">
+            <AppIcon name="search" :size="16" class="search-icon" />
+            <input
+              v-model="search"
+              class="input search-input"
+              type="search"
+              :placeholder="t('common.searchPlaceholder')"
+              :aria-label="t('common.search')"
+            />
           </div>
+
+          <select v-model="typeFilter" class="select compact" :aria-label="t('finance.type')">
+            <option value="">{{ t('finance.allTypes') }}</option>
+            <option v-for="ty in TRANSACTION_TYPES" :key="ty" :value="ty">
+              {{ t(`transactionType.${ty}`) }}
+            </option>
+          </select>
+
+          <select v-model="statusFilter" class="select compact" :aria-label="t('table.status')">
+            <option value="">{{ t('clients.allStatuses') }}</option>
+            <option v-for="s in PAYMENT_STATES" :key="s" :value="s">{{ t(`payState.${s}`) }}</option>
+          </select>
+
+          <select v-model="clientFilter" class="select compact" :aria-label="t('table.client')">
+            <option value="">{{ t('finance.allClients') }}</option>
+            <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
         </div>
 
-        <section v-else class="card">
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>{{ t('payments.date') }}</th>
-                  <th>{{ t('payments.description') }}</th>
-                  <th>{{ t('payments.type') }}</th>
-                  <th>{{ t('table.client') }}</th>
-                  <th class="num">{{ t('table.amount') }}</th>
-                  <th class="col-actions" />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="p in periodPayments" :key="p.id">
-                  <td class="muted nowrap">{{ formatDate(p.date) }}</td>
-                  <td>{{ p.description }}</td>
-                  <td>
-                    <span class="badge badge-plain">{{ t(`transactionType.${p.type}`) }}</span>
-                  </td>
-                  <td class="muted">{{ p.clientName || '—' }}</td>
-                  <td class="num strong" :class="INCOME_TYPES.includes(p.type) ? 'pos' : 'neg'">
-                    {{ money(p.amount.baseMinor) }}
-                  </td>
-                  <td class="col-actions">
-                    <button v-if="canManage" class="btn btn-ghost btn-sm" @click="editPayment(p)">
-                      <AppIcon name="edit" :size="14" />
-                    </button>
-                    <button
-                      v-if="canManage"
-                      class="btn btn-ghost btn-sm danger"
-                      :aria-label="t('common.delete')"
-                      @click="pendingPayment = p"
-                    >
-                      <AppIcon name="trash" :size="14" />
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
-
-      <!-- Overheads ----------------------------------------------------- -->
-      <template v-else>
-        <section v-if="expenseDraft" class="card editor">
-          <div class="card-header">
-            <h2 class="card-title">
-              {{ expenseDraft.id ? t('finance.editExpense') : t('finance.newExpense') }}
-            </h2>
-            <button
-              class="btn btn-ghost btn-icon"
-              :aria-label="t('common.close')"
-              @click="expenseDraft = null"
-            >
-              <AppIcon name="close" :size="18" />
-            </button>
-          </div>
-
-          <div class="card-body stack">
-            <p class="field-hint">{{ t('finance.expenseHint') }}</p>
-            <div class="field-grid">
-              <div class="field">
-                <label class="field-label" for="e-desc">
-                  {{ t('finance.description') }}<span class="req">*</span>
-                </label>
-                <input id="e-desc" v-model="expenseDraft.description" class="input" :maxlength="LIMITS.position" />
-              </div>
-              <div class="field">
-                <label class="field-label" for="e-amount">{{ t('finance.amount') }}</label>
-                <input id="e-amount" v-model.number="expenseDraft.amount" class="input" type="number" step="0.01" />
-              </div>
-              <div class="field">
-                <label class="field-label" for="e-cur">{{ t('table.type') }}</label>
-                <select id="e-cur" v-model="expenseDraft.currency" class="select">
-                  <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-                </select>
-              </div>
-              <div class="field">
-                <label class="field-label" for="e-date">{{ t('finance.date') }}</label>
-                <input id="e-date" v-model="expenseDraft.date" class="input" type="date" />
-              </div>
-              <div class="field">
-                <label class="field-label" for="e-cat">{{ t('finance.category') }}</label>
-                <select id="e-cat" v-model="expenseDraft.category" class="select">
-                  <option v-for="c in EXPENSE_CATEGORIES" :key="c" :value="c">
-                    {{ t(`expenseCategory.${c}`) }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <label class="check">
-              <input v-model="expenseDraft.recurring" type="checkbox" />
-              <span class="check-text">{{ t('finance.recurring') }}</span>
-            </label>
-          </div>
-
-          <div class="card-footer">
-            <button class="btn btn-secondary" @click="expenseDraft = null">{{ t('common.cancel') }}</button>
-            <button class="btn btn-primary" :disabled="saving" @click="commitExpense">
-              <span v-if="saving" class="spinner" />{{ t('common.save') }}
-            </button>
-          </div>
-        </section>
-
-        <div v-if="periodExpenses.length === 0" class="card">
+        <div v-if="ledger.length === 0" class="card">
           <div class="empty">
             <span class="empty-icon"><AppIcon name="wallet" :size="20" /></span>
-            <p class="empty-title">{{ t('finance.noExpenses') }}</p>
-            <p class="empty-text">{{ t('finance.expenseHint') }}</p>
-            <button v-if="canManage" class="btn btn-primary" @click="newExpense">
-              {{ t('finance.newExpense') }}
+            <p class="empty-title">{{ t('finance.empty') }}</p>
+            <p class="empty-text">{{ t('finance.emptyHint') }}</p>
+            <button v-if="canCreate" class="btn btn-primary" @click="startNew('income')">
+              {{ t('finance.newIncome') }}
             </button>
           </div>
         </div>
@@ -1171,106 +658,130 @@ onMounted(load)
                 <tr>
                   <th>{{ t('finance.date') }}</th>
                   <th>{{ t('finance.description') }}</th>
-                  <th>{{ t('finance.category') }}</th>
-                  <th class="num">{{ t('finance.amount') }}</th>
+                  <th class="hide-sm">{{ t('finance.type') }}</th>
+                  <th class="hide-md">{{ t('finance.category') }}</th>
+                  <th class="hide-md">{{ t('table.client') }}</th>
+                  <th>{{ t('table.status') }}</th>
+                  <th class="num">{{ t('table.amount') }}</th>
                   <th class="col-actions" />
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="entry in periodExpenses" :key="entry.id">
-                  <td class="muted nowrap">{{ formatDate(entry.date) }}</td>
+                <tr v-for="tx in ledger" :key="tx.id">
+                  <td class="muted nowrap">{{ formatDate(tx.date) }}</td>
+                  <td>{{ tx.description }}</td>
+                  <td class="hide-sm">
+                    <span class="badge badge-plain">{{ t(`transactionType.${tx.type}`) }}</span>
+                  </td>
+                  <td class="hide-md muted">{{ t(`transactionCategory.${tx.category}`) }}</td>
+                  <td class="hide-md">
+                    <button
+                      v-if="tx.clientId"
+                      type="button"
+                      class="link-quiet"
+                      @click="router.push(`/clients/${tx.clientId}`)"
+                    >
+                      {{ tx.clientName }}
+                    </button>
+                    <span v-else class="tertiary">—</span>
+                  </td>
                   <td>
-                    {{ entry.description }}
-                    <span v-if="entry.recurring" class="badge badge-plain tiny">
-                      {{ t('finance.recurring') }}
+                    <span class="badge" :class="`ps-${tx.status}`">
+                      {{ t(`payState.${tx.status}`) }}
+                    </span>
+                    <span v-if="tx.dueDate && tx.status !== 'paid'" class="tertiary small block">
+                      {{ formatDate(tx.dueDate) }}
                     </span>
                   </td>
-                  <td class="muted">{{ t(`expenseCategory.${entry.category}`) }}</td>
-                  <td class="num strong">{{ money(entry.amount.baseMinor) }}</td>
+                  <td class="num strong" :class="INCOME_TYPES.includes(tx.type) ? 'pos' : 'neg'">
+                    {{ money(tx.amount.baseMinor) }}
+                  </td>
                   <td class="col-actions">
-                    <button v-if="canManage" class="btn btn-ghost btn-sm" @click="editExpense(entry)">
-                      <AppIcon name="edit" :size="14" />
+                    <button
+                      v-if="canEdit && tx.status !== 'paid'"
+                      class="btn btn-secondary btn-sm"
+                      @click="markPaid(tx)"
+                    >
+                      {{ t('finance.markPaid') }}
                     </button>
                     <button
-                      v-if="canManage"
+                      v-if="canEdit"
+                      class="btn btn-ghost btn-sm"
+                      :aria-label="t('common.edit')"
+                      @click="startEdit(tx)"
+                    >
+                      <AppIcon name="edit" :size="15" />
+                    </button>
+                    <button
+                      v-if="canDelete"
                       class="btn btn-ghost btn-sm danger"
                       :aria-label="t('common.delete')"
-                      @click="pendingExpense = entry"
+                      @click="pendingDelete = tx"
                     >
-                      <AppIcon name="trash" :size="14" />
+                      <AppIcon name="trash" :size="15" />
                     </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <p class="card-body tertiary small">{{ ledger.length }}</p>
         </section>
       </template>
     </template>
 
     <ConfirmDialog
-      :open="pendingExpense !== null"
-      :title="t('finance.deleteExpense')"
-      :message="pendingExpense?.description ?? ''"
+      :open="pendingDelete !== null"
+      :title="t('finance.deleteRecord')"
+      :message="t('recycle.deleteExplain')"
       danger
-      @confirm="confirmDeleteExpense"
-      @cancel="pendingExpense = null"
-    />
-
-    <ConfirmDialog
-      :open="pendingPayment !== null"
-      :title="t('payments.deletePayment')"
-      :message="t('payments.deleteText')"
-      danger
-      @confirm="confirmDeletePayment"
-      @cancel="pendingPayment = null"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
     />
   </div>
 </template>
 
 <style scoped>
-.head-actions { display: flex; gap: var(--space-2); }
-.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
-.tab { padding: var(--space-3) var(--space-4); border-bottom: 2px solid transparent; font-size: var(--text-base); font-weight: 550; color: var(--text-secondary); white-space: nowrap; }
+.head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
+.tab { padding: var(--space-3) var(--space-4); border-bottom: 2px solid transparent; font-size: var(--text-base); font-weight: 550; color: var(--text-secondary); }
 .tab:hover { color: var(--text-primary); }
 .tab.is-active { color: var(--text-brand); border-bottom-color: var(--accent); }
 
-.segmented { display: inline-flex; padding: 2px; gap: 2px; background: var(--bg-inset); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
-.segmented button { padding: 0 var(--space-3); height: 30px; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 550; color: var(--text-tertiary); }
-.segmented button.is-on { background: var(--bg-surface-3); color: var(--text-primary); box-shadow: var(--shadow-sm); }
-
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); }
-.figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) var(--space-5); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure.is-accent { border-color: var(--accent-soft-border); background: var(--accent-soft-bg); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
-.figure-value { font-size: var(--text-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 .figure-hint { font-size: var(--text-xs); color: var(--text-tertiary); line-height: var(--leading-relaxed); }
 .delta { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); font-weight: 600; }
 
-.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); }
 .editor { border-color: var(--accent-soft-border); }
-.spacer { flex: 1; }
-.total { font-size: var(--text-sm); color: var(--text-secondary); }
-.total strong { color: var(--text-brand); font-variant-numeric: tabular-nums; }
-.pad { padding: var(--space-3) 0; }
 
-.billable { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
-.billable li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border-subtle); }
-.billable li:last-child { border-bottom: none; }
+.search { position: relative; display: flex; align-items: center; }
+.search-icon { position: absolute; left: var(--space-3); color: var(--text-tertiary); pointer-events: none; }
+.search-input { padding-left: calc(var(--space-3) * 2 + 16px); }
+.select.compact { max-width: 170px; }
+
+.link-quiet { color: var(--text-secondary); }
+.link-quiet:hover { color: var(--text-brand); text-decoration: underline; }
+.block { display: block; }
 
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .strong { font-weight: 650; }
 .pos { color: var(--ok-500); }
 .neg { color: var(--danger-500); }
-.late { color: var(--danger-500); font-weight: 600; }
+.warn { color: var(--warn-500); }
 .nowrap { white-space: nowrap; }
 .small { font-size: var(--text-xs); }
-.badge.tiny { margin-left: var(--space-2); font-size: 10px; }
 .danger:hover { color: var(--danger-500); }
 
-.iv-draft { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
-.iv-sent { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); color: var(--text-brand); }
-.iv-part_paid { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
-.iv-paid { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
-.iv-cancelled { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
+.ps-paid { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
+.ps-pending { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
+.ps-overdue { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
+
+@media (max-width: 900px) { .hide-md { display: none; } }
+@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

@@ -426,237 +426,212 @@ service cloud.firestore {
      * are the company's history, and a status is the way to retire one.
      * ------------------------------------------------------------------ */
 
-    /*
-     * Collection group over every client's ledger.
-     *
-     * The Clients page shows one table of all work across all clients, which
-     * is a query spanning subcollections rather than a read inside one. That
-     * needs its own rule: a nested match only covers a path that already names
-     * its client, never a query across them.
-     *
-     * Same permission as the per-client ledger, so this opens nothing extra.
-     */
-    match /{path=**}/work/{itemId} {
-      allow read: if isInternal() && can('finance.view');
-    }
-
-    match /clients/{clientId} {
-      allow read: if isInternal() && can('clients.view');
-      allow create, update: if isInternal() && can('clients.manage');
-
-      /*
-       * Archived rather than deleted. A client with work and invoices behind
-       * them is the company's own history, and removing the record would
-       * leave every figure pointing at a name nobody can look up.
-       */
-      allow delete: if false;
-
-      /*
-       * The relationship: what they use, what was said, what we noticed.
-       * Guarded by clients.manage — an account manager runs this without
-       * needing to see the margin.
-       */
-      match /services/{serviceId} {
-        allow read: if isInternal() && can('clients.view');
-        allow write: if isInternal() && can('clients.manage');
-      }
-
-      match /activities/{activityId} {
-        allow read: if isInternal() && can('clients.view');
-        allow write: if isInternal() && can('clients.manage');
-      }
-
-      match /notes/{noteId} {
-        allow read: if isInternal() && can('clients.view');
-        allow write: if isInternal() && can('clients.manage');
-      }
-
-      /*
-       * The money: what was earned, what it cost, what is still owed.
-       * Behind finance permissions rather than clients.manage, so the two can
-       * be handed to different people.
-       *
-       * These ARE deletable, unlike the client itself. A mistyped line in a
-       * ledger should be removable; a client with history should not.
-       */
-      match /work/{itemId} {
-        allow read: if isInternal() && can('finance.view');
-        allow write: if isInternal() && can('finance.manage');
-      }
-
-      match /instalments/{instalmentId} {
-        allow read: if isInternal() && can('finance.view');
-        allow write: if isInternal() && can('finance.manage');
-      }
-
-      match /offers/{offerId} {
-        allow read: if isInternal() && can('finance.view');
-        allow write: if isInternal() && can('finance.manage');
-      }
-    }
-
-    match /projects/{projectId} {
-      allow read: if isInternal() && can('projects.view');
-      allow create, update: if isInternal() && can('projects.manage');
-      allow delete: if false;
-    }
-
-    match /services/{serviceId} {
-      allow read: if isInternal() && can('services.view');
-      allow create, update: if isInternal() && can('services.manage');
-      allow delete: if false;
-    }
-
-    /*
-     * Overheads only.
-     *
-     * Money earned from a client lives in that client's ledger, where one row
-     * carries both what it cost and what it brought in. This collection is for
-     * the costs that belong to nobody in particular — tools, salaries, rent.
-     *
-     * There was a matching `income` collection and it has been removed. Two
-     * places to write the same fact is two places for them to disagree.
-     */
-    match /expenses/{entryId} {
-      allow read: if isInternal() && can('finance.view');
-      allow write: if isInternal() && can('finance.manage');
-    }
-
-    match /leads/{leadId} {
-      allow read: if isInternal() && can('leads.view') && (can('leads.view_all') || ownsRecord());
-      allow create: if isInternal() && can('leads.manage')
-        && request.resource.data.createdBy == me();
-      allow update: if isInternal() && can('leads.manage');
-      allow delete: if isInternal() && can('leads.manage') && isOwner();
-    }
-
-    /*
-     * Tasks are readable by any employee: knowing what the team is working on
-     * is not privileged. Creating and assigning needs the projects permission.
-     */
-    match /tasks/{taskId} {
-      allow read: if isInternal();
-
-      allow create: if isInternal() && request.resource.data.createdBy == me();
-
-      /*
-       * You may always finish your own work. Editing somebody else's task —
-       * reassigning it, moving its deadline — is a manager's act.
-       */
-      allow update: if isInternal()
-        && (
-          resource.data.get('assigneeUid', '') == me()
-          || resource.data.get('createdBy', '') == me()
-          || can('tasks.manage')
-        );
-
-      allow delete: if isInternal()
-        && (resource.data.get('createdBy', '') == me() || can('tasks.manage'));
-
-      match /comments/{commentId} {
-        allow read: if isInternal();
-        allow create: if isInternal() && request.resource.data.authorUid == me();
-        allow update: if isInternal() && resource.data.authorUid == me()
-          && changedOnly(['body', 'editedAt']);
-        allow delete: if isInternal()
-          && (resource.data.authorUid == me() || can('tasks.manage'));
-      }
-    }
-
-    /*
-     * Exchange rates, cached from the national bank so a rate is fetched once
-     * per day rather than per record. Readable by anybody inside; written by
-     * whoever is recording money at the time.
-     */
-    match /exchangeRates/{date} {
-      allow read: if isInternal();
-      allow create: if isInternal() && can('finance.manage');
-      allow update, delete: if false;
-    }
-
     /* ------------------------------------------------------------------ *
-     * Sales pipeline
+     * The business records
      *
-     * `leads.view_all` and `sales.view_all` are the difference between a
-     * salesperson and their manager. Without them you read only records you
-     * own, and the filter is HERE rather than in the query, so removing it
-     * from the client changes nothing.
+     * Three ideas run through every rule below. Reading one of them here
+     * saves reading it eleven times:
+     *
+     * 1. ACTIONS ARE SEPARATE. `view`, `create`, `edit`, `delete` are four
+     *    permissions, not one. "Can access clients" is not something anybody
+     *    can reason about; "may see them, may add one, may not remove one" is.
+     *
+     * 2. `view` VERSUS `view_all`. Without the wider permission you read only
+     *    records you own. The filter is HERE, not in a query — removing it
+     *    from the client changes nothing.
+     *
+     * 3. DELETING DOES NOT DESTROY. A delete is an update that sets
+     *    `deletedAt`; every list filters on it and the recycle bin selects on
+     *    it. Actually destroying a document needs `recycle_bin.purge`, which
+     *    is a different authority given to almost nobody.
      * ------------------------------------------------------------------ */
 
+    /** Does the caller own this record, by any of the fields that mean "mine"? */
     function ownsRecord() {
       return resource.data.get('assigneeUid', '') == me()
         || resource.data.get('ownerUid', '') == me()
+        || resource.data.get('responsibleUid', '') == me()
+        || resource.data.get('employeeUid', '') == me()
         || resource.data.get('createdBy', '') == me();
     }
 
-    match /sales/{saleId} {
-      allow read: if isInternal() && can('sales.view') && (can('sales.view_all') || ownsRecord());
-      allow create: if isInternal() && can('sales.manage')
-        && request.resource.data.createdBy == me();
-      allow update: if isInternal() && can('sales.manage');
-      allow delete: if isInternal() && can('sales.manage') && isOwner();
+    /** Read a record: the wide permission, or the narrow one plus ownership. */
+    function canRead(base) {
+      return isInternal() && can(base + '.view')
+        && (can(base + '.view_all') || ownsRecord());
     }
 
-    /* ------------------------------------------------------------------ *
-     * Contracts — what was agreed
+    /**
+     * An edit that only moves a record into or out of the recycle bin.
      *
-     * Separate from finance on purpose. A contract says what was promised; an
-     * invoice says what was asked for; a payment says what arrived. Reading
-     * one of them as another is how a company loses track of what it is owed.
-     * ------------------------------------------------------------------ */
-
-    match /contracts/{contractId} {
-      allow read: if isInternal() && can('contracts.view');
-      allow create, update: if isInternal() && can('contracts.manage');
-      /* A contract is history. Cancel it; do not erase it. */
-      allow delete: if false;
+     * Separated from an ordinary edit so that `delete` and `edit` can be given
+     * to different people: a junior may correct a client's phone number
+     * without being able to make the client disappear.
+     */
+    function isBinChange() {
+      return changedOnly(['deletedAt', 'deletedBy', 'deletedByName', 'updatedAt']);
     }
 
-    /* ------------------------------------------------------------------ *
-     * Invoices and payments
-     * ------------------------------------------------------------------ */
-
-    match /invoices/{invoiceId} {
-      allow read: if isInternal() && can('finance.view');
-      allow create, update: if isInternal() && can('finance.manage');
-      allow delete: if false;
+    function canDelete(base) {
+      return isInternal() && can(base + '.delete');
     }
+
+    function canPurge() {
+      return isInternal() && can('recycle_bin.purge');
+    }
+
+    /* ---- Clients ---------------------------------------------------- */
+
+    match /clients/{clientId} {
+      allow read: if canRead('clients');
+
+      allow create: if isInternal() && can('clients.create')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('clients.delete') || can('recycle_bin.restore')))
+          || can('clients.edit')
+        );
+
+      /* Destroying one for good is the recycle bin's job, not this rule's. */
+      allow delete: if canPurge();
+
+      /*
+       * CEO-only commercial terms on a client, kept out of the main document
+       * so that reading a client does not reveal what they pay.
+       */
+      match /terms/{termId} {
+        allow read: if isInternal() && can('finance.view');
+        allow write: if isInternal() && can('finance.edit');
+      }
+    }
+
+    /* ---- Leads ------------------------------------------------------- */
 
     /*
-     * Payments are the record of money that actually moved. They are never
-     * edited away: a mistake is corrected with a refund entry, which is why
-     * `transfer` and `refund` exist as transaction types.
+     * The one place an affiliate may write.
+     *
+     * An outside partner submits a lead through their panel and then watches
+     * it. They may create one that names them, read the ones they submitted,
+     * and nothing else — the `isInternal()` on every other rule in this file
+     * is what makes that true regardless of the permissions they hold.
      */
-    match /payments/{paymentId} {
-      allow read: if isInternal() && can('finance.view');
-      allow create, update: if isInternal() && can('finance.manage');
-      allow delete: if isInternal() && can('finance.manage') && isOwner();
+    match /leads/{leadId} {
+      allow read: if canRead('leads')
+        || (isAffiliate() && resource.data.get('createdBy', '') == me());
+
+      allow create: if isActive() && can('leads.create')
+        && request.resource.data.createdBy == me()
+        /* An affiliate cannot submit a lead already assigned to somebody. */
+        && (isInternal() || request.resource.data.get('assigneeUid', null) == null);
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('leads.delete') || can('recycle_bin.restore')))
+          || can('leads.edit')
+        );
+
+      allow delete: if canPurge();
     }
 
-    /* ------------------------------------------------------------------ *
-     * Affiliate programme
-     *
-     * An affiliate is an outsider with a login. They may read their OWN
-     * record and their own commissions and nothing else — the isolation is in
-     * these two rules, not in what the interface chooses to render.
-     * ------------------------------------------------------------------ */
+    /* ---- Projects ---------------------------------------------------- */
 
+    match /projects/{projectId} {
+      /* Being on the team is a form of ownership for reading purposes. */
+      allow read: if isInternal() && can('projects.view')
+        && (
+          can('projects.view_all')
+          || ownsRecord()
+          || me() in resource.data.get('teamUids', [])
+        );
+
+      allow create: if isInternal() && can('projects.create')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('projects.delete') || can('recycle_bin.restore')))
+          || can('projects.edit')
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /* ---- Sales ------------------------------------------------------- */
+
+    match /sales/{saleId} {
+      allow read: if canRead('sales');
+
+      allow create: if isInternal() && can('sales.create')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('sales.delete') || can('recycle_bin.restore')))
+          || can('sales.edit')
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /* ---- Services ---------------------------------------------------- */
+
+    match /services/{serviceId} {
+      allow read: if isInternal() && can('services.view');
+
+      allow create, update: if isInternal() && can('services.manage');
+
+      allow delete: if canPurge();
+    }
+
+    /* ---- Finance ------------------------------------------------------ */
+
+    /*
+     * One collection for every financial record, distinguished by `type`.
+     * There is no separate expenses collection any more: a cost and a payment
+     * are the same kind of fact pointing in opposite directions, and keeping
+     * them apart meant every total had to be assembled twice.
+     */
+    match /transactions/{txId} {
+      allow read: if isInternal() && can('finance.view');
+
+      allow create: if isInternal() && can('finance.create')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('finance.delete') || can('recycle_bin.restore')))
+          || can('finance.edit')
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /* ---- Affiliate programme ------------------------------------------ */
+
+    /*
+     * An affiliate may read their own record — their commission rules are
+     * their terms — and nothing else in this collection.
+     */
     match /affiliates/{affiliateId} {
       allow read: if (isInternal() && can('affiliates.view'))
         || (isActive() && resource.data.get('employeeUid', '') == me());
+
       allow create, update: if isInternal() && can('affiliates.manage');
-      allow delete: if false;
+
+      allow delete: if canPurge();
     }
 
     /*
-     * A commission is money owed to somebody, so the write rules are stricter
-     * than anywhere else in the system:
+     * A commission is money owed to somebody, so this is the strictest write
+     * rule in the file:
      *
-     *   earning it     needs finance.manage — it is generated from a payment
+     *   earning it     needs finance.create — it follows a payment
      *   approving it   needs commissions.approve, a separate decision
      *   paying it      needs commissions.approve as well
      *
-     * Nobody may approve their own. That is the one line worth being explicit
+     * And nobody may approve their own. That is the line worth being explicit
      * about, because an affiliate who is also an employee could otherwise sign
      * off their own payout.
      */
@@ -664,75 +639,214 @@ service cloud.firestore {
       allow read: if (isInternal() && can('affiliates.view'))
         || (isActive() && resource.data.get('affiliateEmployeeUid', '') == me());
 
-      allow create: if isInternal() && can('finance.manage')
+      allow create: if isInternal() && can('finance.create')
         && request.resource.data.status == 'pending';
 
       allow update: if isInternal()
         && (
-          /* Changing the status is an approval decision. */
           (
             can('commissions.approve')
             && request.resource.data.get('affiliateEmployeeUid', '') != me()
           )
-          /* Anything that is not the status is ordinary maintenance. */
           || (can('affiliates.manage') && changedOnly(['note', 'updatedAt']))
         );
 
       allow delete: if false;
     }
 
-    /* ------------------------------------------------------------------ *
-     * Goals and KPIs
-     *
-     * Readable by every employee: a company goal that only management can see
-     * is not a shared goal. Progress is computed from live records, so there
-     * is nothing here for anybody to inflate.
-     * ------------------------------------------------------------------ */
+    /* ---- Goals -------------------------------------------------------- */
 
     match /goals/{goalId} {
-      allow read: if isInternal() && can('goals.view');
-      allow create, update: if isInternal() && can('goals.manage');
-      allow delete: if isInternal() && can('goals.manage');
+      /*
+       * A company goal that only management can see is not a shared goal, so
+       * `everyone` is the ordinary case. `owners` narrows it to the people it
+       * was set for; `management` needs the wider permission.
+       */
+      allow read: if isInternal() && can('goals.view')
+        && (
+          resource.data.get('visibility', 'everyone') == 'everyone'
+          || can('goals.manage')
+          || me() in resource.data.get('ownerUids', [])
+        );
+
+      allow create: if isInternal() && can('goals.manage')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('goals.manage') || can('recycle_bin.restore')))
+          || can('goals.manage')
+        );
+
+      allow delete: if canPurge();
     }
 
-    /* Which KPIs a role is measured on. Configured by whoever edits roles. */
+    /* Which KPIs a role is measured on. */
     match /roleKpis/{roleId} {
       allow read: if isInternal();
       allow write: if isInternal() && can('roles.edit');
     }
 
-    /* ------------------------------------------------------------------ *
-     * Calendar
+    /* ---- Bonuses ------------------------------------------------------- */
+
+    /*
+     * A bonus programme is readable by the staff it applies to — a scheme
+     * nobody can see motivates nobody — but writable only by whoever runs it.
+     * `visibleToStaff` lets one be drafted before it is announced.
+     */
+    match /bonusPrograms/{programmeId} {
+      allow read: if isInternal() && can('bonuses.view')
+        && (can('bonuses.manage') || resource.data.get('visibleToStaff', false) == true);
+
+      allow create: if isInternal() && can('bonuses.manage')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('bonuses.manage') || can('recycle_bin.restore')))
+          || can('bonuses.manage')
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /*
+     * An award is money the company has committed to a person.
      *
-     * Only typed-in entries live here. Deadlines, renewals and payment dates
-     * are read from the records that own them, so there is no second copy to
-     * fall out of step.
-     * ------------------------------------------------------------------ */
+     * The employee it belongs to may read it and may not touch it. Creating
+     * one needs bonuses.manage; moving it along the status ladder — earned,
+     * approved, paid — needs bonuses.approve; and nobody may approve their
+     * own, for the same reason as commissions.
+     */
+    match /bonusAwards/{awardId} {
+      allow read: if (isInternal() && can('bonuses.view_all'))
+        || (isActive() && resource.data.employeeUid == me());
+
+      allow create: if isInternal() && can('bonuses.manage')
+        && request.resource.data.get('employeeUid', '') != me()
+        && request.resource.data.status in ['pending', 'earned'];
+
+      allow update: if isInternal()
+        && can('bonuses.approve')
+        && resource.data.employeeUid != me();
+
+      allow delete: if canPurge();
+    }
+
+    /*
+     * Extra work with a reward attached.
+     *
+     * The status ladder is the whole guard. The person doing the work may
+     * move it as far as `submitted`; `approved` is what earns the bonus and
+     * only somebody else can set it. An employee editing their own row is
+     * also refused any change to the reward.
+     */
+    match /incentiveWork/{workId} {
+      allow read: if (isInternal() && can('bonuses.view_all'))
+        || (isActive() && resource.data.assigneeUid == me())
+        || (isInternal() && resource.data.get('createdBy', '') == me());
+
+      allow create: if isInternal() && can('bonuses.manage')
+        && request.resource.data.createdBy == me()
+        && request.resource.data.status == 'assigned';
+
+      allow update: if isInternal()
+        && (
+          /* The manager's side: anything, including approving it. */
+          can('bonuses.approve')
+          || can('bonuses.manage')
+          /* The worker's side: progress and a submission note, nothing else. */
+          || (
+            resource.data.assigneeUid == me()
+            && changedOnly(['status', 'submissionNote', 'submittedAt', 'updatedAt'])
+            && request.resource.data.status in ['assigned', 'in_progress', 'submitted']
+          )
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /* ---- Calendar ------------------------------------------------------ */
 
     match /calendarEvents/{eventId} {
       allow read: if isInternal() && can('calendar.view');
+
       allow create: if isInternal() && can('calendar.manage')
         && request.resource.data.createdBy == me();
-      allow update, delete: if isInternal() && can('calendar.manage')
-        && (resource.data.createdBy == me() || isOwner());
+
+      allow update: if isInternal() && can('calendar.manage')
+        && (resource.data.createdBy == me() || isOwner() || isBinChange());
+
+      allow delete: if canPurge();
     }
 
-    /* ------------------------------------------------------------------ *
-     * Notifications
+    /* ---- Notes --------------------------------------------------------- */
+
+    /*
+     * Notes replaced the task module. They are attached to a client, a lead, a
+     * project or a sale, readable by anybody inside, and editable only by
+     * whoever wrote one — a note is somebody's words.
+     */
+    match /notes/{noteId} {
+      allow read: if isInternal();
+
+      allow create: if isInternal() && request.resource.data.authorUid == me();
+
+      allow update: if isInternal()
+        && (
+          resource.data.authorUid == me()
+          /* Anybody may tick off a reminder; only the author may reword it. */
+          || changedOnly(['done', 'pinned', 'updatedAt'])
+        );
+
+      allow delete: if isInternal()
+        && (resource.data.authorUid == me() || isOwner());
+    }
+
+    /* ---- Activity ------------------------------------------------------- */
+
+    /*
+     * What has been going on with a record, in words, for whoever works on it.
      *
+     * Not the audit log. The audit log answers "who changed permissions in
+     * March" and is closed to ordinary employees; this answers "what happened
+     * with this client" and is meant to be read. Append-only all the same:
+     * a history somebody can edit is not a history.
+     */
+    match /activity/{entryId} {
+      allow read: if isInternal();
+
+      allow create: if isActive() && request.resource.data.actorUid == me();
+
+      allow update, delete: if false;
+    }
+
+    /* ---- Custom fields --------------------------------------------------- */
+
+    /*
+     * Definitions, not values. The values live on the records themselves, so
+     * a person who may read a client reads its custom values with it; this
+     * collection only describes what the fields are.
+     */
+    match /customFields/{fieldId} {
+      allow read: if isInternal();
+      allow write: if isInternal() && can('custom_fields.manage');
+    }
+
+    /* ---- Notifications ---------------------------------------------------- */
+
+    /*
      * Stored per person, so isolation is structural: there is no query that
      * reaches somebody else's notifications, whatever permissions the caller
      * holds.
      *
-     * KNOWN LIMIT: creation is open to any active employee, because assigning
-     * a task has to be able to notify the person it was assigned to and there
-     * is no server to do it. The forgeable part is bounded — an entry must
-     * name its true author — but a determined employee could send a colleague
-     * a notification the application would not have generated. Cloud Functions
-     * close this, and are the intended upgrade; the same limit already applies
-     * to the audit log and is documented there.
-     * ------------------------------------------------------------------ */
-
+     * KNOWN LIMIT: creation is open to any active account, because assigning a
+     * lead has to be able to notify the person it went to and there is no
+     * server to do it. The forgeable part is bounded — an entry must name its
+     * true author — but a determined employee could send a colleague a
+     * notification the application would not have generated. Cloud Functions
+     * close this, and the same limit already applies to the audit log.
+     */
     match /notifications/{uid}/items/{itemId} {
       allow read, update, delete: if isSelf(uid);
       allow create: if isActive() && request.resource.data.get('actorUid', me()) == me();
@@ -742,83 +856,16 @@ service cloud.firestore {
       allow read, write: if isSelf(uid);
     }
 
-    /* ------------------------------------------------------------------ *
-     * Internal messages
-     *
-     * Membership is the whole access rule. A thread lists everybody who may
-     * read it, and nobody may add themselves: an update that changes the
-     * member list is refused unless the caller already holds chat.manage_groups.
-     * ------------------------------------------------------------------ */
+    /* ---- Exchange rates ---------------------------------------------------- */
 
-    function threadMembers(threadId) {
-      return get(/databases/$(database)/documents/chatThreads/$(threadId)).data.memberUids;
-    }
-
-    match /chatThreads/{threadId} {
-      allow read: if isInternal() && me() in resource.data.memberUids;
-
-      allow create: if isInternal() && can('chat.use')
-        && request.resource.data.createdBy == me()
-        && me() in request.resource.data.memberUids;
-
-      /*
-       * Members may keep the thread current — post a message, mark it read.
-       * Changing who is in it is a different act and needs the permission.
-       */
-      allow update: if isInternal()
-        && me() in resource.data.memberUids
-        && (
-          changedOnly(['lastMessage', 'lastMessageAt', 'lastMessageBy', 'readAt', 'updatedAt'])
-          || can('chat.manage_groups')
-        );
-
-      allow delete: if isInternal() && can('chat.manage_groups');
-
-      match /messages/{messageId} {
-        allow read: if isInternal() && me() in threadMembers(threadId);
-
-        allow create: if isInternal()
-          && me() in threadMembers(threadId)
-          && request.resource.data.authorUid == me();
-
-        /* Your own words, and only the words. */
-        allow update: if isInternal()
-          && resource.data.authorUid == me()
-          && changedOnly(['body', 'editedAt']);
-
-        allow delete: if isInternal()
-          && (resource.data.authorUid == me() || can('chat.manage_groups'));
-      }
-    }
-
-    /* ------------------------------------------------------------------ *
-     * Referral clicks
-     *
-     * The one collection anybody may write to without an account, because a
-     * referral link has to work for a stranger. It is deliberately the
-     * narrowest possible opening:
-     *
-     *   - create only. Nothing here can be read back, changed or deleted by
-     *     the person who wrote it, so it cannot be used as storage.
-     *   - the document must be exactly {code, at} and nothing else, so it
-     *     cannot carry a payload.
-     *   - a click earns nobody anything. Commission follows a payment that
-     *     arrived, which is why this counter can afford to be public: the
-     *     worst an abuser achieves is inflating a vanity number.
-     *
-     * Affiliate names, contact details and commission rules stay private —
-     * the public page never reads this collection or the affiliates one.
-     * ------------------------------------------------------------------ */
-
-    match /referralClicks/{clickId} {
-      allow read: if isInternal() && can('affiliates.view');
-
-      allow create: if request.resource.data.keys().hasOnly(['code', 'at'])
-        && request.resource.data.code is string
-        && request.resource.data.code.size() > 0
-        && request.resource.data.code.size() <= 40
-        && request.resource.data.at is string;
-
+    /*
+     * Cached from the national bank so a rate is fetched once per day rather
+     * than per record. Readable by anybody inside; written by whoever is
+     * recording money at the time.
+     */
+    match /exchangeRates/{date} {
+      allow read: if isInternal();
+      allow create: if isInternal() && can('finance.create');
       allow update, delete: if false;
     }
 

@@ -5,7 +5,11 @@
  * A goal stores what to count, never the count. Progress is recomputed from
  * the live records every time this screen opens, so it moves as work happens
  * and nobody has to remember to update anything — which is the failure mode
- * that makes most goal trackers quietly useless within a month.
+ * that makes most goal trackers useless within a month.
+ *
+ * A goal can belong to several people at once. The same target for a pair or a
+ * whole team is one record with two names on it, not two records to keep in
+ * step, and progress is then counted across all of them together.
  *
  * "On track" compares progress against time elapsed, not against the deadline.
  * A goal at 40% is fine in week two and a problem in week nine, and saying so
@@ -20,8 +24,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { deleteGoal, fetchGoals, saveGoal } from '@/api/company'
 import { fetchEmployees } from '@/api/employees'
 import { fetchDepartments } from '@/api/organisation'
-import { goalProgress, loadSnapshot, type Snapshot } from '@/api/metrics'
-import { EMPTY_SNAPSHOT } from '@/api/metrics'
+import { EMPTY_SNAPSHOT, goalProgress, loadSnapshot, type Snapshot } from '@/api/metrics'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
@@ -30,11 +33,9 @@ import {
   GOAL_METRICS,
   GOAL_SCOPES,
   GOAL_STATUSES,
+  GOAL_VISIBILITY,
   MONEY_METRICS,
   type Goal,
-  type GoalMetric,
-  type GoalScope,
-  type GoalStatus,
 } from '@/types/company'
 import { BASE_CURRENCY, formatMoney, fromMinor, toMinor } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
@@ -53,28 +54,15 @@ const people = ref<EmployeePublic[]>([])
 const departments = ref<Department[]>([])
 
 const scopeFilter = ref<'all' | 'mine'>('all')
+const statusFilter = ref<Goal['status'] | ''>('active')
+
+const draft = ref<Goal | null>(null)
+const draftTarget = ref(0)
+const draftManual = ref(0)
 const pendingDelete = ref<Goal | null>(null)
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.GOALS_MANAGE))
 const today = new Date().toISOString().slice(0, 10)
-
-interface Draft {
-  id: string
-  title: string
-  description: string
-  scope: GoalScope
-  departmentId: string | null
-  ownerUid: string | null
-  metric: GoalMetric
-  targetAmount: number
-  manualValue: number
-  serviceId: string | null
-  startDate: string
-  endDate: string
-  status: GoalStatus
-}
-
-const draft = ref<Draft | null>(null)
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -82,10 +70,13 @@ function money(minor: number): string {
 
 const rows = computed(() =>
   goals.value
-    .filter((g) => scopeFilter.value === 'all' || g.ownerUid === auth.uid)
+    .filter((g) => {
+      if (statusFilter.value && g.status !== statusFilter.value) return false
+      if (scopeFilter.value === 'mine' && !(g.ownerUids ?? []).includes(auth.uid ?? '')) return false
+      return true
+    })
     .map((g) => goalProgress(g, snapshot.value))
     .sort((a, b) => {
-      /* Active first, then by how close the deadline is. */
       if (a.goal.status !== b.goal.status) return a.goal.status === 'active' ? -1 : 1
       return a.goal.endDate.localeCompare(b.goal.endDate)
     }),
@@ -93,6 +84,36 @@ const rows = computed(() =>
 
 function display(value: number, isMoney: boolean): string {
   return isMoney ? money(value) : String(value)
+}
+
+const draftIsMoney = computed(() => !!draft.value && MONEY_METRICS.includes(draft.value.metric))
+
+function blankGoal(): Goal {
+  const year = today.slice(0, 4)
+  return {
+    id: '',
+    title: '',
+    description: '',
+    scope: 'company',
+    departmentId: null,
+    ownerUids: [],
+    ownerNames: [],
+    metric: 'revenue',
+    target: 0,
+    manualValue: 0,
+    startDate: `${year}-01-01`,
+    endDate: `${year}-12-31`,
+    status: 'active',
+    visibility: 'everyone',
+    serviceId: null,
+    notes: '',
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+  }
 }
 
 async function load(): Promise<void> {
@@ -111,44 +132,32 @@ async function load(): Promise<void> {
 }
 
 function startNew(): void {
-  const year = today.slice(0, 4)
-  draft.value = {
-    id: '',
-    title: '',
-    description: '',
-    scope: 'company',
-    departmentId: null,
-    ownerUid: null,
-    metric: 'revenue',
-    targetAmount: 0,
-    manualValue: 0,
-    serviceId: null,
-    startDate: `${year}-01-01`,
-    endDate: `${year}-12-31`,
-    status: 'active',
-  }
+  draft.value = blankGoal()
+  draftTarget.value = 0
+  draftManual.value = 0
 }
 
 function startEdit(goal: Goal): void {
   const isMoney = MONEY_METRICS.includes(goal.metric)
-  draft.value = {
-    id: goal.id,
-    title: goal.title,
-    description: goal.description ?? '',
-    scope: goal.scope,
-    departmentId: goal.departmentId,
-    ownerUid: goal.ownerUid,
-    metric: goal.metric,
-    targetAmount: isMoney ? fromMinor(goal.target, BASE_CURRENCY) : goal.target,
-    manualValue: goal.manualValue ?? 0,
-    serviceId: goal.serviceId,
-    startDate: goal.startDate,
-    endDate: goal.endDate,
-    status: goal.status,
-  }
+  draft.value = { ...goal, ownerUids: [...(goal.ownerUids ?? [])] }
+  draftTarget.value = isMoney ? fromMinor(goal.target, BASE_CURRENCY) : goal.target
+  draftManual.value = isMoney ? fromMinor(goal.manualValue ?? 0, BASE_CURRENCY) : (goal.manualValue ?? 0)
 }
 
-const draftIsMoney = computed(() => !!draft.value && MONEY_METRICS.includes(draft.value.metric))
+function toggleOwner(uid: string): void {
+  const list = draft.value?.ownerUids
+  if (!list) return
+  const i = list.indexOf(uid)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(uid)
+}
+
+/** Everyone in a department, so a department goal does not need ticking twice. */
+function selectDepartment(): void {
+  const d = draft.value
+  if (!d?.departmentId) return
+  d.ownerUids = people.value.filter((p) => p.departmentId === d.departmentId).map((p) => p.uid)
+}
 
 async function commit(): Promise<void> {
   const d = draft.value
@@ -158,28 +167,21 @@ async function commit(): Promise<void> {
     return
   }
 
-  const owner = people.value.find((p) => p.uid === d.ownerUid)
   const isMoney = MONEY_METRICS.includes(d.metric)
+  const names = d.ownerUids
+    .map((uid) => people.value.find((p) => p.uid === uid))
+    .filter(Boolean)
+    .map((p) => `${p!.firstName} ${p!.lastName}`)
 
   saving.value = true
   try {
     await saveGoal({
-      id: d.id,
+      ...d,
       title: d.title.trim(),
-      description: d.description.trim(),
-      scope: d.scope,
-      departmentId: d.scope === 'department' ? d.departmentId : null,
-      ownerUid: d.scope === 'individual' ? d.ownerUid : null,
-      ownerName: owner ? `${owner.firstName} ${owner.lastName}` : '',
-      metric: d.metric,
-      target: isMoney ? toMinor(d.targetAmount, BASE_CURRENCY) : Math.round(d.targetAmount),
-      manualValue: isMoney ? toMinor(d.manualValue, BASE_CURRENCY) : Math.round(d.manualValue),
-      serviceId: d.serviceId,
-      startDate: d.startDate,
-      endDate: d.endDate,
-      status: d.status,
-    } as Goal)
-
+      ownerNames: names,
+      target: isMoney ? toMinor(draftTarget.value, BASE_CURRENCY) : Math.round(draftTarget.value),
+      manualValue: isMoney ? toMinor(draftManual.value, BASE_CURRENCY) : Math.round(draftManual.value),
+    })
     ui.notify('ok', t('goals.saved'))
     draft.value = null
     await load()
@@ -193,6 +195,7 @@ async function commit(): Promise<void> {
 async function confirmDelete(): Promise<void> {
   if (!pendingDelete.value) return
   await deleteGoal(pendingDelete.value)
+  ui.notify('ok', t('recycle.movedToBin'))
   pendingDelete.value = null
   await load()
 }
@@ -231,31 +234,6 @@ onMounted(load)
 
         <div class="field-grid">
           <div class="field">
-            <label class="field-label" for="g-scope">{{ t('goals.scope') }}</label>
-            <select id="g-scope" v-model="draft.scope" class="select">
-              <option v-for="s in GOAL_SCOPES" :key="s" :value="s">{{ t(`goalScope.${s}`) }}</option>
-            </select>
-          </div>
-
-          <div v-if="draft.scope === 'department'" class="field">
-            <label class="field-label" for="g-dept">{{ t('goals.department') }}</label>
-            <select id="g-dept" v-model="draft.departmentId" class="select">
-              <option :value="null">—</option>
-              <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
-          </div>
-
-          <div v-if="draft.scope === 'individual'" class="field">
-            <label class="field-label" for="g-owner">{{ t('goals.owner') }}</label>
-            <select id="g-owner" v-model="draft.ownerUid" class="select">
-              <option :value="null">—</option>
-              <option v-for="p in people" :key="p.uid" :value="p.uid">
-                {{ p.firstName }} {{ p.lastName }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
             <label class="field-label" for="g-metric">{{ t('goals.metric') }}</label>
             <select id="g-metric" v-model="draft.metric" class="select">
               <option v-for="m in GOAL_METRICS" :key="m" :value="m">{{ t(`goalMetric.${m}`) }}</option>
@@ -267,7 +245,7 @@ onMounted(load)
             <label class="field-label" for="g-target">{{ t('goals.target') }}</label>
             <input
               id="g-target"
-              v-model.number="draft.targetAmount"
+              v-model.number="draftTarget"
               class="input"
               type="number"
               :step="draftIsMoney ? 0.01 : 1"
@@ -276,8 +254,28 @@ onMounted(load)
 
           <div v-if="draft.metric === 'manual'" class="field">
             <label class="field-label" for="g-manual">{{ t('goals.manualValue') }}</label>
-            <input id="g-manual" v-model.number="draft.manualValue" class="input" type="number" />
+            <input id="g-manual" v-model.number="draftManual" class="input" type="number" />
             <p class="field-hint">{{ t('goals.manualHint') }}</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="g-scope">{{ t('goals.scope') }}</label>
+            <select id="g-scope" v-model="draft.scope" class="select">
+              <option v-for="s in GOAL_SCOPES" :key="s" :value="s">{{ t(`goalScope.${s}`) }}</option>
+            </select>
+          </div>
+
+          <div v-if="draft.scope === 'department'" class="field">
+            <label class="field-label" for="g-dept">{{ t('goals.department') }}</label>
+            <div class="inline-row">
+              <select id="g-dept" v-model="draft.departmentId" class="select">
+                <option :value="null">—</option>
+                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" type="button" @click="selectDepartment">
+                {{ t('goals.selectAll') }}
+              </button>
+            </div>
           </div>
 
           <div v-if="snapshot.services.length" class="field">
@@ -304,6 +302,31 @@ onMounted(load)
               <option v-for="s in GOAL_STATUSES" :key="s" :value="s">{{ t(`goalStatus.${s}`) }}</option>
             </select>
           </div>
+
+          <div class="field">
+            <label class="field-label" for="g-vis">{{ t('goals.visibility') }}</label>
+            <select id="g-vis" v-model="draft.visibility" class="select">
+              <option v-for="v in GOAL_VISIBILITY" :key="v" :value="v">
+                {{ t(`goalVisibility.${v}`) }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Who it is for: many, not one ------------------------------ -->
+        <div v-if="draft.scope !== 'company'" class="field">
+          <span class="field-label">{{ t('goals.owners') }}</span>
+          <p class="field-hint">{{ t('goals.ownersHint') }}</p>
+          <div class="picker">
+            <label v-for="p in people" :key="p.uid" class="check">
+              <input
+                type="checkbox"
+                :checked="draft.ownerUids.includes(p.uid)"
+                @change="toggleOwner(p.uid)"
+              />
+              <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+            </label>
+          </div>
         </div>
 
         <div class="field">
@@ -329,11 +352,16 @@ onMounted(load)
           {{ t('goals.mine') }}
         </button>
       </div>
+
+      <select v-model="statusFilter" class="select compact" :aria-label="t('table.status')">
+        <option value="">{{ t('clients.allStatuses') }}</option>
+        <option v-for="s in GOAL_STATUSES" :key="s" :value="s">{{ t(`goalStatus.${s}`) }}</option>
+      </select>
     </div>
 
     <div v-if="loading" class="card">
       <div class="card-body stack">
-        <div v-for="n in 3" :key="n" class="skeleton" style="height: 80px" />
+        <div v-for="n in 3" :key="n" class="skeleton" style="height: 90px" />
       </div>
     </div>
 
@@ -354,9 +382,7 @@ onMounted(load)
           <div class="goal-id">
             <h2 class="goal-title">{{ row.goal.title }}</h2>
             <span class="tertiary goal-scope">
-              {{ t(`goalScope.${row.goal.scope}`) }}
-              <template v-if="row.goal.ownerName"> · {{ row.goal.ownerName }}</template>
-              · {{ t(`goalMetric.${row.goal.metric}`) }}
+              {{ t(`goalScope.${row.goal.scope}`) }} · {{ t(`goalMetric.${row.goal.metric}`) }}
             </span>
           </div>
           <span class="badge" :class="`gs-${row.goal.status}`">
@@ -365,6 +391,15 @@ onMounted(load)
         </div>
 
         <p v-if="row.goal.description" class="muted goal-desc">{{ row.goal.description }}</p>
+
+        <div v-if="(row.goal.ownerNames ?? []).length" class="chips">
+          <span v-for="name in row.goal.ownerNames.slice(0, 4)" :key="name" class="badge badge-plain">
+            {{ name }}
+          </span>
+          <span v-if="row.goal.ownerNames.length > 4" class="tertiary small">
+            +{{ row.goal.ownerNames.length - 4 }}
+          </span>
+        </div>
 
         <div class="bar-row">
           <div class="bar-track">
@@ -397,8 +432,7 @@ onMounted(load)
             <AppIcon :name="row.onTrack ? 'check' : 'alert'" :size="13" />
             {{ row.onTrack ? t('goals.onTrack') : t('goals.behind') }}
             <span class="tertiary">
-              ·
-              {{ row.daysLeft > 0 ? t('goals.daysLeft', { n: row.daysLeft }) : t('goals.ended') }}
+              · {{ row.daysLeft > 0 ? t('goals.daysLeft', { n: row.daysLeft }) : t('goals.ended') }}
             </span>
           </span>
 
@@ -421,7 +455,7 @@ onMounted(load)
     <ConfirmDialog
       :open="pendingDelete !== null"
       :title="t('goals.deleteGoal')"
-      :message="t('goals.deleteText')"
+      :message="t('recycle.deleteExplain')"
       danger
       @confirm="confirmDelete"
       @cancel="pendingDelete = null"
@@ -434,14 +468,19 @@ onMounted(load)
 .segmented { display: inline-flex; padding: 2px; gap: 2px; background: var(--bg-inset); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
 .segmented button { padding: 0 var(--space-3); height: 30px; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 550; color: var(--text-tertiary); }
 .segmented button.is-on { background: var(--bg-surface-3); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+.select.compact { max-width: 180px; }
+.inline-row { display: flex; gap: var(--space-2); align-items: center; }
+.inline-row .select { flex: 1; }
+.picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 180px; overflow-y: auto; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: var(--space-4); }
 .goal { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); }
 .goal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .goal-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .goal-title { font-size: var(--text-md); font-weight: 650; }
 .goal-scope { font-size: var(--text-xs); }
 .goal-desc { font-size: var(--text-sm); line-height: var(--leading-relaxed); }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 
 .bar-row { display: flex; align-items: center; gap: var(--space-3); }
 .bar-track { flex: 1; height: 10px; border-radius: var(--radius-full); background: var(--bg-inset); overflow: hidden; }
@@ -466,5 +505,6 @@ onMounted(load)
 
 .pos { color: var(--ok-500); }
 .warn { color: var(--warn-500); }
+.small { font-size: var(--text-xs); }
 .danger:hover { color: var(--danger-500); }
 </style>

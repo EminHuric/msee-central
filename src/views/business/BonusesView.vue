@@ -1,0 +1,1181 @@
+<script setup lang="ts">
+/**
+ * Bonuses, incentive work and awards.
+ *
+ * One sentence governs the whole screen: **nobody awards themselves anything.**
+ *
+ * Progress is counted from records the employee cannot edit. Reaching a
+ * milestone lets a manager grant the award — it is not granted silently,
+ * because money leaving the company should be somebody's decision. Approving
+ * and paying are two further steps, and the rules refuse all three to the
+ * person the award belongs to.
+ *
+ * Earned and paid are shown as separate columns because they are separate
+ * facts. A bonus earned in March and paid in May is a debt for two months.
+ */
+
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import AppIcon from '@/components/ui/AppIcon.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
+import { fetchEmployees } from '@/api/employees'
+import { fetchDepartments } from '@/api/organisation'
+import { EMPTY_SNAPSHOT, loadSnapshot, type Snapshot } from '@/api/metrics'
+import {
+  approveWork,
+  deleteProgramme,
+  deleteWork,
+  grantManual,
+  grantMilestone,
+  membersOf,
+  progressFor,
+  rejectWork,
+  saveProgramme,
+  saveWork,
+  setAwardStatus,
+  type ProgressSources,
+} from '@/api/rewards'
+import { formatDate } from '@/i18n'
+import { LIMITS } from '@/lib/validation'
+import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
+import {
+  AWARD_STATUSES,
+  BONUS_AUDIENCES,
+  BONUS_METRICS,
+  MONEY_BONUS_METRICS,
+  PROGRAMME_STATUSES,
+  type AwardStatus,
+  type BonusAward,
+  type BonusMilestone,
+  type BonusProgramme,
+  type IncentiveWork,
+} from '@/types/rewards'
+import { BASE_CURRENCY, formatMoney, fromMinor, toMinor } from '@/types/money'
+import { PERMISSIONS } from '@/types/permissions'
+import type { Department, EmployeePublic } from '@/types/domain'
+
+const auth = useAuthStore()
+const ui = useUiStore()
+const { t, locale } = useI18n()
+
+type Tab = 'programmes' | 'work' | 'awards'
+
+const tab = ref<Tab>('programmes')
+const loading = ref(true)
+const saving = ref(false)
+
+const snapshot = ref<Snapshot>(EMPTY_SNAPSHOT)
+const people = ref<EmployeePublic[]>([])
+const departments = ref<Department[]>([])
+
+const programmeDraft = ref<BonusProgramme | null>(null)
+const milestoneAmounts = ref<Record<string, number>>({})
+const workDraft = ref<IncentiveWork | null>(null)
+const workReward = ref(0)
+const manualOpen = ref(false)
+const manual = ref({ uid: '', reason: '', amount: 0, label: '' })
+const reviewing = ref<IncentiveWork | null>(null)
+const reviewNote = ref('')
+
+const pendingProgramme = ref<BonusProgramme | null>(null)
+const pendingWork = ref<IncentiveWork | null>(null)
+const statusFilter = ref<AwardStatus | ''>('')
+
+const today = new Date().toISOString().slice(0, 10)
+
+const canManage = computed(() => auth.hasPermission(PERMISSIONS.BONUSES_MANAGE))
+const canApprove = computed(() => auth.hasPermission(PERMISSIONS.BONUSES_APPROVE))
+const canSeeAll = computed(() => auth.hasPermission(PERMISSIONS.BONUSES_VIEW_ALL))
+
+function money(minor: number): string {
+  return formatMoney(minor, BASE_CURRENCY, locale.value)
+}
+
+const peopleByUid = computed(() => new Map(people.value.map((p) => [p.uid, p])))
+
+const sources = computed<ProgressSources>(() => ({
+  sales: snapshot.value.sales,
+  transactions: snapshot.value.transactions,
+  leads: snapshot.value.leads,
+  clients: snapshot.value.clients,
+  projects: snapshot.value.projects,
+  awards: snapshot.value.awards,
+}))
+
+/** Programmes the viewer may see: everything, or only ones they are part of. */
+const programmes = computed(() =>
+  snapshot.value.programmes.filter(
+    (p) =>
+      canSeeAll.value ||
+      canManage.value ||
+      membersOf(p, roster.value).includes(auth.uid ?? ''),
+  ),
+)
+
+const roster = computed(() =>
+  people.value.map((p) => ({ uid: p.uid, departmentId: p.departmentId ?? null })),
+)
+
+/** Every member of every programme, with where they stand. */
+function standings(programme: BonusProgramme) {
+  const uids = canSeeAll.value || canManage.value
+    ? membersOf(programme, roster.value)
+    : [auth.uid ?? '']
+
+  return uids
+    .filter(Boolean)
+    .map((uid) => ({
+      uid,
+      person: peopleByUid.value.get(uid),
+      progress: progressFor(programme, uid, sources.value),
+    }))
+    .sort((a, b) => b.progress.current - a.progress.current)
+}
+
+const work = computed(() =>
+  snapshot.value.work
+    .filter((w) => canSeeAll.value || canManage.value || w.assigneeUid === auth.uid)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
+)
+
+const awards = computed(() =>
+  snapshot.value.awards
+    .filter((a) => canSeeAll.value || a.employeeUid === auth.uid)
+    .filter((a) => !statusFilter.value || a.status === statusFilter.value)
+    .sort((a, b) => b.earnedDate.localeCompare(a.earnedDate)),
+)
+
+const owed = computed(() =>
+  snapshot.value.awards
+    .filter((a) => a.status === 'earned' || a.status === 'approved')
+    .reduce((n, a) => n + a.amountBaseMinor, 0),
+)
+
+async function load(): Promise<void> {
+  loading.value = true
+  const [snap, e, d] = await Promise.all([
+    loadSnapshot(),
+    fetchEmployees().catch(() => []),
+    fetchDepartments().catch(() => []),
+  ])
+  snapshot.value = snap
+  people.value = e
+  departments.value = d
+  loading.value = false
+}
+
+/* ---- Programme editor ------------------------------------------------ */
+
+function blankProgramme(): BonusProgramme {
+  const year = today.slice(0, 4)
+  return {
+    id: '',
+    name: '',
+    description: '',
+    metric: 'sales_count',
+    audience: 'company',
+    departmentId: null,
+    memberUids: [],
+    milestones: [],
+    startDate: `${year}-01-01`,
+    endDate: `${year}-12-31`,
+    serviceId: null,
+    requiresApproval: true,
+    repeats: false,
+    status: 'draft',
+    visibleToStaff: true,
+    notes: '',
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+  }
+}
+
+function startProgramme(): void {
+  programmeDraft.value = blankProgramme()
+  milestoneAmounts.value = {}
+}
+
+function editProgramme(p: BonusProgramme): void {
+  programmeDraft.value = {
+    ...p,
+    memberUids: [...(p.memberUids ?? [])],
+    milestones: (p.milestones ?? []).map((m) => ({ ...m })),
+  }
+  milestoneAmounts.value = Object.fromEntries(
+    (p.milestones ?? []).map((m) => [m.id, fromMinor(m.rewardBaseMinor, BASE_CURRENCY)]),
+  )
+}
+
+function addMilestone(): void {
+  const d = programmeDraft.value
+  if (!d) return
+  const milestone: BonusMilestone = {
+    id: Math.random().toString(36).slice(2, 10),
+    target: 0,
+    rewardBaseMinor: 0,
+    rewardLabel: '',
+    note: '',
+  }
+  d.milestones.push(milestone)
+  milestoneAmounts.value[milestone.id] = 0
+}
+
+function toggleMember(uid: string): void {
+  const list = programmeDraft.value?.memberUids
+  if (!list) return
+  const i = list.indexOf(uid)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(uid)
+}
+
+async function commitProgramme(): Promise<void> {
+  const d = programmeDraft.value
+  if (!d || saving.value) return
+  if (!d.name.trim()) {
+    ui.notify('danger', t('bonuses.nameRequired'))
+    return
+  }
+
+  saving.value = true
+  try {
+    await saveProgramme({
+      ...d,
+      name: d.name.trim(),
+      milestones: d.milestones
+        .map((m) => ({
+          ...m,
+          rewardBaseMinor: toMinor(milestoneAmounts.value[m.id] ?? 0, BASE_CURRENCY),
+        }))
+        .sort((a, b) => a.target - b.target),
+    })
+    ui.notify('ok', t('bonuses.saved'))
+    programmeDraft.value = null
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+/**
+ * Grant a milestone somebody has reached.
+ *
+ * Deliberately a button rather than something that happens on its own. The
+ * count is automatic; handing over money is not.
+ */
+async function grant(
+  programme: BonusProgramme,
+  milestone: BonusMilestone,
+  uid: string,
+): Promise<void> {
+  const person = peopleByUid.value.get(uid)
+  if (!person) return
+
+  try {
+    await grantMilestone(programme, milestone, {
+      uid,
+      name: `${person.firstName} ${person.lastName}`,
+    })
+    ui.notify('ok', t('bonuses.granted'))
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  }
+}
+
+async function confirmDeleteProgramme(): Promise<void> {
+  if (!pendingProgramme.value) return
+  await deleteProgramme(pendingProgramme.value)
+  pendingProgramme.value = null
+  await load()
+}
+
+/* ---- Incentive work -------------------------------------------------- */
+
+function blankWork(): IncentiveWork {
+  return {
+    id: '',
+    title: '',
+    description: '',
+    assigneeUid: '',
+    assigneeName: '',
+    dueDate: null,
+    rewardBaseMinor: 0,
+    rewardLabel: '',
+    status: 'assigned',
+    submittedAt: null,
+    submissionNote: '',
+    reviewedBy: null,
+    reviewedByName: '',
+    reviewedAt: null,
+    reviewNote: '',
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: '',
+    createdBy: '',
+    createdByName: '',
+    updatedAt: '',
+  }
+}
+
+function startWork(): void {
+  workDraft.value = blankWork()
+  workReward.value = 0
+}
+
+function onAssigneeChange(uid: string): void {
+  const d = workDraft.value
+  if (!d) return
+  const person = peopleByUid.value.get(uid)
+  d.assigneeUid = uid
+  d.assigneeName = person ? `${person.firstName} ${person.lastName}` : ''
+}
+
+async function commitWork(): Promise<void> {
+  const d = workDraft.value
+  if (!d || saving.value) return
+  if (!d.title.trim() || !d.assigneeUid) {
+    ui.notify('danger', t('bonuses.workRequired'))
+    return
+  }
+
+  saving.value = true
+  try {
+    await saveWork({
+      ...d,
+      title: d.title.trim(),
+      rewardBaseMinor: toMinor(workReward.value, BASE_CURRENCY),
+    })
+    ui.notify('ok', t('bonuses.workAssigned'))
+    workDraft.value = null
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function decideWork(approve: boolean): Promise<void> {
+  const w = reviewing.value
+  if (!w || saving.value) return
+
+  saving.value = true
+  try {
+    if (approve) await approveWork(w, reviewNote.value)
+    else await rejectWork(w, reviewNote.value)
+
+    ui.notify('ok', approve ? t('bonuses.workApproved') : t('bonuses.workRejected'))
+    reviewing.value = null
+    reviewNote.value = ''
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function confirmDeleteWork(): Promise<void> {
+  if (!pendingWork.value) return
+  await deleteWork(pendingWork.value)
+  pendingWork.value = null
+  await load()
+}
+
+/* ---- Awards ---------------------------------------------------------- */
+
+async function decideAward(award: BonusAward, status: AwardStatus): Promise<void> {
+  if (award.employeeUid === auth.uid) {
+    ui.notify('danger', t('bonuses.approveOwn'))
+    return
+  }
+
+  try {
+    await setAwardStatus(award, status)
+    ui.notify('ok', t('bonuses.statusChanged'))
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  }
+}
+
+async function commitManual(): Promise<void> {
+  if (saving.value || !manual.value.uid || !manual.value.reason.trim()) return
+  const person = peopleByUid.value.get(manual.value.uid)
+  if (!person) return
+
+  saving.value = true
+  try {
+    await grantManual({
+      employeeUid: manual.value.uid,
+      employeeName: `${person.firstName} ${person.lastName}`,
+      reason: manual.value.reason.trim(),
+      amountBaseMinor: toMinor(manual.value.amount, BASE_CURRENCY),
+      rewardLabel: manual.value.label.trim(),
+    })
+    ui.notify('ok', t('bonuses.granted'))
+    manualOpen.value = false
+    manual.value = { uid: '', reason: '', amount: 0, label: '' }
+    await load()
+  } catch {
+    ui.notify('danger', t('bonuses.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+function isMoneyMetric(programme: BonusProgramme): boolean {
+  return MONEY_BONUS_METRICS.includes(programme.metric)
+}
+
+function displayCount(programme: BonusProgramme, value: number): string {
+  return isMoneyMetric(programme) ? money(value) : String(value)
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">{{ t('bonuses.title') }}</h1>
+        <p class="page-subtitle">{{ t('bonuses.subtitle') }}</p>
+      </div>
+
+      <div v-if="canManage" class="head-actions">
+        <button v-if="tab === 'programmes'" class="btn btn-primary" @click="startProgramme">
+          <AppIcon name="plus" :size="16" /> {{ t('bonuses.newProgramme') }}
+        </button>
+        <button v-else-if="tab === 'work'" class="btn btn-primary" @click="startWork">
+          <AppIcon name="plus" :size="16" /> {{ t('bonuses.assignWork') }}
+        </button>
+        <button v-else class="btn btn-primary" @click="manualOpen = true">
+          <AppIcon name="plus" :size="16" /> {{ t('bonuses.grantManual') }}
+        </button>
+      </div>
+    </header>
+
+    <div class="note">
+      <AppIcon name="shield" :size="16" />
+      <div>
+        <p class="note-title">{{ t('bonuses.ruleTitle') }}</p>
+        <p class="note-text">{{ t('bonuses.ruleText') }}</p>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button
+        v-for="key in (['programmes', 'work', 'awards'] as Tab[])"
+        :key="key"
+        type="button"
+        role="tab"
+        class="tab"
+        :class="{ 'is-active': tab === key }"
+        :aria-selected="tab === key"
+        @click="tab = key"
+      >
+        {{
+          key === 'programmes'
+            ? t('bonuses.programmes')
+            : key === 'work'
+              ? t('bonuses.incentiveWork')
+              : t('bonuses.history')
+        }}
+      </button>
+    </div>
+
+    <div v-if="loading" class="card">
+      <div class="card-body stack">
+        <div v-for="n in 3" :key="n" class="skeleton" style="height: 90px" />
+      </div>
+    </div>
+
+    <!-- ===================== PROGRAMMES ===================== -->
+    <template v-else-if="tab === 'programmes'">
+      <section v-if="programmeDraft" class="card editor">
+        <div class="card-header">
+          <h2 class="card-title">
+            {{ programmeDraft.id ? t('bonuses.editProgramme') : t('bonuses.newProgramme') }}
+          </h2>
+          <button
+            class="btn btn-ghost btn-icon"
+            :aria-label="t('common.close')"
+            @click="programmeDraft = null"
+          >
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
+
+        <div class="card-body stack">
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="b-name">
+                {{ t('bonuses.name') }}<span class="req">*</span>
+              </label>
+              <input id="b-name" v-model="programmeDraft.name" class="input" :maxlength="LIMITS.position" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-metric">{{ t('bonuses.metric') }}</label>
+              <select id="b-metric" v-model="programmeDraft.metric" class="select">
+                <option v-for="m in BONUS_METRICS" :key="m" :value="m">
+                  {{ t(`bonusMetric.${m}`) }}
+                </option>
+              </select>
+              <p class="field-hint">{{ t('bonuses.metricHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-audience">{{ t('bonuses.audience') }}</label>
+              <select id="b-audience" v-model="programmeDraft.audience" class="select">
+                <option v-for="a in BONUS_AUDIENCES" :key="a" :value="a">
+                  {{ t(`bonusAudience.${a}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="programmeDraft.audience === 'department'" class="field">
+              <label class="field-label" for="b-dept">{{ t('goals.department') }}</label>
+              <select id="b-dept" v-model="programmeDraft.departmentId" class="select">
+                <option :value="null">—</option>
+                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+            </div>
+
+            <div v-if="snapshot.services.length" class="field">
+              <label class="field-label" for="b-svc">{{ t('goals.service') }}</label>
+              <select id="b-svc" v-model="programmeDraft.serviceId" class="select">
+                <option :value="null">{{ t('goals.anyService') }}</option>
+                <option v-for="s in snapshot.services" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-from">{{ t('goals.startDate') }}</label>
+              <input id="b-from" v-model="programmeDraft.startDate" class="input" type="date" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-to">{{ t('goals.endDate') }}</label>
+              <input id="b-to" v-model="programmeDraft.endDate" class="input" type="date" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-status">{{ t('table.status') }}</label>
+              <select id="b-status" v-model="programmeDraft.status" class="select">
+                <option v-for="s in PROGRAMME_STATUSES" :key="s" :value="s">
+                  {{ t(`programmeStatus.${s}`) }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="programmeDraft.audience === 'selected'" class="field">
+            <span class="field-label">{{ t('bonuses.members') }}</span>
+            <div class="picker">
+              <label v-for="p in people" :key="p.uid" class="check">
+                <input
+                  type="checkbox"
+                  :checked="programmeDraft.memberUids.includes(p.uid)"
+                  @change="toggleMember(p.uid)"
+                />
+                <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Milestones ---------------------------------------------- -->
+          <fieldset class="block">
+            <legend>{{ t('bonuses.milestones') }}</legend>
+            <p class="field-hint">{{ t('bonuses.milestonesHint') }}</p>
+
+            <div v-for="(m, i) in programmeDraft.milestones" :key="m.id" class="milestone-row">
+              <div class="field">
+                <label class="field-label" :for="`m-target-${i}`">{{ t('bonuses.target') }}</label>
+                <input :id="`m-target-${i}`" v-model.number="m.target" class="input" type="number" />
+              </div>
+              <div class="field">
+                <label class="field-label" :for="`m-amount-${i}`">{{ t('bonuses.rewardAmount') }}</label>
+                <input
+                  :id="`m-amount-${i}`"
+                  v-model.number="milestoneAmounts[m.id]"
+                  class="input"
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" :for="`m-label-${i}`">{{ t('bonuses.rewardLabel') }}</label>
+                <input :id="`m-label-${i}`" v-model="m.rewardLabel" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <button
+                class="btn btn-ghost btn-sm danger"
+                :aria-label="t('common.delete')"
+                @click="programmeDraft.milestones.splice(i, 1)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </div>
+
+            <button class="btn btn-secondary btn-sm" type="button" @click="addMilestone">
+              <AppIcon name="plus" :size="14" /> {{ t('bonuses.addMilestone') }}
+            </button>
+          </fieldset>
+
+          <div class="switches">
+            <label class="check">
+              <input v-model="programmeDraft.requiresApproval" type="checkbox" />
+              <span class="check-text">{{ t('bonuses.requiresApproval') }}</span>
+            </label>
+            <label class="check">
+              <input v-model="programmeDraft.repeats" type="checkbox" />
+              <span class="check-text">{{ t('bonuses.repeats') }}</span>
+            </label>
+            <label class="check">
+              <input v-model="programmeDraft.visibleToStaff" type="checkbox" />
+              <span class="check-text">{{ t('bonuses.visibleToStaff') }}</span>
+            </label>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="b-desc">{{ t('bonuses.description') }}</label>
+            <textarea
+              id="b-desc"
+              v-model="programmeDraft.description"
+              class="textarea"
+              :maxlength="LIMITS.longText"
+            />
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="programmeDraft = null">
+            {{ t('common.cancel') }}
+          </button>
+          <button class="btn btn-primary" :disabled="saving" @click="commitProgramme">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
+        </div>
+      </section>
+
+      <div v-if="programmes.length === 0" class="card">
+        <div class="empty">
+          <span class="empty-icon"><AppIcon name="gift" :size="20" /></span>
+          <p class="empty-title">{{ t('bonuses.empty') }}</p>
+          <p class="empty-text">{{ t('bonuses.emptyHint') }}</p>
+          <button v-if="canManage" class="btn btn-primary" @click="startProgramme">
+            {{ t('bonuses.newProgramme') }}
+          </button>
+        </div>
+      </div>
+
+      <section v-for="programme in programmes" :key="programme.id" class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">{{ programme.name }}</h2>
+            <p class="field-hint">
+              {{ t(`bonusMetric.${programme.metric}`) }} ·
+              {{ formatDate(programme.startDate) }} → {{ formatDate(programme.endDate) }}
+            </p>
+          </div>
+          <span class="badge" :class="`pg-${programme.status}`">
+            {{ t(`programmeStatus.${programme.status}`) }}
+          </span>
+          <button v-if="canManage" class="btn btn-ghost btn-sm" @click="editProgramme(programme)">
+            <AppIcon name="edit" :size="15" />
+          </button>
+          <button
+            v-if="canManage"
+            class="btn btn-ghost btn-sm danger"
+            :aria-label="t('common.delete')"
+            @click="pendingProgramme = programme"
+          >
+            <AppIcon name="trash" :size="15" />
+          </button>
+        </div>
+
+        <p v-if="programme.description" class="card-body muted">{{ programme.description }}</p>
+
+        <p v-if="(programme.milestones ?? []).length === 0" class="card-body tertiary small">
+          {{ t('bonuses.noMilestones') }}
+        </p>
+
+        <!-- The ladder, per person -------------------------------------- -->
+        <div v-else class="standings">
+          <article v-for="row in standings(programme)" :key="row.uid" class="standing">
+            <div class="standing-head">
+              <UserAvatar
+                :name="row.person ? `${row.person.firstName} ${row.person.lastName}` : row.uid"
+                :photo-url="row.person?.photoUrl ?? null"
+                :size="30"
+              />
+              <span class="standing-name">
+                {{ row.person ? `${row.person.firstName} ${row.person.lastName}` : row.uid }}
+              </span>
+              <span class="standing-current">
+                {{ displayCount(programme, row.progress.current) }}
+              </span>
+            </div>
+
+            <!-- A visual ladder rather than one bar ------------------- -->
+            <ol class="ladder">
+              <li
+                v-for="step in row.progress.milestones"
+                :key="step.milestone.id"
+                class="rung"
+                :class="{ 'is-reached': step.reached }"
+              >
+                <span class="rung-dot">
+                  <AppIcon v-if="step.awardStatus === 'paid'" name="check" :size="11" />
+                  <AppIcon v-else-if="step.reached" name="flag" :size="11" />
+                </span>
+                <span class="rung-body">
+                  <span class="rung-target">
+                    {{ displayCount(programme, step.milestone.target) }}
+                  </span>
+                  <span class="rung-reward tertiary">
+                    {{
+                      step.milestone.rewardLabel ||
+                      money(step.milestone.rewardBaseMinor)
+                    }}
+                  </span>
+                </span>
+                <span v-if="step.awardStatus" class="badge badge-plain">
+                  {{ t(`awardStatus.${step.awardStatus}`) }}
+                </span>
+                <button
+                  v-else-if="step.reached && canManage && row.uid !== auth.uid"
+                  class="btn btn-secondary btn-sm"
+                  @click="grant(programme, step.milestone, row.uid)"
+                >
+                  {{ t('bonuses.grant') }}
+                </button>
+              </li>
+            </ol>
+
+            <p v-if="row.progress.nextMilestone" class="next tertiary">
+              {{ t('bonuses.remaining') }}:
+              {{ displayCount(programme, row.progress.remaining) }}
+              → {{ row.progress.nextMilestone.rewardLabel || money(row.progress.nextMilestone.rewardBaseMinor) }}
+            </p>
+          </article>
+        </div>
+      </section>
+    </template>
+
+    <!-- ===================== INCENTIVE WORK ===================== -->
+    <template v-else-if="tab === 'work'">
+      <section v-if="workDraft" class="card editor">
+        <div class="card-header">
+          <h2 class="card-title">{{ t('bonuses.assignWork') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="workDraft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
+
+        <div class="card-body stack">
+          <p class="field-hint">{{ t('bonuses.workHint') }}</p>
+
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="w-title">
+                {{ t('bonuses.workTitle') }}<span class="req">*</span>
+              </label>
+              <input id="w-title" v-model="workDraft.title" class="input" :maxlength="LIMITS.position" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="w-assignee">
+                {{ t('table.assignee') }}<span class="req">*</span>
+              </label>
+              <select
+                id="w-assignee"
+                :value="workDraft.assigneeUid"
+                class="select"
+                @change="onAssigneeChange(($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">—</option>
+                <option v-for="p in people" :key="p.uid" :value="p.uid">
+                  {{ p.firstName }} {{ p.lastName }}
+                </option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="w-due">{{ t('table.dueDate') }}</label>
+              <input id="w-due" v-model="workDraft.dueDate" class="input" type="date" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="w-reward">{{ t('bonuses.rewardAmount') }}</label>
+              <input id="w-reward" v-model.number="workReward" class="input" type="number" step="0.01" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="w-label">{{ t('bonuses.rewardLabel') }}</label>
+              <input id="w-label" v-model="workDraft.rewardLabel" class="input" :maxlength="LIMITS.name" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="w-desc">{{ t('bonuses.description') }}</label>
+            <textarea id="w-desc" v-model="workDraft.description" class="textarea" :maxlength="LIMITS.longText" />
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="workDraft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commitWork">
+            <span v-if="saving" class="spinner" />{{ t('bonuses.assignWork') }}
+          </button>
+        </div>
+      </section>
+
+      <div v-if="work.length === 0" class="card">
+        <div class="empty">
+          <span class="empty-icon"><AppIcon name="briefcase" :size="20" /></span>
+          <p class="empty-title">{{ t('bonuses.noWork') }}</p>
+          <p class="empty-text">{{ t('bonuses.noWorkHint') }}</p>
+        </div>
+      </div>
+
+      <section v-else class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('bonuses.workTitle') }}</th>
+                <th class="hide-sm">{{ t('table.assignee') }}</th>
+                <th class="hide-sm">{{ t('table.dueDate') }}</th>
+                <th class="num">{{ t('bonuses.reward') }}</th>
+                <th>{{ t('table.status') }}</th>
+                <th class="col-actions" />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="w in work" :key="w.id">
+                <td>
+                  <span class="strong">{{ w.title }}</span>
+                  <span v-if="w.submissionNote" class="tertiary small block">{{ w.submissionNote }}</span>
+                </td>
+                <td class="hide-sm muted">{{ w.assigneeName }}</td>
+                <td class="hide-sm muted nowrap" :class="{ late: w.dueDate && w.dueDate < today }">
+                  {{ w.dueDate ? formatDate(w.dueDate) : '—' }}
+                </td>
+                <td class="num strong">
+                  {{ w.rewardBaseMinor ? money(w.rewardBaseMinor) : w.rewardLabel || '—' }}
+                </td>
+                <td>
+                  <span class="badge" :class="`ws-${w.status}`">
+                    {{ t(`workStatus.${w.status}`) }}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <button
+                    v-if="canApprove && w.status === 'submitted'"
+                    class="btn btn-primary btn-sm"
+                    @click="reviewing = w"
+                  >
+                    {{ t('bonuses.review') }}
+                  </button>
+                  <button
+                    v-if="canManage"
+                    class="btn btn-ghost btn-sm danger"
+                    :aria-label="t('common.delete')"
+                    @click="pendingWork = w"
+                  >
+                    <AppIcon name="trash" :size="15" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+    <!-- ===================== AWARDS ===================== -->
+    <template v-else>
+      <div class="figures">
+        <article class="card figure">
+          <span class="figure-label">{{ t('bonuses.owed') }}</span>
+          <span class="figure-value warn">{{ money(owed) }}</span>
+          <span class="figure-hint">{{ t('bonuses.owedHint') }}</span>
+        </article>
+      </div>
+
+      <div class="toolbar">
+        <select v-model="statusFilter" class="select compact" :aria-label="t('table.status')">
+          <option value="">{{ t('clients.allStatuses') }}</option>
+          <option v-for="s in AWARD_STATUSES" :key="s" :value="s">{{ t(`awardStatus.${s}`) }}</option>
+        </select>
+      </div>
+
+      <div v-if="awards.length === 0" class="card">
+        <div class="empty">
+          <span class="empty-icon"><AppIcon name="gift" :size="20" /></span>
+          <p class="empty-title">{{ t('bonuses.noAwards') }}</p>
+          <p class="empty-text">{{ t('bonuses.noAwardsHint') }}</p>
+        </div>
+      </div>
+
+      <section v-else class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('table.employee') }}</th>
+                <th>{{ t('bonuses.reason') }}</th>
+                <th class="hide-sm">{{ t('bonuses.source') }}</th>
+                <th class="num">{{ t('table.amount') }}</th>
+                <th class="hide-sm">{{ t('bonuses.earnedDate') }}</th>
+                <th class="hide-md">{{ t('bonuses.paidDate') }}</th>
+                <th>{{ t('table.status') }}</th>
+                <th class="col-actions" />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in awards" :key="a.id">
+                <td class="strong">{{ a.employeeName }}</td>
+                <td>{{ a.reason || a.sourceLabel }}</td>
+                <td class="hide-sm muted">{{ t(`awardSource.${a.source}`) }}</td>
+                <td class="num strong">
+                  {{ a.amountBaseMinor ? money(a.amountBaseMinor) : a.rewardLabel || '—' }}
+                </td>
+                <td class="hide-sm muted nowrap">{{ formatDate(a.earnedDate) }}</td>
+                <td class="hide-md muted nowrap">
+                  {{ a.paidAt ? formatDate(a.paidAt.slice(0, 10)) : '—' }}
+                </td>
+                <td>
+                  <span class="badge" :class="`as-${a.status}`">
+                    {{ t(`awardStatus.${a.status}`) }}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <template v-if="canApprove && a.employeeUid !== auth.uid">
+                    <button
+                      v-if="a.status === 'pending'"
+                      class="btn btn-secondary btn-sm"
+                      @click="decideAward(a, 'earned')"
+                    >
+                      {{ t('bonuses.markEarned') }}
+                    </button>
+                    <button
+                      v-if="a.status === 'earned'"
+                      class="btn btn-primary btn-sm"
+                      @click="decideAward(a, 'approved')"
+                    >
+                      {{ t('bonuses.approve') }}
+                    </button>
+                    <button
+                      v-if="a.status === 'approved'"
+                      class="btn btn-secondary btn-sm"
+                      @click="decideAward(a, 'paid')"
+                    >
+                      {{ t('bonuses.markPaid') }}
+                    </button>
+                    <button
+                      v-if="a.status === 'pending' || a.status === 'earned'"
+                      class="btn btn-ghost btn-sm danger"
+                      @click="decideAward(a, 'rejected')"
+                    >
+                      {{ t('bonuses.reject') }}
+                    </button>
+                  </template>
+                  <span v-else-if="a.employeeUid === auth.uid" class="tertiary small">
+                    {{ t('bonuses.approveOwn') }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+    <!-- Review a submission ------------------------------------------- -->
+    <div v-if="reviewing" class="modal-backdrop" @click.self="reviewing = null">
+      <section class="card modal">
+        <div class="card-header">
+          <h2 class="card-title">{{ t('bonuses.review') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="reviewing = null">
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
+
+        <div class="card-body stack">
+          <p class="strong">{{ reviewing.title }}</p>
+          <p class="tertiary small">{{ reviewing.assigneeName }}</p>
+          <p v-if="reviewing.submissionNote" class="prose">{{ reviewing.submissionNote }}</p>
+          <p class="field-hint">{{ t('bonuses.reviewHint') }}</p>
+
+          <div class="field">
+            <label class="field-label" for="rv-note">{{ t('bonuses.reviewNote') }}</label>
+            <textarea id="rv-note" v-model="reviewNote" class="textarea" :maxlength="LIMITS.longText" />
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-ghost danger" :disabled="saving" @click="decideWork(false)">
+            {{ t('bonuses.reject') }}
+          </button>
+          <span class="spacer" />
+          <button class="btn btn-secondary" @click="reviewing = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="decideWork(true)">
+            <span v-if="saving" class="spinner" />{{ t('bonuses.approve') }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Grant a one-off ------------------------------------------------ -->
+    <div v-if="manualOpen" class="modal-backdrop" @click.self="manualOpen = false">
+      <section class="card modal">
+        <div class="card-header">
+          <h2 class="card-title">{{ t('bonuses.grantManual') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="manualOpen = false">
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
+
+        <div class="card-body stack">
+          <div class="field">
+            <label class="field-label" for="mn-uid">{{ t('table.employee') }}</label>
+            <select id="mn-uid" v-model="manual.uid" class="select">
+              <option value="">—</option>
+              <option v-for="p in people" :key="p.uid" :value="p.uid">
+                {{ p.firstName }} {{ p.lastName }}
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="mn-reason">{{ t('bonuses.reason') }}</label>
+            <input id="mn-reason" v-model="manual.reason" class="input" :maxlength="LIMITS.position" />
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="mn-amount">{{ t('bonuses.rewardAmount') }}</label>
+              <input id="mn-amount" v-model.number="manual.amount" class="input" type="number" step="0.01" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="mn-label">{{ t('bonuses.rewardLabel') }}</label>
+              <input id="mn-label" v-model="manual.label" class="input" :maxlength="LIMITS.name" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="manualOpen = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commitManual">
+            <span v-if="saving" class="spinner" />{{ t('bonuses.grant') }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <ConfirmDialog
+      :open="pendingProgramme !== null"
+      :title="t('bonuses.deleteProgramme')"
+      :message="t('recycle.deleteExplain')"
+      danger
+      @confirm="confirmDeleteProgramme"
+      @cancel="pendingProgramme = null"
+    />
+
+    <ConfirmDialog
+      :open="pendingWork !== null"
+      :title="t('bonuses.deleteWork')"
+      :message="t('recycle.deleteExplain')"
+      danger
+      @confirm="confirmDeleteWork"
+      @cancel="pendingWork = null"
+    />
+  </div>
+</template>
+
+<style scoped>
+.head-actions { display: flex; gap: var(--space-2); }
+.note {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  background: var(--bg-inset); color: var(--text-secondary);
+}
+.note-title { font-size: var(--text-sm); font-weight: 650; color: var(--text-primary); }
+.note-text { font-size: var(--text-xs); line-height: var(--leading-relaxed); margin-top: 2px; }
+
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
+.tab { padding: var(--space-3) var(--space-4); border-bottom: 2px solid transparent; font-size: var(--text-base); font-weight: 550; color: var(--text-secondary); white-space: nowrap; }
+.tab:hover { color: var(--text-primary); }
+.tab.is-active { color: var(--text-brand); border-bottom-color: var(--accent); }
+
+.editor { border-color: var(--accent-soft-border); }
+.block { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.block > legend { padding: 0 var(--space-2); font-size: var(--text-sm); font-weight: 650; }
+.milestone-row { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: var(--space-3); align-items: end; }
+@media (max-width: 720px) { .milestone-row { grid-template-columns: 1fr 1fr; } }
+.switches { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 180px; overflow-y: auto; }
+
+.standings { display: flex; flex-direction: column; }
+.standing { padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: var(--space-3); }
+.standing-head { display: flex; align-items: center; gap: var(--space-3); }
+.standing-name { flex: 1; font-weight: 600; }
+.standing-current { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-brand); }
+
+.ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); position: relative; }
+.ladder::before {
+  content: ''; position: absolute; left: 9px; top: 10px; bottom: 10px;
+  width: 2px; background: var(--border-subtle);
+}
+.rung { display: flex; align-items: center; gap: var(--space-3); position: relative; }
+.rung-dot {
+  width: 20px; height: 20px; flex-shrink: 0; z-index: 1;
+  border-radius: 50%; border: 2px solid var(--border-strong);
+  background: var(--bg-surface);
+  display: grid; place-items: center; color: var(--text-tertiary);
+}
+.rung.is-reached .rung-dot { border-color: var(--ok-500); background: var(--ok-bg); color: var(--ok-500); }
+.rung-body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.rung-target { font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
+.rung-reward { font-size: var(--text-xs); }
+.next { font-size: var(--text-xs); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+.figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
+.figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.figure-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
+.select.compact { max-width: 200px; }
+
+.modal-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--space-4); background: rgb(0 0 0 / 45%); }
+.modal { width: min(520px, 100%); box-shadow: var(--shadow-lg); }
+.spacer { flex: 1; }
+.prose { font-size: var(--text-sm); line-height: var(--leading-relaxed); white-space: pre-wrap; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.strong { font-weight: 650; }
+.block { display: block; }
+.warn { color: var(--warn-500); }
+.late { color: var(--danger-500); font-weight: 600; }
+.nowrap { white-space: nowrap; }
+.small { font-size: var(--text-xs); }
+.danger:hover { color: var(--danger-500); }
+
+.pg-active, .ws-approved, .as-paid { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
+.pg-draft, .ws-assigned, .as-pending { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
+.pg-ended, .ws-cancelled, .as-cancelled { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
+.ws-in_progress, .as-earned { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); color: var(--text-brand); }
+.ws-submitted, .as-approved { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
+.ws-rejected, .as-rejected { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
+
+@media (max-width: 900px) { .hide-md { display: none; } }
+@media (max-width: 640px) { .hide-sm { display: none; } }
+</style>

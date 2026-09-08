@@ -54,12 +54,18 @@ interface NavSection {
 const isAffiliate = computed(() => auth.access?.accountType === 'affiliate')
 
 const sections = computed<NavSection[]>(() => {
+  /*
+   * The final shape. Administration is deliberately absent: roles, the
+   * organisation chart, registration requests and the audit log live under
+   * Settings, because they are configured once and then left alone. Beside
+   * the daily work they only made this list longer.
+   */
   const raw: NavSection[] = [
     {
       titleKey: 'modules.groupMain',
       items: [
         { to: '/', labelKey: 'nav.dashboard', icon: 'dashboard' },
-        { to: '/workspace', labelKey: 'modules.workspace', icon: 'briefcase' },
+        { to: '/workspace', labelKey: 'workspace.title', icon: 'briefcase' },
       ],
     },
     {
@@ -77,7 +83,6 @@ const sections = computed<NavSection[]>(() => {
           labelKey: 'modules.leads',
           icon: 'target',
           permission: PERMISSIONS.LEADS_VIEW,
-          internalOnly: true,
         },
         {
           to: '/projects',
@@ -86,7 +91,6 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.PROJECTS_VIEW,
           internalOnly: true,
         },
-        { to: '/tasks', labelKey: 'modules.tasks', icon: 'check', internalOnly: true },
         {
           to: '/sales',
           labelKey: 'modules.sales',
@@ -101,20 +105,7 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.SERVICES_VIEW,
           internalOnly: true,
         },
-        {
-          to: '/affiliates',
-          labelKey: 'modules.affiliateProgram',
-          icon: 'gift',
-          permission: PERMISSIONS.AFFILIATES_VIEW,
-          internalOnly: true,
-        },
-        {
-          to: '/contracts',
-          labelKey: 'modules.contracts',
-          icon: 'contract',
-          permission: PERMISSIONS.CONTRACTS_VIEW,
-          internalOnly: true,
-        },
+        { to: '/affiliates', labelKey: 'modules.affiliateProgram', icon: 'gift' },
         {
           to: '/finance',
           labelKey: 'modules.finance',
@@ -142,6 +133,13 @@ const sections = computed<NavSection[]>(() => {
           internalOnly: true,
         },
         {
+          to: '/bonuses',
+          labelKey: 'modules.bonuses',
+          icon: 'gift',
+          permission: PERMISSIONS.BONUSES_VIEW,
+          internalOnly: true,
+        },
+        {
           to: '/performance',
           labelKey: 'modules.performance',
           icon: 'gauge',
@@ -161,13 +159,6 @@ const sections = computed<NavSection[]>(() => {
           internalOnly: true,
         },
         {
-          to: '/chat',
-          labelKey: 'chat.title',
-          icon: 'chat',
-          permission: PERMISSIONS.CHAT_USE,
-          internalOnly: true,
-        },
-        {
           to: '/analytics',
           labelKey: 'modules.analytics',
           icon: 'chart',
@@ -176,26 +167,9 @@ const sections = computed<NavSection[]>(() => {
         },
       ],
     },
-    /*
-     * Administration lives inside Settings rather than as its own group.
-     * Roles, the organisation chart, registration requests and the audit log
-     * are all things you configure once and then leave alone; putting them
-     * beside the work somebody does every day made the menu longer without
-     * making anything easier to find. Their routes still exist and are still
-     * permission-gated — Settings is a hub over them, not a replacement.
-     */
     {
       titleKey: 'modules.groupSystem',
-      items: [
-        {
-          to: '/requests',
-          labelKey: 'nav.requests',
-          icon: 'inbox',
-          permission: PERMISSIONS.REQUESTS_VIEW,
-          internalOnly: true,
-        },
-        { to: '/settings', labelKey: 'nav.settings', icon: 'settings' },
-      ],
+      items: [{ to: '/settings', labelKey: 'nav.settings', icon: 'settings' }],
     },
   ]
 
