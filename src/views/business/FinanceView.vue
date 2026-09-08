@@ -653,7 +653,7 @@ onMounted(load)
 
         <section v-else class="card">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table table-cards">
               <thead>
                 <tr>
                   <th>{{ t('finance.date') }}</th>
@@ -669,12 +669,12 @@ onMounted(load)
               <tbody>
                 <tr v-for="tx in ledger" :key="tx.id">
                   <td class="muted nowrap">{{ formatDate(tx.date) }}</td>
-                  <td>{{ tx.description }}</td>
-                  <td class="hide-sm">
+                  <td :data-label="t('finance.description')">{{ tx.description }}</td>
+                  <td :data-label="t('finance.type')" class="hide-sm">
                     <span class="badge badge-plain">{{ t(`transactionType.${tx.type}`) }}</span>
                   </td>
-                  <td class="hide-md muted">{{ t(`transactionCategory.${tx.category}`) }}</td>
-                  <td class="hide-md">
+                  <td :data-label="t('finance.category')" class="hide-md muted">{{ t(`transactionCategory.${tx.category}`) }}</td>
+                  <td :data-label="t('table.client')" class="hide-md">
                     <button
                       v-if="tx.clientId"
                       type="button"
@@ -685,7 +685,7 @@ onMounted(load)
                     </button>
                     <span v-else class="tertiary">—</span>
                   </td>
-                  <td>
+                  <td :data-label="t('table.status')">
                     <span class="badge" :class="`ps-${tx.status}`">
                       {{ t(`payState.${tx.status}`) }}
                     </span>
@@ -693,7 +693,7 @@ onMounted(load)
                       {{ formatDate(tx.dueDate) }}
                     </span>
                   </td>
-                  <td class="num strong" :class="INCOME_TYPES.includes(tx.type) ? 'pos' : 'neg'">
+                  <td :data-label="t('table.amount')" class="num strong" :class="INCOME_TYPES.includes(tx.type) ? 'pos' : 'neg'">
                     {{ money(tx.amount.baseMinor) }}
                   </td>
                   <td class="col-actions">
@@ -782,6 +782,4 @@ onMounted(load)
 .ps-pending { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
 .ps-overdue { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

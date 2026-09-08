@@ -186,7 +186,7 @@ onMounted(load)
 
     <div v-else class="card">
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('table.name') }}</th>
@@ -212,13 +212,13 @@ onMounted(load)
                   </div>
                 </div>
               </td>
-              <td>{{ request.desiredPosition || '—' }}</td>
-              <td class="muted">{{ [request.city, request.country].filter(Boolean).join(', ') }}</td>
-              <td class="muted nowrap">
+              <td :data-label="t('table.requestedPosition')">{{ request.desiredPosition || '—' }}</td>
+              <td :data-label="t('table.location')" class="muted">{{ [request.city, request.country].filter(Boolean).join(', ') }}</td>
+              <td :data-label="t('table.submitted')" class="muted nowrap">
                 {{ formatDate(request.submittedAt) }}
                 <div class="tertiary small">{{ formatRelative(request.submittedAt) }}</div>
               </td>
-              <td v-if="tab === 'rejected'" class="muted truncate">
+              <td :data-label="t('table.reason')" v-if="tab === 'rejected'" class="muted truncate">
                 {{ request.rejectionReason || '—' }}
               </td>
               <td class="col-actions">

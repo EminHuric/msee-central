@@ -573,3 +573,162 @@
   flex: 1;
   min-width: 200px;
 }
+
+/* ---- Anchored popovers ------------------------------------------------ *
+ *
+ * A dropdown hung off a control near the right edge of the screen.
+ *
+ * The obvious version — `position: absolute; right: 0` with a viewport-wide
+ * max — is wrong, and shipped wrong: the notification panel is anchored to the
+ * bell, but the bell has three more controls to its right. On a phone that put
+ * the panel's right edge ~120px in from the screen edge while its width was
+ * still `100vw - 24px`, so the left half hung off the side of the screen and
+ * the text was unreadable.
+ *
+ * The anchor is the problem, so below 640px the panel stops using one: it goes
+ * `fixed` and is placed against the viewport, where it cannot miss. Above that
+ * the anchored version is right and stays.
+ */
+
+.popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 60;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* Never taller than the space under the control it hangs from. */
+.popover-scroll {
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  .popover {
+    position: fixed;
+    top: var(--topbar-height);
+    right: var(--space-3);
+    left: var(--space-3);
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .popover-scroll {
+    max-height: calc(100vh - var(--topbar-height) - var(--space-6));
+  }
+}
+
+/* ---- Responsive columns ----------------------------------------------- *
+ *
+ * Dropping a column on a narrow screen. Both rules were pasted into eight
+ * separate view files; they belong here once.
+ */
+
+@media (max-width: 900px) {
+  .hide-md { display: none; }
+}
+
+@media (max-width: 640px) {
+  .hide-sm { display: none; }
+}
+
+/* ---- Tables that become cards ----------------------------------------- *
+ *
+ * A table with seven columns has no honest phone layout. Sideways dragging
+ * makes the reader work to assemble one row; hiding columns until it fits
+ * leaves them unable to see the contact at all.
+ *
+ * So below 640px a `.table-cards` table stops being a table: the header goes,
+ * each row becomes a card, and each cell puts its own label in front of its
+ * value — taken from `data-label` on the cell, which is why every cell that
+ * should appear on a phone carries one. A cell with no `data-label` is a
+ * heading or an action, and spans the card instead.
+ *
+ * `hide-sm` and `hide-md` are lifted inside a card. Those columns were dropped
+ * because the row had no horizontal room, and a card has none of that pressure
+ * — it grows downwards, where space is cheap. Keeping them hidden would mean a
+ * phone card showing a name and a status and nothing else.
+ */
+
+@media (max-width: 640px) {
+  .table-cards,
+  .table-cards tbody,
+  .table-cards tr,
+  .table-cards td {
+    display: block;
+    width: auto;
+  }
+
+  .table-cards thead { display: none; }
+
+  .table-cards td.hide-sm,
+  .table-cards td.hide-md { display: flex; }
+
+  /* A cell with genuinely nothing in it earns no row in the card. */
+  .table-cards td[data-label]:empty { display: none; }
+
+  .table-cards tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+    background: var(--bg-surface);
+  }
+
+  .table-cards tr:last-child { margin-bottom: 0; }
+
+  .table-cards td {
+    border: 0;
+    padding: var(--space-1) 0;
+  }
+
+  /* A labelled cell reads as "Label   value" across the card. */
+  .table-cards td[data-label] {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    min-height: 24px;
+  }
+
+  .table-cards td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* The value side may be long — let it wrap rather than widen the card. */
+  .table-cards td[data-label] > * {
+    text-align: right;
+    min-width: 0;
+  }
+
+  /* The first cell is the row's identity: no label, full width, and heavier. */
+  .table-cards td:not([data-label]):first-child {
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Actions sit along the bottom of the card. */
+  .table-cards td.col-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+
+  /* Nothing to scroll sideways any more. */
+  .table-cards { min-width: 0; }
+}

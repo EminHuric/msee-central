@@ -504,7 +504,7 @@ onMounted(load)
     <!-- Table ---------------------------------------------------------- -->
     <section v-else-if="view === 'table'" class="card">
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('leads.name') }}</th>
@@ -526,7 +526,7 @@ onMounted(load)
                 </button>
               </td>
 
-              <td class="hide-sm">
+              <td :data-label="t('clients.contact')" class="hide-sm">
                 <span class="stack-tight">
                   <a v-if="lead.phone" :href="`tel:${lead.phone}`" class="link-quiet">{{ lead.phone }}</a>
                   <a v-if="lead.email" :href="`mailto:${lead.email}`" class="link-quiet">
@@ -536,9 +536,9 @@ onMounted(load)
                 </span>
               </td>
 
-              <td class="hide-md muted">{{ lead.serviceInterest || '—' }}</td>
+              <td :data-label="t('leads.serviceInterest')" class="hide-md muted">{{ lead.serviceInterest || '—' }}</td>
 
-              <td>
+              <td :data-label="t('leads.stage')">
                 <select
                   class="select tiny"
                   :value="lead.stage"
@@ -550,9 +550,9 @@ onMounted(load)
                 </select>
               </td>
 
-              <td class="hide-md muted">{{ lead.assigneeName || t('leads.unassigned') }}</td>
+              <td :data-label="t('table.assignee')" class="hide-md muted">{{ lead.assigneeName || t('leads.unassigned') }}</td>
 
-              <td :class="contactTone(lead)">
+              <td :data-label="t('leads.lastContacted')" :class="contactTone(lead)">
                 <template v-if="lead.lastContactedAt">
                   {{ formatDate(lead.lastContactedAt) }}
                   <span class="tertiary small">· {{ daysSinceContact(lead) }}d</span>
@@ -560,7 +560,7 @@ onMounted(load)
                 <template v-else>{{ t('leads.neverContacted') }}</template>
               </td>
 
-              <td class="num hide-sm">
+              <td :data-label="t('table.value')" class="num hide-sm">
                 {{ lead.estimatedValue ? money(lead.estimatedValue.baseMinor) : '—' }}
               </td>
 
@@ -768,6 +768,4 @@ onMounted(load)
 .small { font-size: var(--text-xs); }
 .danger:hover { color: var(--danger-500); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

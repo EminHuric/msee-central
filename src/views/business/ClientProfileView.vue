@@ -334,7 +334,7 @@ watch(clientId, load)
 
         <section v-else class="card">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table table-cards">
               <thead>
                 <tr>
                   <th>{{ t('sales.dealTitle') }}</th>
@@ -352,13 +352,13 @@ watch(clientId, load)
                       {{ sale.title }}
                     </button>
                   </td>
-                  <td class="hide-sm muted">{{ sale.serviceName || '—' }}</td>
-                  <td class="hide-sm muted nowrap">{{ formatDate(sale.saleDate) }}</td>
-                  <td class="num strong">{{ money(sale.value.baseMinor) }}</td>
-                  <td class="num hide-sm pos">
+                  <td :data-label="t('table.service')" class="hide-sm muted">{{ sale.serviceName || '—' }}</td>
+                  <td :data-label="t('sales.saleDate')" class="hide-sm muted nowrap">{{ formatDate(sale.saleDate) }}</td>
+                  <td :data-label="t('table.value')" class="num strong">{{ money(sale.value.baseMinor) }}</td>
+                  <td :data-label="t('finance.collected')" class="num hide-sm pos">
                     {{ money(balances.get(sale.id)?.paidBaseMinor ?? 0) }}
                   </td>
-                  <td>
+                  <td :data-label="t('table.status')">
                     <span class="badge" :class="`pay-${balances.get(sale.id)?.status}`">
                       {{ t(`payStatus.${balances.get(sale.id)?.status}`) }}
                     </span>
@@ -390,7 +390,7 @@ watch(clientId, load)
 
         <section v-else class="card">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table table-cards">
               <thead>
                 <tr>
                   <th>{{ t('finance.date') }}</th>
@@ -403,16 +403,16 @@ watch(clientId, load)
               <tbody>
                 <tr v-for="tx in transactions" :key="tx.id">
                   <td class="muted nowrap">{{ formatDate(tx.date) }}</td>
-                  <td>{{ tx.description }}</td>
-                  <td class="hide-sm">
+                  <td :data-label="t('finance.description')">{{ tx.description }}</td>
+                  <td :data-label="t('finance.type')" class="hide-sm">
                     <span class="badge badge-plain">{{ t(`transactionType.${tx.type}`) }}</span>
                   </td>
-                  <td>
+                  <td :data-label="t('table.status')">
                     <span class="badge" :class="`ps-${tx.status}`">
                       {{ t(`payState.${tx.status}`) }}
                     </span>
                   </td>
-                  <td
+                  <td :data-label="t('table.amount')"
                     class="num strong"
                     :class="INCOME_TYPES.includes(tx.type) ? 'pos' : 'neg'"
                   >
@@ -544,5 +544,4 @@ watch(clientId, load)
 .cs-former, .ps-cancelled, .ps-completed { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
 .pay-advance_due, .pay-unpaid, .ps-at_risk, .ps-overdue { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
 
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

@@ -152,7 +152,7 @@ onMounted(load)
       </div>
 
       <div v-else class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('recycle.record') }}</th>
@@ -169,15 +169,15 @@ onMounted(load)
                 <span class="strong">{{ record.label }}</span>
                 <span v-if="record.detail" class="tertiary small block">{{ record.detail }}</span>
               </td>
-              <td class="hide-sm">
+              <td :data-label="t('recycle.kind')" class="hide-sm">
                 <span class="badge badge-plain">{{ t(`recycle.kinds.${record.collection}`) }}</span>
               </td>
-              <td class="hide-sm muted">{{ record.deletedByName || '—' }}</td>
-              <td class="muted nowrap">
+              <td :data-label="t('recycle.deletedBy')" class="hide-sm muted">{{ record.deletedByName || '—' }}</td>
+              <td :data-label="t('recycle.deletedAt')" class="muted nowrap">
                 {{ formatDate(record.deletedAt.slice(0, 10)) }}
                 <span class="tertiary small block">{{ formatRelative(record.deletedAt) }}</span>
               </td>
-              <td :class="record.daysLeft <= 0 ? 'neg' : record.daysLeft <= 7 ? 'warn' : ''">
+              <td :data-label="t('recycle.daysLeft')" :class="record.daysLeft <= 0 ? 'neg' : record.daysLeft <= 7 ? 'warn' : ''">
                 {{ record.daysLeft > 0 ? record.daysLeft : t('recycle.overdue') }}
               </td>
               <td class="col-actions">
@@ -238,5 +238,4 @@ onMounted(load)
 .neg { color: var(--danger-500); font-weight: 600; }
 .danger:hover { color: var(--danger-500); }
 
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

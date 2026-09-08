@@ -94,7 +94,7 @@ async function handleSignOut(): Promise<void> {
         </button>
 
         <Transition name="menu">
-          <div v-if="menuOpen" class="menu card" role="menu">
+          <div v-if="menuOpen" class="menu popover" role="menu">
             <div class="menu-head">
               <UserAvatar :name="name" :photo-url="auth.photoUrl" :size="40" class="menu-avatar" />
               <p class="menu-name truncate">{{ name }}</p>
@@ -187,15 +187,12 @@ async function handleSignOut(): Promise<void> {
   max-width: 140px;
 }
 
+/* Placement lives in `.popover`, which also keeps this inside the viewport
+   on a phone rather than hanging it off the avatar near the screen edge. */
 .menu {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
   min-width: 232px;
   padding: var(--space-2);
   background: var(--bg-surface-2);
-  box-shadow: var(--shadow-lg);
-  z-index: var(--z-dropdown);
 }
 
 .menu-head {

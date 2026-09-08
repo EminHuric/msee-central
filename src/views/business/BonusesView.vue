@@ -848,7 +848,7 @@ onMounted(load)
 
       <section v-else class="card">
         <div class="table-wrap">
-          <table class="table">
+          <table class="table table-cards">
             <thead>
               <tr>
                 <th>{{ t('bonuses.workTitle') }}</th>
@@ -865,14 +865,14 @@ onMounted(load)
                   <span class="strong">{{ w.title }}</span>
                   <span v-if="w.submissionNote" class="tertiary small block">{{ w.submissionNote }}</span>
                 </td>
-                <td class="hide-sm muted">{{ w.assigneeName }}</td>
-                <td class="hide-sm muted nowrap" :class="{ late: w.dueDate && w.dueDate < today }">
+                <td :data-label="t('table.assignee')" class="hide-sm muted">{{ w.assigneeName }}</td>
+                <td :data-label="t('table.dueDate')" class="hide-sm muted nowrap" :class="{ late: w.dueDate && w.dueDate < today }">
                   {{ w.dueDate ? formatDate(w.dueDate) : '—' }}
                 </td>
-                <td class="num strong">
+                <td :data-label="t('bonuses.reward')" class="num strong">
                   {{ w.rewardBaseMinor ? money(w.rewardBaseMinor) : w.rewardLabel || '—' }}
                 </td>
-                <td>
+                <td :data-label="t('table.status')">
                   <span class="badge" :class="`ws-${w.status}`">
                     {{ t(`workStatus.${w.status}`) }}
                   </span>
@@ -928,7 +928,7 @@ onMounted(load)
 
       <section v-else class="card">
         <div class="table-wrap">
-          <table class="table">
+          <table class="table table-cards">
             <thead>
               <tr>
                 <th>{{ t('table.employee') }}</th>
@@ -944,16 +944,16 @@ onMounted(load)
             <tbody>
               <tr v-for="a in awards" :key="a.id">
                 <td class="strong">{{ a.employeeName }}</td>
-                <td>{{ a.reason || a.sourceLabel }}</td>
-                <td class="hide-sm muted">{{ t(`awardSource.${a.source}`) }}</td>
-                <td class="num strong">
+                <td :data-label="t('bonuses.reason')">{{ a.reason || a.sourceLabel }}</td>
+                <td :data-label="t('bonuses.source')" class="hide-sm muted">{{ t(`awardSource.${a.source}`) }}</td>
+                <td :data-label="t('table.amount')" class="num strong">
                   {{ a.amountBaseMinor ? money(a.amountBaseMinor) : a.rewardLabel || '—' }}
                 </td>
-                <td class="hide-sm muted nowrap">{{ formatDate(a.earnedDate) }}</td>
-                <td class="hide-md muted nowrap">
+                <td :data-label="t('bonuses.earnedDate')" class="hide-sm muted nowrap">{{ formatDate(a.earnedDate) }}</td>
+                <td :data-label="t('bonuses.paidDate')" class="hide-md muted nowrap">
                   {{ a.paidAt ? formatDate(a.paidAt.slice(0, 10)) : '—' }}
                 </td>
-                <td>
+                <td :data-label="t('table.status')">
                   <span class="badge" :class="`as-${a.status}`">
                     {{ t(`awardStatus.${a.status}`) }}
                   </span>
@@ -1176,6 +1176,4 @@ onMounted(load)
 .ws-submitted, .as-approved { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-500); }
 .ws-rejected, .as-rejected { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-500); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

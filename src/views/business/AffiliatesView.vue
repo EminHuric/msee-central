@@ -421,7 +421,7 @@ onMounted(load)
         </div>
 
         <div v-else class="table-wrap">
-          <table class="table">
+          <table class="table table-cards">
             <thead>
               <tr>
                 <th>{{ t('leads.name') }}</th>
@@ -433,13 +433,13 @@ onMounted(load)
             <tbody>
               <tr v-for="lead in myLeads" :key="lead.id">
                 <td class="strong">{{ lead.company || lead.name }}</td>
-                <td class="hide-sm muted">{{ lead.serviceInterest || '—' }}</td>
-                <td>
+                <td :data-label="t('leads.serviceInterest')" class="hide-sm muted">{{ lead.serviceInterest || '—' }}</td>
+                <td :data-label="t('leads.stage')">
                   <span class="badge" :class="`ls-${lead.stage}`">
                     {{ t(`leadStage.${lead.stage}`) }}
                   </span>
                 </td>
-                <td class="hide-sm muted nowrap">
+                <td :data-label="t('table.date')" class="hide-sm muted nowrap">
                   {{ lead.createdAt ? formatDate(lead.createdAt.slice(0, 10)) : '—' }}
                 </td>
               </tr>
@@ -458,7 +458,7 @@ onMounted(load)
         </p>
 
         <div v-else class="table-wrap">
-          <table class="table">
+          <table class="table table-cards">
             <thead>
               <tr>
                 <th>{{ t('sales.dealTitle') }}</th>
@@ -470,13 +470,13 @@ onMounted(load)
             <tbody>
               <tr v-for="c in myCommissions" :key="c.id">
                 <td>{{ c.saleTitle }}</td>
-                <td class="hide-sm muted nowrap">{{ formatDate(c.earnedDate) }}</td>
-                <td>
+                <td :data-label="t('table.date')" class="hide-sm muted nowrap">{{ formatDate(c.earnedDate) }}</td>
+                <td :data-label="t('table.status')">
                   <span class="badge" :class="`cs-${c.status}`">
                     {{ t(`commissionStatus.${c.status}`) }}
                   </span>
                 </td>
-                <td class="num strong">{{ money(c.amountBaseMinor) }}</td>
+                <td :data-label="t('table.amount')" class="num strong">{{ money(c.amountBaseMinor) }}</td>
               </tr>
             </tbody>
           </table>
@@ -776,7 +776,7 @@ onMounted(load)
 
         <section v-else class="card">
           <div class="table-wrap">
-            <table class="table">
+            <table class="table table-cards">
               <thead>
                 <tr>
                   <th>{{ t('affiliates.name') }}</th>
@@ -791,14 +791,14 @@ onMounted(load)
               <tbody>
                 <tr v-for="c in visibleCommissions" :key="c.id">
                   <td class="strong">{{ c.affiliateName }}</td>
-                  <td class="hide-sm muted">{{ c.saleTitle }}</td>
-                  <td class="hide-md muted">
+                  <td :data-label="t('sales.dealTitle')" class="hide-sm muted">{{ c.saleTitle }}</td>
+                  <td :data-label="t('affiliates.ruleModel')" class="hide-md muted">
                     {{ c.ruleDescription }}
                     <span class="tertiary small">· {{ money(c.baseAmountBaseMinor) }}</span>
                   </td>
-                  <td class="num strong">{{ money(c.amountBaseMinor) }}</td>
-                  <td class="hide-sm muted nowrap">{{ formatDate(c.earnedDate) }}</td>
-                  <td>
+                  <td :data-label="t('table.amount')" class="num strong">{{ money(c.amountBaseMinor) }}</td>
+                  <td :data-label="t('table.date')" class="hide-sm muted nowrap">{{ formatDate(c.earnedDate) }}</td>
+                  <td :data-label="t('table.status')">
                     <span class="badge" :class="`cs-${c.status}`">
                       {{ t(`commissionStatus.${c.status}`) }}
                     </span>
@@ -922,6 +922,4 @@ onMounted(load)
 .small { font-size: var(--text-xs); }
 .danger:hover { color: var(--danger-500); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

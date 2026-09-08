@@ -154,7 +154,7 @@ onBeforeUnmount(() => {
     </button>
 
     <Transition name="menu">
-      <div v-if="open" class="panel card" role="dialog" :aria-label="t('notifications.title')">
+      <div v-if="open" class="panel popover" role="dialog" :aria-label="t('notifications.title')">
         <div class="panel-head">
           <h2 class="panel-title">{{ t('notifications.title') }}</h2>
           <button
@@ -166,6 +166,11 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
+        <!--
+          Only the list scrolls. The heading and the settings link stay put, so
+          "mark all read" stays reachable without scrolling a long list back up.
+        -->
+        <div class="popover-scroll">
         <div v-if="loading" class="panel-body stack">
           <div v-for="n in 3" :key="n" class="skeleton" style="height: 40px" />
         </div>
@@ -231,6 +236,7 @@ onBeforeUnmount(() => {
             </div>
           </section>
         </template>
+        </div>
 
         <RouterLink to="/settings/notifications" class="panel-foot" @click="open = false">
           <AppIcon name="settings" :size="14" />
@@ -254,12 +260,12 @@ onBeforeUnmount(() => {
   font-size: 9px; font-weight: 700; line-height: 1;
 }
 
+/* Placement, and the drop to a viewport-fixed panel on a phone, live in
+   `.popover` — see the note there. This sets only the width. */
 .panel {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
   width: min(380px, calc(100vw - 24px));
-  max-height: min(560px, calc(100vh - 90px));
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle); }

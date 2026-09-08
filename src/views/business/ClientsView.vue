@@ -418,7 +418,7 @@ onMounted(load)
 
     <section v-else class="card">
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('clients.name') }}</th>
@@ -442,7 +442,7 @@ onMounted(load)
                 </button>
               </td>
 
-              <td class="hide-sm">
+              <td :data-label="t('clients.contact')" class="hide-sm">
                 <span class="stack-tight">
                   <span v-if="client.contactName">{{ client.contactName }}</span>
                   <a v-if="client.email" :href="`mailto:${client.email}`" class="link-quiet">
@@ -457,9 +457,9 @@ onMounted(load)
                 </span>
               </td>
 
-              <td class="hide-md muted">{{ client.responsibleName || '—' }}</td>
+              <td :data-label="t('clients.responsible')" class="hide-md muted">{{ client.responsibleName || '—' }}</td>
 
-              <td class="hide-md">
+              <td :data-label="t('clients.services')" class="hide-md">
                 <span v-if="(client.serviceIds ?? []).length === 0" class="tertiary">—</span>
                 <span v-else class="chips">
                   <span v-for="id in client.serviceIds.slice(0, 2)" :key="id" class="badge badge-plain">
@@ -471,13 +471,13 @@ onMounted(load)
                 </span>
               </td>
 
-              <td>
+              <td :data-label="t('table.status')">
                 <span class="badge" :class="`cs-${client.status}`">
                   {{ t(`clientStatus.${client.status}`) }}
                 </span>
               </td>
 
-              <td class="hide-sm muted nowrap">
+              <td :data-label="t('clients.lastActivity')" class="hide-sm muted nowrap">
                 <template v-if="lastActivity.get(client.id)">
                   {{ formatDate(lastActivity.get(client.id)!) }}
                 </template>
@@ -575,6 +575,4 @@ onMounted(load)
 .small { font-size: var(--text-xs); }
 .danger:hover { color: var(--danger-500); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

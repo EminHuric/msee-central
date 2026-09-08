@@ -614,7 +614,7 @@ onMounted(load)
 
     <section v-else class="card">
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('sales.dealTitle') }}</th>
@@ -636,7 +636,7 @@ onMounted(load)
                   <span v-if="sale.ownerName" class="tertiary">{{ sale.ownerName }}</span>
                 </button>
               </td>
-              <td class="hide-sm">
+              <td :data-label="t('table.client')" class="hide-sm">
                 <button
                   type="button"
                   class="link-quiet"
@@ -645,14 +645,14 @@ onMounted(load)
                   {{ sale.clientName }}
                 </button>
               </td>
-              <td class="hide-md muted">{{ sale.serviceName || '—' }}</td>
-              <td class="hide-md muted">{{ t(`saleChannel.${sale.channel}`) }}</td>
-              <td class="hide-sm muted nowrap">{{ formatDate(sale.saleDate) }}</td>
-              <td class="num strong">{{ money(sale.value.baseMinor) }}</td>
-              <td class="num hide-sm" :class="{ neg: (balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) > 0 }">
+              <td :data-label="t('table.service')" class="hide-md muted">{{ sale.serviceName || '—' }}</td>
+              <td :data-label="t('sales.channel')" class="hide-md muted">{{ t(`saleChannel.${sale.channel}`) }}</td>
+              <td :data-label="t('sales.saleDate')" class="hide-sm muted nowrap">{{ formatDate(sale.saleDate) }}</td>
+              <td :data-label="t('table.value')" class="num strong">{{ money(sale.value.baseMinor) }}</td>
+              <td :data-label="t('finance.outstanding')" class="num hide-sm" :class="{ neg: (balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) > 0 }">
                 {{ money(balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) }}
               </td>
-              <td>
+              <td :data-label="t('table.status')">
                 <span class="badge" :class="`pay-${balanceMap.get(sale.id)?.status}`">
                   {{ t(`payStatus.${balanceMap.get(sale.id)?.status}`) }}
                 </span>
@@ -791,6 +791,4 @@ onMounted(load)
 .pay-unpaid { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }
 .pay-overpaid { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); color: var(--text-brand); }
 
-@media (max-width: 900px) { .hide-md { display: none; } }
-@media (max-width: 640px) { .hide-sm { display: none; } }
 </style>

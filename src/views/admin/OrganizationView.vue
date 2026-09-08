@@ -222,7 +222,7 @@ onMounted(load)
       </div>
 
       <div v-else-if="departments.length" class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('organisation.nameEn') }}</th>
@@ -235,13 +235,13 @@ onMounted(load)
           <tbody>
             <tr v-for="d in departments" :key="d.id">
               <td>{{ d.name }}</td>
-              <td class="muted">{{ d.nameSr }}</td>
-              <td>
+              <td :data-label="t('organisation.nameSr')" class="muted">{{ d.nameSr }}</td>
+              <td :data-label="t('employees.filterStatus')">
                 <span class="badge" :class="d.status === 'active' ? 'badge-active' : 'badge-deactivated'">
                   {{ d.status === 'active' ? t('organisation.statusActive') : t('organisation.statusInactive') }}
                 </span>
               </td>
-              <td class="muted">{{ departmentUsage(d.id) }}</td>
+              <td :data-label="t('employees.title')" class="muted">{{ departmentUsage(d.id) }}</td>
               <td class="col-actions">
                 <button
                   v-if="canManageDepartments"
@@ -319,7 +319,7 @@ onMounted(load)
       </div>
 
       <div v-else-if="positions.length" class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('organisation.titleEn') }}</th>
@@ -335,15 +335,15 @@ onMounted(load)
                 {{ p.title }}
                 <span v-if="p.titleSr && p.titleSr !== p.title" class="muted"> · {{ p.titleSr }}</span>
               </td>
-              <td class="muted">
+              <td :data-label="t('organisation.parentDepartment')" class="muted">
                 {{ departmentName(departments.find((d) => d.id === p.departmentId)) ?? '—' }}
               </td>
-              <td>
+              <td :data-label="t('employees.filterStatus')">
                 <span class="badge" :class="p.status === 'active' ? 'badge-active' : 'badge-deactivated'">
                   {{ p.status === 'active' ? t('organisation.statusActive') : t('organisation.statusInactive') }}
                 </span>
               </td>
-              <td class="muted">{{ positionUsage(p.id) }}</td>
+              <td :data-label="t('employees.title')" class="muted">{{ positionUsage(p.id) }}</td>
               <td class="col-actions">
                 <button v-if="canManagePositions" class="btn btn-ghost btn-sm" @click="editPosition(p)">
                   {{ t('common.edit') }}

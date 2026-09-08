@@ -293,7 +293,7 @@ onMounted(load)
       </div>
 
       <div v-else class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead>
             <tr>
               <th>{{ t('table.name') }}</th>
@@ -327,7 +327,7 @@ onMounted(load)
                   </div>
                 </RouterLink>
               </td>
-              <td>
+              <td :data-label="t('table.role')">
                 <span v-if="roleLabels(employee).length === 0" class="tertiary">—</span>
                 <span
                   v-for="role in roleLabels(employee)"
@@ -338,9 +338,9 @@ onMounted(load)
                   {{ role.name }}
                 </span>
               </td>
-              <td>{{ positionLabel(employee) ?? t('employees.noPosition') }}</td>
-              <td class="muted">{{ departmentLabel(employee) ?? '—' }}</td>
-              <td><StatusBadge :status="employee.status" /></td>
+              <td :data-label="t('table.position')">{{ positionLabel(employee) ?? t('employees.noPosition') }}</td>
+              <td :data-label="t('table.department')" class="muted">{{ departmentLabel(employee) ?? '—' }}</td>
+              <td :data-label="t('table.status')"><StatusBadge :status="employee.status" /></td>
               <td class="col-actions">
                 <RouterLink :to="`/employees/${employee.uid}`" class="btn btn-secondary btn-sm">
                   {{ t('common.edit') }}
