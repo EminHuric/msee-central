@@ -155,7 +155,25 @@ export async function write<T extends Stamped>(
   input: T,
   extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const isNew = !input.id
+  /*
+   * "New" means the record is being created now — not that no id was supplied.
+   *
+   * Those were treated as the same thing, and they are not. A caller that
+   * picks the id itself — a readable slug for a client, `newId()` for an award
+   * — was handing this function an id, so it concluded the record already
+   * existed and skipped the creation stamps entirely.
+   *
+   * The result was a client saved with `createdBy: ''`. Firestore's rules
+   * decide who may read a record they do not own by comparing `createdBy` to
+   * the signed-in user, so the person who had just created it was refused it.
+   * From their side the record was saved and then was not there: which reads
+   * exactly like a save that failed.
+   *
+   * `createdAt` is the honest signal. Every blank-record factory leaves it
+   * empty and every stored record has one, so a missing value means this write
+   * is the first.
+   */
+  const isNew = !input.id || !input.createdAt
   const id = input.id || newId()
   const me = actor()
   const stamp = now()

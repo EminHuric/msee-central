@@ -364,7 +364,8 @@ export default {
     create: 'Napravi nalog',
     creating: 'Pravljenje…',
     created: 'Nalog je napravljen za {name}.',
-    exists: 'Nalog sa tom email adresom već postoji.',
+    exists:
+      'Nalog sa tom email adresom već postoji. Ovde se niko ne briše — ako je ta osoba ranije radila ovde, i dalje je u sistemu sa statusom suspendovan ili deaktiviran. Vrati je u rad umesto da praviš drugi nalog.',
     failed: 'Nalog nije mogao da se napravi.',
     noRole: 'Izaberi bar jednu ulogu, inače će se prijaviti bez pristupa.',
     credentialsTitle: 'Nalog je spreman',

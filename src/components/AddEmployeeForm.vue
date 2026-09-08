@@ -136,13 +136,28 @@ async function submit(): Promise<void> {
     ui.notify('ok', t('newEmployee.created', { name }))
     emit('created')
   } catch (error) {
-    ui.notify(
-      'danger',
-      error instanceof AccountExistsError ? t('newEmployee.exists') : t('newEmployee.failed'),
-    )
+    ui.notify('danger', explain(error))
   } finally {
     busy.value = false
   }
+}
+
+/**
+ * Say what actually happened, and what to do about it.
+ *
+ * "An account with that email already exists" is true and useless. Nobody is
+ * deleted here — leaving is a status, so a person's sales and history survive
+ * them — which means the commonest way to reach this message is trying to
+ * re-add somebody who is already in the system, suspended.
+ *
+ * The message says that. It deliberately does not look the person up by email
+ * and name them: the employee directory does not carry email addresses, and
+ * that is a privacy decision worth more than a slightly better error message.
+ */
+function explain(error: unknown): string {
+  return error instanceof AccountExistsError
+    ? t('newEmployee.exists')
+    : t('newEmployee.failed')
 }
 </script>
 

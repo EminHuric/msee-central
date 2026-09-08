@@ -365,7 +365,8 @@ export default {
     create: 'Create account',
     creating: 'Creating…',
     created: 'Account created for {name}.',
-    exists: 'An account with that email already exists.',
+    exists:
+      'An account with that email already exists. Nobody is deleted here — if this person worked here before, they are still in the system with a suspended or deactivated status. Reactivate them rather than creating a second account.',
     failed: 'The account could not be created.',
     noRole: 'Choose at least one role, or they will sign in with no access.',
     credentialsTitle: 'Account ready',

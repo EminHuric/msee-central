@@ -139,6 +139,32 @@ let ownerUid = null
 let founderSnapshot = null
 let affiliateUid = null
 
+/**
+ * Collections these tests write into, and the shape of the ids they use.
+ *
+ * Cleanup used to name each document by hand and missed the leads written by
+ * the affiliate phase — three of them were still sitting in the real database
+ * days later, in a collection the company actually uses. A test that leaves
+ * rubbish in live data is worse than no test.
+ *
+ * So cleanup sweeps by pattern instead of by list. Every id these tests create
+ * begins with one of these prefixes, which means a check added later is swept
+ * up without anybody remembering to add a line to the cleanup, and leftovers
+ * from earlier runs go too.
+ */
+const TEST_COLLECTIONS = [
+  'leads',
+  'clients',
+  'commissions',
+  'bonusAwards',
+  'auditLogs',
+  'userPermissions',
+  'registrationRequests',
+  'employees',
+]
+
+const TEST_ID = /^(rules-|forged-|would-be-owner-)/
+
 console.log('\n  Security rule verification')
 console.log(`  project: ${serviceAccount.project_id}`)
 console.log(`  acting as a newly registered, unapproved employee\n`)
@@ -690,8 +716,18 @@ try {
     await adminDb.collection('userPermissions').doc(uid).delete().catch(() => {})
     await adminAuth.deleteUser(uid).catch(() => {})
   }
-  await adminDb.collection('userPermissions').doc(`would-be-owner-${stamp}`).delete().catch(() => {})
-  await adminDb.collection('clients').doc(`forged-${stamp}`).delete().catch(() => {})
+  /* Sweep by pattern — see TEST_COLLECTIONS. Catches earlier runs too. */
+  let swept = 0
+  for (const name of TEST_COLLECTIONS) {
+    const snap = await adminDb.collection(name).get().catch(() => null)
+    if (!snap) continue
+    for (const document of snap.docs) {
+      if (!TEST_ID.test(document.id)) continue
+      await document.ref.delete().catch(() => {})
+      swept += 1
+    }
+  }
+  if (swept) console.log(`\n  ${swept} test document(s) removed`)
 
   /* Put the founder back exactly as it was, whatever the tests managed to do. */
   if (founderSnapshot) {
