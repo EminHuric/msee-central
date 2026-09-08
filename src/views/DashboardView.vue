@@ -51,7 +51,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { OPEN_STAGES } from '@/types/business'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
-import { PERMISSIONS } from '@/types/permissions'
+import { PERMISSIONS, type Permission } from '@/types/permissions'
+import { fetchLayout, saveLayout } from '@/api/dashboard'
+import {
+  availableWidgets,
+  defaultLayout,
+  resolveLayout,
+  type DashboardLayout,
+} from '@/types/dashboard'
 import type { ActivityEntry } from '@/types/records'
 import type { RegistrationRequest } from '@/types/domain'
 
@@ -363,17 +370,75 @@ const hasAnything = computed(
     snap.value.transactions.length > 0,
 )
 
+/* ---- What this person has chosen to see -------------------------------- */
+
+const layout = ref<DashboardLayout | null>(null)
+const customising = ref(false)
+
+const holds = (permission: Permission) => auth.hasPermission(permission)
+
+/**
+ * The widgets actually drawn.
+ *
+ * Filtered through the permission check every time, not only when the picker
+ * is open — a layout saved while somebody held `finance.view` keeps naming the
+ * money widgets after it is taken away, and this is what stops them appearing.
+ * The data behind them is guarded by Firestore's rules regardless; this keeps
+ * the screen honest rather than keeping it safe.
+ */
+const visible = computed(() => resolveLayout(layout.value, holds))
+const shows = (id: string) => visible.value.some((w) => w.id === id)
+
+/** Everything this person could add, whether or not it is currently on. */
+const offerable = computed(() => availableWidgets(holds))
+
+function toggleWidget(id: string): void {
+  if (!layout.value) return
+  const list = layout.value.visible
+  const at = list.indexOf(id)
+  if (at >= 0) list.splice(at, 1)
+  else list.push(id)
+}
+
+function moveWidget(id: string, by: -1 | 1): void {
+  const list = layout.value?.visible
+  if (!list) return
+  const at = list.indexOf(id)
+  const to = at + by
+  if (at < 0 || to < 0 || to >= list.length) return
+  list.splice(to, 0, ...list.splice(at, 1))
+}
+
+async function persistLayout(): Promise<void> {
+  if (!layout.value) return
+  try {
+    await saveLayout(layout.value)
+    customising.value = false
+    ui.notify('ok', t('widget.saved'))
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  }
+}
+
+async function restoreDefaults(): Promise<void> {
+  if (!auth.uid) return
+  layout.value = defaultLayout(auth.uid)
+  await persistLayout()
+}
+
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [s, a, r] = await Promise.all([
+    const [s, a, r, l] = await Promise.all([
       loadSnapshot(),
       fetchRecentActivity(12).catch(() => []),
       canRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
+      auth.uid ? fetchLayout(auth.uid) : Promise.resolve(null),
     ])
     snap.value = s
     activity.value = a
     requests.value = r.filter((x) => x.status === 'pending')
+    layout.value = l
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
   } finally {
@@ -391,7 +456,70 @@ onMounted(load)
         <h1 class="page-title">{{ greeting }}</h1>
         <p class="page-subtitle">{{ subtitle }}</p>
       </div>
+      <button v-if="!loading" class="btn btn-secondary" @click="customising = !customising">
+        <AppIcon name="settings" :size="15" />
+        {{ t('widget.customise') }}
+      </button>
     </header>
+
+    <!--
+      The picker.
+
+      It offers only what this person is allowed to see, and what it offers is
+      still checked again when each widget renders — see the note on
+      `resolveLayout`. Choosing a widget is a preference, never a grant.
+    -->
+    <section v-if="customising && layout" class="card">
+      <div class="card-header">
+        <h2 class="card-title">{{ t('widget.customise') }}</h2>
+        <button class="btn btn-ghost btn-sm" @click="restoreDefaults">
+          {{ t('widget.reset') }}
+        </button>
+      </div>
+
+      <div class="card-body">
+        <p class="field-hint">{{ t('widget.hint') }}</p>
+
+        <ul class="picker">
+          <li v-for="widget in offerable" :key="widget.id" class="picker-row">
+            <label class="check picker-check">
+              <input
+                type="checkbox"
+                :checked="shows(widget.id)"
+                @change="toggleWidget(widget.id)"
+              />
+              <span class="check-text">{{ t(widget.labelKey) }}</span>
+            </label>
+
+            <span v-if="shows(widget.id)" class="picker-move">
+              <button
+                class="btn btn-ghost btn-sm btn-icon"
+                :aria-label="t('fields.moveUp')"
+                @click="moveWidget(widget.id, -1)"
+              >
+                <AppIcon name="arrowUp" :size="14" />
+              </button>
+              <button
+                class="btn btn-ghost btn-sm btn-icon"
+                :aria-label="t('fields.moveDown')"
+                @click="moveWidget(widget.id, 1)"
+              >
+                <AppIcon name="arrowDown" :size="14" />
+              </button>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card-footer">
+        <button class="btn btn-secondary" @click="customising = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button class="btn btn-primary" @click="persistLayout">
+          {{ t('common.save') }}
+        </button>
+      </div>
+    </section>
 
     <div v-if="loading" class="card">
       <div class="card-body stack">
@@ -401,7 +529,7 @@ onMounted(load)
 
     <template v-else>
       <!-- Alerts ------------------------------------------------------- -->
-      <section v-if="alerts.length" class="alerts">
+      <section v-if="shows('alerts') && alerts.length" class="alerts">
         <button
           v-for="alert in alerts"
           :key="alert.key"
@@ -443,7 +571,7 @@ onMounted(load)
 
       <template v-else>
         <!-- Today ----------------------------------------------------- -->
-        <template v-if="todayCards.length">
+        <template v-if="shows('today') && todayCards.length">
           <h2 class="section-title">{{ t('period.today') }}</h2>
           <div class="cards">
             <article v-for="card in todayCards" :key="card.key" class="card figure">
@@ -456,7 +584,7 @@ onMounted(load)
         <PeriodPicker v-model="period" />
 
         <!-- Money ------------------------------------------------------ -->
-        <template v-if="moneyCards.length">
+        <template v-if="shows('money') && moneyCards.length">
           <h2 class="section-title">{{ t('dashboard.money') }}</h2>
           <div class="cards">
             <button
@@ -480,6 +608,7 @@ onMounted(load)
         <p v-else-if="!isAffiliate" class="tertiary small">{{ t('dashboard.restricted') }}</p>
 
         <!-- Work ------------------------------------------------------- -->
+        <template v-if="shows('work')">
         <h2 class="section-title">{{ t('dashboard.work') }}</h2>
         <div class="cards">
           <button
@@ -497,9 +626,10 @@ onMounted(load)
             </span>
           </button>
         </div>
+        </template>
 
         <!-- Charts ----------------------------------------------------- -->
-        <section v-if="canMoney" class="card">
+        <section v-if="shows('moneyChart') && canMoney" class="card">
           <div class="card-header">
             <h2 class="card-title">{{ t('finance.overTime') }}</h2>
             <button class="btn btn-ghost btn-sm" @click="router.push('/analytics')">
@@ -518,7 +648,7 @@ onMounted(load)
         </section>
 
         <div class="pair">
-          <section class="card">
+          <section v-if="shows('salesAndLeads')" class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('dashboard.salesAndLeads') }}</h2>
             </div>
@@ -533,7 +663,7 @@ onMounted(load)
             </div>
           </section>
 
-          <section v-if="canMoney" class="card">
+          <section v-if="shows('byService') && canMoney" class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('finance.byService') }}</h2>
             </div>
@@ -549,7 +679,7 @@ onMounted(load)
             </div>
           </section>
 
-          <section class="card">
+          <section v-if="shows('bySource')" class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('finance.bySource') }}</h2>
             </div>
@@ -562,7 +692,7 @@ onMounted(load)
 
         <!-- Goals + activity ------------------------------------------- -->
         <div class="pair">
-          <section class="card">
+          <section v-if="shows('goals')" class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('dashboard.goalsCard') }}</h2>
               <button class="btn btn-ghost btn-sm" @click="router.push('/goals')">
@@ -589,7 +719,7 @@ onMounted(load)
             </ul>
           </section>
 
-          <section class="card">
+          <section v-if="shows('activity')" class="card">
             <div class="card-header">
               <h2 class="card-title">{{ t('dashboard.recentActivity') }}</h2>
             </div>
@@ -615,7 +745,7 @@ onMounted(load)
         </div>
 
         <!-- Quick actions ---------------------------------------------- -->
-        <section class="card">
+        <section v-if="shows('quickActions')" class="card">
           <div class="card-header">
             <h2 class="card-title">{{ t('dashboard.quickActions') }}</h2>
           </div>
@@ -644,6 +774,17 @@ onMounted(load)
 
 <style scoped>
 .section-title { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+
+.picker { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.picker-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.picker-row:last-child { border-bottom: 0; }
+.picker-check { flex: 1; min-width: 0; }
+.picker-move { display: flex; gap: 2px; flex-shrink: 0; }
 
 .alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); }
 .alert-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); text-align: left; }

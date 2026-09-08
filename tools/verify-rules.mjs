@@ -153,6 +153,7 @@ let affiliateUid = null
  * from earlier runs go too.
  */
 const TEST_COLLECTIONS = [
+  'dashboardLayouts',
   'leads',
   'clients',
   'commissions',
@@ -698,6 +699,31 @@ try {
 
   await mustDeny("affiliate CANNOT read another person's notifications", () =>
     getDoc(doc(db, 'notifications', 'someone-else', 'items', 'any-item')),
+  )
+
+  /*
+   * Dashboard layouts.
+   *
+   * The interesting half is the second check. A layout is a list of widget
+   * names, and naming the finance widgets is not the same as being allowed to
+   * see finance — this account holds every permission in the catalogue and
+   * still reads nothing, because each widget's data is guarded where it lives.
+   * The layout is a preference. It is never a grant.
+   */
+  await mustAllow('affiliate CAN save their own dashboard layout', () =>
+    setDoc(doc(db, 'dashboardLayouts', affiliateUid), {
+      uid: affiliateUid,
+      visible: ['money', 'byService'],
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('affiliate CANNOT read finance, layout or no layout', () =>
+    getDoc(doc(db, 'transactions', 'any-entry')),
+  )
+
+  await mustDeny("affiliate CANNOT read somebody else's dashboard layout", () =>
+    getDoc(doc(db, 'dashboardLayouts', 'someone-else')),
   )
 
   await mustDeny('affiliate CANNOT read an affiliate record that is not theirs', () =>

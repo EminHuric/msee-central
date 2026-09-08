@@ -2725,4 +2725,22 @@ export default {
     custom: 'Nešto drugo',
   },
 
+  widget: {
+    customise: 'Prilagodi',
+    hint: 'Izaberi šta se pojavljuje na tvojoj tabli i kojim redom. Možeš dodati samo ono što smeš da vidiš.',
+    reset: 'Vrati na podrazumevano',
+    saved: 'Tvoja tabla je sačuvana.',
+    alerts: 'Šta traži pažnju',
+    today: 'Danas',
+    quickActions: 'Brze akcije',
+    money: 'Novac',
+    moneyChart: 'Novac kroz vreme',
+    byService: 'Prihod po usluzi',
+    bySource: 'Odakle je došla prodaja',
+    work: 'Poslovanje',
+    salesAndLeads: 'Prodaja i kontakti',
+    goals: 'Ciljevi',
+    activity: 'Skorašnja aktivnost',
+  },
+
 }

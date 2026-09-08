@@ -856,6 +856,20 @@ service cloud.firestore {
       allow read, write: if isSelf(uid);
     }
 
+    /*
+     * A person's chosen dashboard widgets.
+     *
+     * Theirs alone, and worth nothing to anybody else. Note what this rule
+     * does NOT do: it does not police which widgets are named. It cannot, and
+     * it does not need to — every widget reads a collection guarded by its own
+     * rule, so a layout naming the finance widgets renders empty for somebody
+     * without finance.view. The layout is a preference; the permission is
+     * enforced where the data is.
+     */
+    match /dashboardLayouts/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+
     /* ---- Exchange rates ---------------------------------------------------- */
 
     /*

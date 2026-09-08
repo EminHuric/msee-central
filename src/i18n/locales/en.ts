@@ -2726,4 +2726,22 @@ export default {
     custom: 'Something else',
   },
 
+  widget: {
+    customise: 'Customise',
+    hint: 'Choose what appears on your dashboard, and in what order. You can only add what you are allowed to see.',
+    reset: 'Back to default',
+    saved: 'Your dashboard is saved.',
+    alerts: 'What needs attention',
+    today: 'Today',
+    quickActions: 'Quick actions',
+    money: 'Money',
+    moneyChart: 'Money over time',
+    byService: 'Income by service',
+    bySource: 'Where sales came from',
+    work: 'The business',
+    salesAndLeads: 'Sales and leads',
+    goals: 'Goals',
+    activity: 'Recent activity',
+  },
+
 }
