@@ -1203,7 +1203,6 @@ export default {
     signOut: 'Sign out',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
-    futureModules: 'Coming later',
   },
 
   theme: {

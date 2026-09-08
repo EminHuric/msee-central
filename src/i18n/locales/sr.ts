@@ -1202,7 +1202,6 @@ export default {
     signOut: 'Odjavi se',
     openMenu: 'Otvori meni',
     closeMenu: 'Zatvori meni',
-    futureModules: 'Uskoro',
   },
 
   theme: {
