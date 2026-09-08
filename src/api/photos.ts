@@ -14,8 +14,18 @@
 /** Longest edge of the stored image, in pixels. */
 const TARGET_SIZE = 256
 
+/** Longest edge of a reward picture. Bigger: it is shown, not used as a chip. */
+const REWARD_SIZE = 640
+
 /** Firestore documents cap at 1 MB; stay far below it. */
 export const MAX_STORED_BYTES = 90_000
+
+/**
+ * A reward picture is allowed more room than an avatar, but a programme can
+ * hold many milestones and they all live in one document. 160 KB each keeps a
+ * five-rung ladder under a megabyte with room to spare.
+ */
+export const MAX_REWARD_BYTES = 160_000
 
 /** Reject absurd uploads before decoding them. */
 export const MAX_SOURCE_BYTES = 12 * 1024 * 1024
@@ -66,6 +76,49 @@ export async function processProfilePhoto(file: File): Promise<string> {
     for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
       const dataUrl = canvas.toDataURL('image/jpeg', quality)
       if (byteLength(dataUrl) <= MAX_STORED_BYTES) return dataUrl
+    }
+
+    throw new PhotoError('size')
+  } finally {
+    bitmap.close?.()
+  }
+}
+
+/**
+ * A picture of a reward: a phone, a trip, a voucher.
+ *
+ * Same pipeline as a profile photo, with one difference that matters — it is
+ * not square-cropped. A reward is a product shot, and cropping an iPhone to a
+ * square cuts the ends off it. So the aspect ratio is kept and the longest
+ * edge is capped, which costs a slightly larger file for a picture somebody is
+ * meant to want.
+ */
+export async function processRewardImage(file: File): Promise<string> {
+  if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
+    throw new PhotoError('type')
+  }
+  if (file.size > MAX_SOURCE_BYTES) {
+    throw new PhotoError('size')
+  }
+
+  const bitmap = await decode(file)
+
+  try {
+    const scale = Math.min(1, REWARD_SIZE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new PhotoError('decode')
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+
+    for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
+      const dataUrl = canvas.toDataURL('image/jpeg', quality)
+      if (byteLength(dataUrl) <= MAX_REWARD_BYTES) return dataUrl
     }
 
     throw new PhotoError('size')

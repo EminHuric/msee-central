@@ -37,6 +37,7 @@ import {
   setAwardStatus,
   type ProgressSources,
 } from '@/api/rewards'
+import { ACCEPTED_TYPES, PhotoError, processRewardImage } from '@/api/photos'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +48,8 @@ import {
   BONUS_METRICS,
   MONEY_BONUS_METRICS,
   PROGRAMME_STATUSES,
+  REWARD_TYPES,
+  rewardValueOf,
   type AwardStatus,
   type BonusAward,
   type BonusMilestone,
@@ -187,6 +190,7 @@ function blankProgramme(): BonusProgramme {
     repeats: false,
     status: 'draft',
     visibleToStaff: true,
+    rules: '',
     notes: '',
     deletedAt: null,
     deletedBy: null,
@@ -219,12 +223,64 @@ function addMilestone(): void {
   const milestone: BonusMilestone = {
     id: Math.random().toString(36).slice(2, 10),
     target: 0,
+    type: 'money',
     rewardBaseMinor: 0,
+    rewardPercent: 0,
     rewardLabel: '',
+    rewardImage: null,
+    description: '',
     note: '',
   }
   d.milestones.push(milestone)
   milestoneAmounts.value[milestone.id] = 0
+}
+
+/**
+ * The ladder, in the order somebody climbs it.
+ *
+ * Sorted for display rather than on save, so a level added out of order slots
+ * into place while the CEO is still looking at it instead of jumping after a
+ * reload.
+ */
+const sortedDraftMilestones = computed(() =>
+  [...(programmeDraft.value?.milestones ?? [])].sort((a, b) => a.target - b.target),
+)
+
+function removeMilestone(id: string): void {
+  const d = programmeDraft.value
+  if (!d) return
+  d.milestones = d.milestones.filter((m) => m.id !== id)
+  delete milestoneAmounts.value[id]
+}
+
+/** A one-line summary for the collapsed header of each level. */
+function describeLevel(m: BonusMilestone): string {
+  const target = displayCount(programmeDraft.value, m.target)
+  const reward =
+    m.type === 'money'
+      ? money(toMinor(milestoneAmounts.value[m.id] ?? 0, BASE_CURRENCY))
+      : m.type === 'percentage'
+        ? `${m.rewardPercent}%`
+        : m.rewardLabel || t(`rewardType.${m.type}`)
+  return `${target} → ${reward}`
+}
+
+async function pickImage(m: BonusMilestone, event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  try {
+    m.rewardImage = await processRewardImage(file)
+  } catch (error) {
+    ui.notify(
+      'danger',
+      error instanceof PhotoError && error.reason === 'type'
+        ? t('errors.fileWrongType')
+        : t('errors.fileTooLarge', { max: '12 MB' }),
+    )
+  }
 }
 
 function toggleMember(uid: string): void {
@@ -248,10 +304,22 @@ async function commitProgramme(): Promise<void> {
     await saveProgramme({
       ...d,
       name: d.name.trim(),
+      /*
+       * The amount is cleared for anything that is not money.
+       *
+       * The editor hides the amount field when the type changes, but the value
+       * typed before the switch is still sitting in `milestoneAmounts` — and
+       * saving it would leave a day off carrying a price, which finance reads
+       * as a cash bonus. The same goes for a percentage: its amount is fixed
+       * when the level is granted, not when it is written.
+       */
       milestones: d.milestones
         .map((m) => ({
           ...m,
-          rewardBaseMinor: toMinor(milestoneAmounts.value[m.id] ?? 0, BASE_CURRENCY),
+          rewardBaseMinor:
+            m.type === 'money' ? toMinor(milestoneAmounts.value[m.id] ?? 0, BASE_CURRENCY) : 0,
+          rewardPercent: m.type === 'percentage' ? m.rewardPercent : 0,
+          rewardLabel: m.type === 'money' || m.type === 'percentage' ? '' : m.rewardLabel.trim(),
         }))
         .sort((a, b) => a.target - b.target),
     })
@@ -280,10 +348,14 @@ async function grant(
   if (!person) return
 
   try {
-    await grantMilestone(programme, milestone, {
-      uid,
-      name: `${person.firstName} ${person.lastName}`,
-    })
+    await grantMilestone(
+      programme,
+      milestone,
+      { uid, name: `${person.firstName} ${person.lastName}` },
+      /* Recounted here rather than taken from the row, so a percentage reward
+         is worked out from the figure at the moment of granting. */
+      progressFor(programme, uid, sources.value).current,
+    )
     ui.notify('ok', t('bonuses.granted'))
     await load()
   } catch {
@@ -438,8 +510,36 @@ function isMoneyMetric(programme: BonusProgramme): boolean {
   return MONEY_BONUS_METRICS.includes(programme.metric)
 }
 
-function displayCount(programme: BonusProgramme, value: number): string {
+function displayCount(programme: BonusProgramme | null, value: number): string {
+  if (!programme) return String(value)
   return isMoneyMetric(programme) ? money(value) : String(value)
+}
+
+/**
+ * What a rung is worth, in words.
+ *
+ * A percentage rung is worth nothing fixed until it is reached, so it is shown
+ * as the rate and what that currently comes to — an estimate, and labelled as
+ * one, rather than a number that looks promised and then changes.
+ */
+function rewardText(milestone: BonusMilestone, currentValue: number): string {
+  if (milestone.type === 'money') return money(milestone.rewardBaseMinor)
+
+  if (milestone.type === 'percentage') {
+    const { baseMinor } = rewardValueOf(milestone, currentValue)
+    return `${milestone.rewardPercent}% · ${t('bonuses.approx', { amount: money(baseMinor) })}`
+  }
+
+  return milestone.rewardLabel || t(`rewardType.${milestone.type}`)
+}
+
+/** How far along this rung somebody is: 740 of 1,000 is 74%. */
+function rungPercent(
+  progress: { current: number },
+  milestone: BonusMilestone,
+): number {
+  if (milestone.target <= 0) return 100
+  return Math.min(100, (progress.current / milestone.target) * 100)
 }
 
 onMounted(load)
@@ -600,36 +700,156 @@ onMounted(load)
             <legend>{{ t('bonuses.milestones') }}</legend>
             <p class="field-hint">{{ t('bonuses.milestonesHint') }}</p>
 
-            <div v-for="(m, i) in programmeDraft.milestones" :key="m.id" class="milestone-row">
-              <div class="field">
-                <label class="field-label" :for="`m-target-${i}`">{{ t('bonuses.target') }}</label>
-                <input :id="`m-target-${i}`" v-model.number="m.target" class="input" type="number" />
+            <div v-for="(m, i) in sortedDraftMilestones" :key="m.id" class="level">
+              <div class="level-head">
+                <span class="level-rank">{{ i + 1 }}</span>
+                <span class="level-summary">{{ describeLevel(m) }}</span>
+                <button
+                  class="btn btn-ghost btn-sm danger"
+                  type="button"
+                  :aria-label="t('common.delete')"
+                  @click="removeMilestone(m.id)"
+                >
+                  <AppIcon name="trash" :size="14" />
+                </button>
               </div>
+
+              <div class="level-grid">
+                <div class="field">
+                  <label class="field-label" :for="`m-target-${i}`">
+                    {{ t('bonuses.target') }}
+                  </label>
+                  <input
+                    :id="`m-target-${i}`"
+                    v-model.number="m.target"
+                    class="input"
+                    type="number"
+                    min="0"
+                  />
+                  <p class="field-hint">{{ t(`bonusMetric.${programmeDraft.metric}`) }}</p>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" :for="`m-type-${i}`">
+                    {{ t('bonuses.rewardType') }}
+                  </label>
+                  <select :id="`m-type-${i}`" v-model="m.type" class="select">
+                    <option v-for="type in REWARD_TYPES" :key="type" :value="type">
+                      {{ t(`rewardType.${type}`) }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Money and percentage are numbers; everything else is a thing. -->
+                <div v-if="m.type === 'money'" class="field">
+                  <label class="field-label" :for="`m-amount-${i}`">
+                    {{ t('bonuses.rewardAmount') }}
+                  </label>
+                  <input
+                    :id="`m-amount-${i}`"
+                    v-model.number="milestoneAmounts[m.id]"
+                    class="input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+
+                <div v-else-if="m.type === 'percentage'" class="field">
+                  <label class="field-label" :for="`m-percent-${i}`">
+                    {{ t('bonuses.rewardPercent') }}
+                  </label>
+                  <input
+                    :id="`m-percent-${i}`"
+                    v-model.number="m.rewardPercent"
+                    class="input"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                  />
+                  <p class="field-hint">{{ t('bonuses.percentHint') }}</p>
+                </div>
+
+                <div v-else class="field">
+                  <label class="field-label" :for="`m-label-${i}`">
+                    {{ t('bonuses.rewardName') }}
+                  </label>
+                  <input
+                    :id="`m-label-${i}`"
+                    v-model="m.rewardLabel"
+                    class="input"
+                    :maxlength="LIMITS.name"
+                    :placeholder="t('bonuses.rewardNamePlaceholder')"
+                  />
+                </div>
+              </div>
+
               <div class="field">
-                <label class="field-label" :for="`m-amount-${i}`">{{ t('bonuses.rewardAmount') }}</label>
+                <label class="field-label" :for="`m-desc-${i}`">
+                  {{ t('bonuses.rewardDescription') }}
+                </label>
                 <input
-                  :id="`m-amount-${i}`"
-                  v-model.number="milestoneAmounts[m.id]"
+                  :id="`m-desc-${i}`"
+                  v-model="m.description"
                   class="input"
-                  type="number"
-                  step="0.01"
+                  :maxlength="LIMITS.shortText"
                 />
               </div>
+
               <div class="field">
-                <label class="field-label" :for="`m-label-${i}`">{{ t('bonuses.rewardLabel') }}</label>
-                <input :id="`m-label-${i}`" v-model="m.rewardLabel" class="input" :maxlength="LIMITS.name" />
+                <label class="field-label" :for="`m-note-${i}`">
+                  {{ t('bonuses.levelConditions') }}
+                </label>
+                <input
+                  :id="`m-note-${i}`"
+                  v-model="m.note"
+                  class="input"
+                  :maxlength="LIMITS.shortText"
+                  :placeholder="t('bonuses.levelConditionsPlaceholder')"
+                />
               </div>
-              <button
-                class="btn btn-ghost btn-sm danger"
-                :aria-label="t('common.delete')"
-                @click="programmeDraft.milestones.splice(i, 1)"
-              >
-                <AppIcon name="trash" :size="14" />
-              </button>
+
+              <!-- A picture, for a reward somebody is meant to want. -->
+              <div class="field">
+                <span class="field-label">{{ t('bonuses.rewardImage') }}</span>
+                <div class="image-row">
+                  <img
+                    v-if="m.rewardImage"
+                    :src="m.rewardImage"
+                    alt=""
+                    class="image-preview"
+                  />
+                  <div v-else class="image-empty">
+                    <AppIcon name="gift" :size="20" />
+                  </div>
+
+                  <div class="image-actions">
+                    <label class="btn btn-secondary btn-sm">
+                      <input
+                        type="file"
+                        class="sr-only"
+                        :accept="ACCEPTED_TYPES.join(',')"
+                        @change="pickImage(m, $event)"
+                      />
+                      {{ m.rewardImage ? t('bonuses.changeImage') : t('bonuses.addImage') }}
+                    </label>
+                    <button
+                      v-if="m.rewardImage"
+                      class="btn btn-ghost btn-sm danger"
+                      type="button"
+                      @click="m.rewardImage = null"
+                    >
+                      {{ t('common.remove') }}
+                    </button>
+                    <p class="field-hint">{{ t('bonuses.imageHint') }}</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <button class="btn btn-secondary btn-sm" type="button" @click="addMilestone">
-              <AppIcon name="plus" :size="14" /> {{ t('bonuses.addMilestone') }}
+              <AppIcon name="plus" :size="14" /> {{ t('bonuses.addLevel') }}
             </button>
           </fieldset>
 
@@ -656,6 +876,24 @@ onMounted(load)
               class="textarea"
               :maxlength="LIMITS.longText"
             />
+          </div>
+
+          <!--
+            The rules, in the CEO's words, read by everybody on the programme.
+            A reward scheme whose conditions are not written down is one people
+            argue about afterwards.
+          -->
+          <div class="field">
+            <label class="field-label" for="b-rules">{{ t('bonuses.rules') }}</label>
+            <textarea
+              id="b-rules"
+              v-model="programmeDraft.rules"
+              class="textarea"
+              rows="3"
+              :maxlength="LIMITS.longText"
+              :placeholder="t('bonuses.rulesPlaceholder')"
+            />
+            <p class="field-hint">{{ t('bonuses.rulesHint') }}</p>
           </div>
         </div>
 
@@ -707,6 +945,12 @@ onMounted(load)
 
         <p v-if="programme.description" class="card-body muted">{{ programme.description }}</p>
 
+        <!-- Readable before somebody chases the target, not after they miss it. -->
+        <div v-if="programme.rules" class="card-body rules">
+          <p class="rules-title">{{ t('bonuses.rules') }}</p>
+          <p class="rules-body">{{ programme.rules }}</p>
+        </div>
+
         <p v-if="(programme.milestones ?? []).length === 0" class="card-body tertiary small">
           {{ t('bonuses.noMilestones') }}
         </p>
@@ -728,46 +972,105 @@ onMounted(load)
               </span>
             </div>
 
-            <!-- A visual ladder rather than one bar ------------------- -->
+            <!--
+              The reward ladder.
+
+              The whole point of this screen is that somebody can see, before
+              they start, what reaching each number gets them. So nothing is
+              hidden: locked rungs show their reward and their picture exactly
+              like earned ones, only quieter. A ladder that reveals the next
+              prize only once you have passed it cannot motivate anybody
+              towards it.
+            -->
             <ol class="ladder">
               <li
                 v-for="step in row.progress.milestones"
                 :key="step.milestone.id"
                 class="rung"
-                :class="{ 'is-reached': step.reached }"
+                :class="{
+                  'is-reached': step.reached,
+                  'is-next': step.milestone.id === row.progress.nextMilestone?.id,
+                }"
               >
-                <span class="rung-dot">
-                  <AppIcon v-if="step.awardStatus === 'paid'" name="check" :size="11" />
-                  <AppIcon v-else-if="step.reached" name="flag" :size="11" />
-                </span>
-                <span class="rung-body">
-                  <span class="rung-target">
-                    {{ displayCount(programme, step.milestone.target) }}
-                  </span>
-                  <span class="rung-reward tertiary">
-                    {{
-                      step.milestone.rewardLabel ||
-                      money(step.milestone.rewardBaseMinor)
-                    }}
+                <span class="rung-rail" aria-hidden="true">
+                  <span class="rung-dot">
+                    <AppIcon v-if="step.awardStatus === 'paid'" name="check" :size="12" />
+                    <AppIcon v-else-if="step.reached" name="flag" :size="12" />
                   </span>
                 </span>
-                <span v-if="step.awardStatus" class="badge badge-plain">
-                  {{ t(`awardStatus.${step.awardStatus}`) }}
-                </span>
-                <button
-                  v-else-if="step.reached && canManage && row.uid !== auth.uid"
-                  class="btn btn-secondary btn-sm"
-                  @click="grant(programme, step.milestone, row.uid)"
-                >
-                  {{ t('bonuses.grant') }}
-                </button>
+
+                <div class="rung-card">
+                  <img
+                    v-if="step.milestone.rewardImage"
+                    :src="step.milestone.rewardImage"
+                    :alt="step.milestone.rewardLabel"
+                    class="rung-image"
+                    loading="lazy"
+                  />
+
+                  <div class="rung-body">
+                    <p class="rung-target">
+                      {{ displayCount(programme, step.milestone.target) }}
+                    </p>
+                    <p class="rung-reward">{{ rewardText(step.milestone, row.progress.current) }}</p>
+                    <p v-if="step.milestone.description" class="rung-note tertiary">
+                      {{ step.milestone.description }}
+                    </p>
+                    <p v-if="step.milestone.note" class="rung-note tertiary">
+                      {{ step.milestone.note }}
+                    </p>
+
+                    <!--
+                      Progress, but only on the rung being climbed. Showing a
+                      bar on every level turns the ladder into a wall of bars
+                      and hides the one number that matters today.
+                    -->
+                    <template v-if="step.milestone.id === row.progress.nextMilestone?.id">
+                      <div
+                        class="rung-bar"
+                        role="progressbar"
+                        :aria-valuenow="Math.round(rungPercent(row.progress, step.milestone))"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                      >
+                        <span :style="{ width: `${rungPercent(row.progress, step.milestone)}%` }" />
+                      </div>
+                      <p class="rung-remaining">
+                        {{ displayCount(programme, row.progress.current) }}
+                        /
+                        {{ displayCount(programme, step.milestone.target) }}
+                        ·
+                        {{
+                          t('bonuses.remainingToGo', {
+                            amount: displayCount(programme, row.progress.remaining),
+                          })
+                        }}
+                      </p>
+                    </template>
+                  </div>
+
+                  <div class="rung-side">
+                    <span v-if="step.awardStatus" class="badge" :class="`award-${step.awardStatus}`">
+                      {{ t(`awardStatus.${step.awardStatus}`) }}
+                    </span>
+                    <span v-else-if="!step.reached" class="rung-locked tertiary">
+                      <AppIcon name="lock" :size="12" />
+                      {{ t('bonuses.locked') }}
+                    </span>
+                    <button
+                      v-if="!step.awardStatus && step.reached && canManage && row.uid !== auth.uid"
+                      class="btn btn-secondary btn-sm"
+                      @click="grant(programme, step.milestone, row.uid)"
+                    >
+                      {{ t('bonuses.grant') }}
+                    </button>
+                  </div>
+                </div>
               </li>
             </ol>
 
-            <p v-if="row.progress.nextMilestone" class="next tertiary">
-              {{ t('bonuses.remaining') }}:
-              {{ displayCount(programme, row.progress.remaining) }}
-              → {{ row.progress.nextMilestone.rewardLabel || money(row.progress.nextMilestone.rewardBaseMinor) }}
+            <p v-if="!row.progress.nextMilestone" class="next">
+              {{ t('bonuses.ladderComplete') }}
             </p>
           </article>
         </div>
@@ -1119,34 +1422,212 @@ onMounted(load)
 .editor { border-color: var(--accent-soft-border); }
 .block { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
 .block > legend { padding: 0 var(--space-2); font-size: var(--text-sm); font-weight: 650; }
-.milestone-row { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: var(--space-3); align-items: end; }
-@media (max-width: 720px) { .milestone-row { grid-template-columns: 1fr 1fr; } }
-.switches { display: flex; flex-wrap: wrap; gap: var(--space-4); }
-.picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 180px; overflow-y: auto; }
+/* ---- The level editor ------------------------------------------------ */
+
+.level {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface-2);
+  margin-bottom: var(--space-3);
+}
+
+.level-head { display: flex; align-items: center; gap: var(--space-3); }
+
+.level-rank {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  font-size: var(--text-xs); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.level-summary { flex: 1; font-weight: 600; font-size: var(--text-sm); }
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.image-row { display: flex; gap: var(--space-3); align-items: flex-start; }
+
+.image-preview {
+  width: 96px; height: 72px; flex-shrink: 0;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.image-empty {
+  display: grid; place-items: center;
+  width: 96px; height: 72px; flex-shrink: 0;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-default);
+  color: var(--text-tertiary);
+}
+
+.image-actions { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.image-actions .btn { cursor: pointer; }
+
+/* ---- Standings -------------------------------------------------------- */
 
 .standings { display: flex; flex-direction: column; }
-.standing { padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: var(--space-3); }
+.standing {
+  padding: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
 .standing-head { display: flex; align-items: center; gap: var(--space-3); }
 .standing-name { flex: 1; font-weight: 600; }
-.standing-current { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-brand); }
+.standing-current {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-brand);
+}
 
-.ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); position: relative; }
-.ladder::before {
-  content: ''; position: absolute; left: 9px; top: 10px; bottom: 10px;
+/* ---- The reward ladder ------------------------------------------------ *
+ *
+ * A vertical timeline: a rail down the left with a marker per level, and the
+ * reward beside it. Restrained on purpose — the specification asked for this
+ * to read as premium rather than as a game, so the only colour is on the level
+ * being climbed and the ones already won. Locked levels are quiet but fully
+ * legible, because being able to read them is the entire point.
+ */
+
+.ladder {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+
+.rung { display: flex; gap: var(--space-3); align-items: stretch; }
+
+/* The rail is drawn per rung so it stops cleanly at the last one. */
+.rung-rail {
+  position: relative;
+  flex: 0 0 20px;
+  display: flex; justify-content: center;
+}
+
+.rung-rail::before {
+  content: ''; position: absolute;
+  top: 22px; bottom: calc(var(--space-3) * -1);
   width: 2px; background: var(--border-subtle);
 }
-.rung { display: flex; align-items: center; gap: var(--space-3); position: relative; }
+
+.rung:last-child .rung-rail::before { display: none; }
+
 .rung-dot {
-  width: 20px; height: 20px; flex-shrink: 0; z-index: 1;
-  border-radius: 50%; border: 2px solid var(--border-strong);
+  position: relative; z-index: 1;
+  display: grid; place-items: center;
+  width: 20px; height: 20px; margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
   background: var(--bg-surface);
-  display: grid; place-items: center; color: var(--text-tertiary);
+  color: var(--text-tertiary);
 }
-.rung.is-reached .rung-dot { border-color: var(--ok-500); background: var(--ok-bg); color: var(--ok-500); }
-.rung-body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.rung-target { font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
-.rung-reward { font-size: var(--text-xs); }
-.next { font-size: var(--text-xs); }
+
+.rung.is-reached .rung-dot {
+  border-color: var(--ok-500);
+  background: var(--ok-bg);
+  color: var(--ok-500);
+}
+
+.rung.is-next .rung-dot { border-color: var(--brand-500); }
+
+.rung-card {
+  flex: 1; min-width: 0;
+  display: flex; gap: var(--space-3); align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.rung.is-next .rung-card {
+  border-color: var(--brand-500);
+  background: var(--bg-surface-2);
+}
+
+/* A locked level is dimmed, never hidden. */
+.rung:not(.is-reached):not(.is-next) .rung-card { opacity: 0.72; }
+
+.rung-image {
+  width: 84px; height: 64px; flex-shrink: 0;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-2);
+}
+
+.rung-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.rung-target {
+  font-size: var(--text-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rung-reward { font-size: var(--text-sm); color: var(--text-secondary); }
+.rung-note { font-size: var(--text-xs); }
+
+.rung-bar {
+  height: 5px; margin-top: var(--space-2);
+  border-radius: 3px; overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.rung-bar > span {
+  display: block; height: 100%;
+  background: var(--brand-500);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.rung-remaining {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-brand);
+}
+
+.rung-side {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: var(--space-2); flex-shrink: 0;
+}
+
+.rung-locked {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--text-xs);
+}
+
+.next { font-size: var(--text-sm); font-weight: 600; color: var(--ok-500); }
+
+.rules {
+  padding-top: 0;
+  border-left: 2px solid var(--border-default);
+  margin-left: var(--space-5);
+  padding-left: var(--space-4);
+}
+.rules-title {
+  font-size: var(--text-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-1);
+}
+.rules-body { font-size: var(--text-sm); color: var(--text-secondary); white-space: pre-wrap; }
+
+@media (max-width: 640px) {
+  .rung-card { flex-direction: column; }
+  .rung-image { width: 100%; height: 120px; }
+  .rung-side { flex-direction: row; align-items: center; align-self: stretch; }
+  .image-row { flex-direction: column; }
+}
 
 .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }

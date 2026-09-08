@@ -24,6 +24,7 @@ import { INCOME_TYPES } from '@/types/revenue'
 import {
   MONEY_BONUS_METRICS,
   OWED_STATUSES,
+  rewardValueOf,
   type AwardStatus,
   type BonusAward,
   type BonusMetric,
@@ -251,9 +252,14 @@ export async function grantMilestone(
   programme: BonusProgramme,
   milestone: BonusMilestone,
   employee: { uid: string; name: string },
+  /** Where the person stands right now, for a reward set as a percentage. */
+  metricValue = 0,
 ): Promise<string> {
   const id = newId()
   const status: AwardStatus = programme.requiresApproval ? 'pending' : 'earned'
+
+  /* A percentage rung becomes an amount here, and stays that amount. */
+  const { baseMinor } = rewardValueOf(milestone, metricValue)
 
   await write('bonusAwards', {
     id,
@@ -264,7 +270,8 @@ export async function grantMilestone(
     sourceLabel: programme.name,
     milestoneId: milestone.id,
     reason: milestone.note || `${milestone.target}`,
-    amountBaseMinor: milestone.rewardBaseMinor,
+    amountBaseMinor: baseMinor,
+    rewardType: milestone.type,
     rewardLabel: milestone.rewardLabel,
     status,
     earnedDate: today(),
@@ -279,7 +286,7 @@ export async function grantMilestone(
     targetType: 'bonus',
     targetId: id,
     targetLabel: `${employee.name} · ${programme.name}`,
-    metadata: { amount: milestone.rewardBaseMinor, status, milestone: milestone.target },
+    metadata: { amount: baseMinor, status, milestone: milestone.target },
   })
 
   await notify(employee.uid, {
@@ -313,6 +320,8 @@ export async function grantManual(input: {
     milestoneId: '',
     reason: input.reason,
     amountBaseMinor: input.amountBaseMinor,
+    /* An amount makes it cash; a bare label makes it a thing. */
+    rewardType: input.amountBaseMinor > 0 ? 'money' : 'custom',
     rewardLabel: input.rewardLabel,
     status: 'earned',
     earnedDate: today(),
@@ -478,6 +487,7 @@ export async function approveWork(work: IncentiveWork, note: string): Promise<vo
     milestoneId: '',
     reason: work.title,
     amountBaseMinor: work.rewardBaseMinor,
+    rewardType: work.rewardBaseMinor > 0 ? 'money' : 'custom',
     rewardLabel: work.rewardLabel,
     status: 'earned',
     earnedDate: today(),

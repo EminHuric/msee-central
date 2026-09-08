@@ -47,15 +47,78 @@ export const MONEY_BONUS_METRICS: readonly BonusMetric[] = ['sales_value', 'reve
  * A programme is a list of these, in order. The employee sees where they are,
  * what the next one needs, and what it pays.
  */
+/**
+ * What somebody actually gets.
+ *
+ * Kept as a type rather than inferred from whether an amount is set, because
+ * the three that are not money behave differently on the way out: a day off is
+ * approved by a manager and never reaches payroll, a product is ordered, and a
+ * percentage is not a number at all until the figure it applies to is known.
+ * Finance has to be able to tell them apart without reading a label.
+ */
+export const REWARD_TYPES = [
+  'money',
+  'percentage',
+  'product',
+  'gift',
+  'experience',
+  'day_off',
+  'custom',
+] as const
+export type RewardType = (typeof REWARD_TYPES)[number]
+
+/** Reward types that cost the company cash, and so reach finance as a bonus. */
+export const CASH_REWARDS: readonly RewardType[] = ['money', 'percentage']
+
 export interface BonusMilestone {
   id: string
   /** Reaching this number earns the reward. */
   target: number
-  /** Cash reward in base-currency minor units. Zero when the reward is a thing. */
+  type: RewardType
+  /**
+   * Cash reward in base-currency minor units.
+   *
+   * For `percentage` this is filled in when the award is granted, from the
+   * figure reached at that moment — so a rate changed next year cannot
+   * retroactively alter what somebody was promised.
+   */
   rewardBaseMinor: number
+  /** Rate for `percentage`, as a whole-number percent of the metric. */
+  rewardPercent: number
   /** What they get, when it is not money: a day off, a device, a trip. */
   rewardLabel: string
+  /**
+   * A picture of the reward, as a data URI.
+   *
+   * Deliberately on the document rather than in Firebase Storage, which is the
+   * same decision profile photos made and for the same reason: Storage needs a
+   * billing plan, and a 640px product shot is small enough to carry.
+   */
+  rewardImage: string | null
+  /** Shown under the reward on the ladder. */
+  description: string
+  /** Conditions specific to this rung, beyond the programme's own rules. */
   note: string
+}
+
+/**
+ * What a milestone is worth, for display.
+ *
+ * A percentage rung has no fixed amount until it is reached, so this returns
+ * the rate for one and the amount for the other rather than pretending both
+ * are the same kind of number.
+ */
+export function rewardValueOf(
+  milestone: BonusMilestone,
+  metricValue = 0,
+): { baseMinor: number; isEstimate: boolean } {
+  if (milestone.type === 'percentage') {
+    return {
+      baseMinor: Math.round((metricValue * milestone.rewardPercent) / 100),
+      isEstimate: true,
+    }
+  }
+  return { baseMinor: milestone.rewardBaseMinor, isEstimate: false }
 }
 
 export const BONUS_AUDIENCES = ['company', 'department', 'team', 'selected'] as const
@@ -95,6 +158,15 @@ export interface BonusProgramme extends SoftDeletable {
   status: ProgrammeStatus
   /** Employees see programmes they are part of; this hides one while drafting. */
   visibleToStaff: boolean
+  /**
+   * The rules, in the CEO's own words, shown to everybody on the programme.
+   *
+   * Separate from `notes`, which is internal. A reward scheme whose conditions
+   * are not written down is one people argue about afterwards — "only confirmed
+   * sales count" has to be readable before somebody chases the target, not
+   * produced once they miss it.
+   */
+  rules: string
   notes: string
   createdAt: string
   createdBy: string
@@ -189,7 +261,16 @@ export interface BonusAward {
   /** Which rung, when it came from a programme. */
   milestoneId: string
   reason: string
+  /**
+   * What it is worth, frozen at the moment it was granted.
+   *
+   * A percentage rung is worked out here and then never recalculated: whoever
+   * earned 2% of a figure earned that amount, not 2% of whatever the figure
+   * becomes later.
+   */
   amountBaseMinor: number
+  /** Cash, or a thing. Finance needs to tell them apart without reading a name. */
+  rewardType: RewardType
   rewardLabel: string
   status: AwardStatus
   earnedDate: string

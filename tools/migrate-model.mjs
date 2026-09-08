@@ -449,7 +449,62 @@ async function write(ref, data) {
 }
 
 /* ------------------------------------------------------------------ *
- * 9. Retired collections
+ * 9. Bonus programmes — a reward became a typed thing
+ *
+ * A milestone used to be an amount and a label, and which one you got was
+ * inferred from whether the amount was zero. That guess is now a `type`,
+ * because a day off and a cash bonus leave the company by different routes
+ * and finance has to tell them apart without reading a name.
+ * ------------------------------------------------------------------ */
+
+{
+  const snap = await db.collection('bonusPrograms').get()
+  let moved = 0
+
+  for (const doc of snap.docs) {
+    const data = doc.data()
+    const milestones = data.milestones ?? []
+    if (data.rules !== undefined && milestones.every((m) => m.type)) continue
+
+    await write(doc.ref, {
+      ...SOFT,
+      rules: data.rules ?? '',
+      milestones: milestones.map((m) => ({
+        ...m,
+        /* An amount meant money; anything else was described in the label. */
+        type: m.type ?? (m.rewardBaseMinor > 0 ? 'money' : m.rewardLabel ? 'custom' : 'money'),
+        rewardPercent: m.rewardPercent ?? 0,
+        rewardImage: m.rewardImage ?? null,
+        description: m.description ?? '',
+      })),
+      updatedAt: now,
+    })
+    moved += 1
+  }
+
+  note(`bonus programmes reshaped  ${moved}/${snap.size}`)
+}
+
+{
+  const snap = await db.collection('bonusAwards').get()
+  let moved = 0
+
+  for (const doc of snap.docs) {
+    const data = doc.data()
+    if (data.rewardType) continue
+
+    await write(doc.ref, {
+      rewardType: data.amountBaseMinor > 0 ? 'money' : 'custom',
+      updatedAt: now,
+    })
+    moved += 1
+  }
+
+  note(`bonus awards typed         ${moved}/${snap.size}`)
+}
+
+/* ------------------------------------------------------------------ *
+ * 10. Retired collections
  *
  * Contracts, invoices, payments, tasks and chat threads have no home in the
  * new model. Their documents are left exactly where they are: no rule reads

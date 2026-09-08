@@ -60,6 +60,7 @@ export {
   BONUS_AUDIENCES,
   BONUS_METRICS,
   PROGRAMME_STATUSES,
+  REWARD_TYPES,
   WORK_STATUSES,
 } from '../src/types/rewards.ts'
 
