@@ -26,7 +26,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import AddEmployeeForm from '@/components/AddEmployeeForm.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
-import { nextEmployeeCode } from '@/api/approval'
+import { nextEmployeeCode } from '@/api/provisioning'
 import { fetchEmployees } from '@/api/employees'
 import {
   departmentName,
@@ -71,7 +71,7 @@ const typeFilter = ref<AccountType | ''>('')
  * the write would be refused halfway by the rules.
  */
 const canCreateAccounts = computed(() =>
-  auth.hasAll(PERMISSIONS.REQUESTS_APPROVE, PERMISSIONS.ROLES_ASSIGN),
+  auth.hasAll(PERMISSIONS.EMPLOYEES_CREATE, PERMISSIONS.ROLES_ASSIGN),
 )
 
 const showAdd = ref(false)

@@ -62,12 +62,6 @@ const groups = computed<Group[]>(() =>
           permission: PERMISSIONS.EMPLOYEES_VIEW,
         },
         {
-          to: '/settings/requests',
-          labelKey: 'nav.requests',
-          icon: 'inbox',
-          permission: PERMISSIONS.REQUESTS_VIEW,
-        },
-        {
           to: '/settings/roles',
           labelKey: 'nav.roles',
           icon: 'shield',

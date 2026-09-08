@@ -14,13 +14,13 @@ import type { Permission } from './permissions'
  * Account status
  * ------------------------------------------------------------------ */
 
-export const ACCOUNT_STATUSES = [
-  'pending',
-  'active',
-  'suspended',
-  'rejected',
-  'deactivated',
-] as const
+/*
+ * `pending` and `rejected` went with self-registration. Accounts are created
+ * by the CEO and are active from the moment they exist; an account that should
+ * not be used is suspended or deactivated, which are both decisions somebody
+ * made rather than a queue somebody forgot to empty.
+ */
+export const ACCOUNT_STATUSES = ['active', 'suspended', 'deactivated'] as const
 
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number]
 

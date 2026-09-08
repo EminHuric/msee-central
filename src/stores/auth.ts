@@ -16,31 +16,22 @@
 
 import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore'
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
-  updateProfile,
   type User as FirebaseUser,
 } from 'firebase/auth'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '@/lib/firebase'
-import type {
-  AccountStatus,
-  EmployeePublic,
-  RegistrationRequest,
-  UserPermissions,
-} from '@/types/domain'
+import type { AccountStatus, EmployeePublic, UserPermissions } from '@/types/domain'
 import type { Permission } from '@/types/permissions'
 
 export type SessionState =
   | 'loading'
   | 'anonymous'
-  | 'pending'
-  | 'rejected'
   | 'blocked'
   | 'active'
   | 'unconfigured'
@@ -48,7 +39,6 @@ export type SessionState =
 export const useAuthStore = defineStore('auth', () => {
   const firebaseUser = ref<FirebaseUser | null>(null)
   const access = ref<UserPermissions | null>(null)
-  const request = ref<RegistrationRequest | null>(null)
   /**
    * The signed-in person's own employee record.
    *
@@ -94,25 +84,19 @@ export const useAuthStore = defineStore('auth', () => {
     if (!firebaseUser.value) return 'anonymous'
 
     if (access.value) {
-      switch (access.value.status) {
-        case 'active':
-          return 'active'
-        case 'pending':
-          return 'pending'
-        case 'rejected':
-          return 'rejected'
-        default:
-          return 'blocked'
-      }
+      return access.value.status === 'active' ? 'active' : 'blocked'
     }
 
-    // No permissions document. Either still waiting, or turned away.
-    if (request.value?.status === 'rejected') return 'rejected'
-    if (request.value?.status === 'pending') return 'pending'
-
-    // Signed in with nothing attached — treat as not yet approved rather than
-    // guessing. This is the safe direction to fail in.
-    return 'pending'
+    /*
+     * Signed in, with no access document.
+     *
+     * Anybody holding the web API key can create a Firebase Auth login — that
+     * is true of every Firebase project and is not something the application
+     * can prevent. What it can do is give such an account nothing, which is
+     * what this is: no document, no access, and the rules refuse it
+     * independently of anything decided here.
+     */
+    return 'blocked'
   })
 
   const isSignedIn = computed(() => firebaseUser.value !== null)
@@ -158,16 +142,6 @@ export const useAuthStore = defineStore('auth', () => {
       },
     )
 
-    stopRequestWatch = onSnapshot(
-      doc(db, 'registrationRequests', user.uid),
-      (snap) => {
-        request.value = snap.exists() ? (snap.data() as RegistrationRequest) : null
-      },
-      () => {
-        request.value = null
-      },
-    )
-
     stopProfileWatch = onSnapshot(
       doc(db, 'employees', user.uid),
       (snap) => {
@@ -205,7 +179,6 @@ export const useAuthStore = defineStore('auth', () => {
         } else {
           stopWatching()
           access.value = null
-          request.value = null
           profile.value = null
           initialised.value = true
         }
@@ -220,30 +193,9 @@ export const useAuthStore = defineStore('auth', () => {
     await signInWithEmailAndPassword(getFirebaseAuth(), emailAddress.trim(), password)
   }
 
-  /**
-   * Create the Firebase Auth account for a registration request.
-   *
-   * The account exists immediately but carries no permissions document, so it
-   * cannot read anything. The caller then writes the request itself.
-   */
-  async function createAccount(
-    emailAddress: string,
-    password: string,
-    fullName: string,
-  ): Promise<FirebaseUser> {
-    const credential = await createUserWithEmailAndPassword(
-      getFirebaseAuth(),
-      emailAddress.trim(),
-      password,
-    )
-    await updateProfile(credential.user, { displayName: fullName })
-    return credential.user
-  }
-
   async function signOut(): Promise<void> {
     stopWatching()
     access.value = null
-    request.value = null
     profile.value = null
     await firebaseSignOut(getFirebaseAuth())
   }
@@ -255,7 +207,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     firebaseUser,
     access,
-    request,
     profile,
     initialised,
     uid,
@@ -273,7 +224,6 @@ export const useAuthStore = defineStore('auth', () => {
     hasAll,
     initialise,
     signIn,
-    createAccount,
     signOut,
     sendPasswordReset,
   }

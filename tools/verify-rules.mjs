@@ -174,40 +174,33 @@ try {
   const credential = await createUserWithEmailAndPassword(clientAuth, testEmail, testPassword)
   testUid = credential.user.uid
 
-  /* --- what an applicant legitimately needs ------------------------ */
+  /*
+   * There is no sign-up any more: accounts are created by the CEO.
+   *
+   * But anybody holding the web API key can still create a Firebase Auth
+   * login — that is true of every Firebase project and nothing in the
+   * application can stop it. This account is exactly that: a stranger who
+   * signed themselves up against the project and has no access document.
+   *
+   * So the phase that used to prove 'can do one narrow thing' now proves the
+   * stronger claim: it can do nothing at all.
+   */
 
-  await mustAllow('applicant can file their own registration request', () =>
+  await mustDeny('a stranger CANNOT file a registration request', () =>
     setDoc(doc(db, 'registrationRequests', testUid), {
       id: testUid,
       uid: testUid,
-      firstName: 'Rules',
-      lastName: 'Test',
       email: testEmail,
-      phone: '+381600000000',
-      country: 'Serbia',
-      city: 'Novi Pazar',
-      photoUrl: null,
-      personalDescription: 'temporary verification account',
-      desiredPosition: 'tester',
-      additionalInfo: '',
-      termsAcceptedAt: new Date().toISOString(),
       status: 'pending',
       submittedAt: new Date().toISOString(),
-      reviewedBy: null,
-      reviewedAt: null,
-      rejectionReason: null,
     }),
   )
 
-  await mustAllow('applicant can read back their own request', () =>
+  await mustDeny('a stranger CANNOT read a registration request', () =>
     getDoc(doc(db, 'registrationRequests', testUid)),
   )
 
   /* --- the attacks that must fail ---------------------------------- */
-
-  await mustDeny('applicant CANNOT approve their own request', () =>
-    updateDoc(doc(db, 'registrationRequests', testUid), { status: 'approved' }),
-  )
 
   await mustDeny('applicant CANNOT grant themselves permissions', () =>
     setDoc(doc(db, 'userPermissions', testUid), {

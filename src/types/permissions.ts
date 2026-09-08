@@ -81,6 +81,12 @@ export const PERMISSIONS = {
 
   // --- Employees --------------------------------------------------------
   EMPLOYEES_VIEW: 'employees.view',
+  /*
+   * Make somebody an account. Held with `roles.assign`, because creating a
+   * person without deciding what they may do produces an account that cannot
+   * be used, and the rules refuse the second write without it anyway.
+   */
+  EMPLOYEES_CREATE: 'employees.create',
   EMPLOYEES_VIEW_ALL: 'employees.view_all',
   EMPLOYEES_EDIT_PROFESSIONAL: 'employees.edit_professional',
   EMPLOYEES_MANAGE_STATUS: 'employees.manage_status',
@@ -119,10 +125,6 @@ export const PERMISSIONS = {
   // --- Announcements ----------------------------------------------------
   ANNOUNCEMENTS_SEND: 'announcements.send',
 
-  // --- Registration requests --------------------------------------------
-  REQUESTS_VIEW: 'registration_requests.view',
-  REQUESTS_APPROVE: 'registration_requests.approve',
-  REQUESTS_REJECT: 'registration_requests.reject',
 
   // --- Roles & permissions ----------------------------------------------
   ROLES_VIEW: 'roles.view',
@@ -244,6 +246,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       PERMISSIONS.EMPLOYEES_VIEW,
       PERMISSIONS.EMPLOYEES_VIEW_ALL,
+      PERMISSIONS.EMPLOYEES_CREATE,
       PERMISSIONS.EMPLOYEES_VIEW_PRIVATE_INFO,
       PERMISSIONS.EMPLOYEES_EDIT_PROFESSIONAL,
       PERMISSIONS.EMPLOYEES_MANAGE_STATUS,
@@ -276,14 +279,6 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.CALENDAR_VIEW,
       PERMISSIONS.CALENDAR_MANAGE,
       PERMISSIONS.ANNOUNCEMENTS_SEND,
-    ],
-  },
-  {
-    key: 'requests',
-    permissions: [
-      PERMISSIONS.REQUESTS_VIEW,
-      PERMISSIONS.REQUESTS_APPROVE,
-      PERMISSIONS.REQUESTS_REJECT,
     ],
   },
   {

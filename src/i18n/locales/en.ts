@@ -70,7 +70,7 @@ export default {
     password: 'Password',
     confirmPassword: 'Confirm password',
     forgotPassword: 'Forgot your password?',
-    noAccount: 'Do not have an account yet?',
+    noAccount: 'No account? Accounts are created by the company — ask whoever runs MsEe Central.',
     haveAccount: 'Already have an account?',
     signingIn: 'Signing in…',
     invalidCredentials: 'Incorrect email or password.',
@@ -1238,7 +1238,6 @@ export default {
     dashboard: 'Dashboard',
     employees: 'Employees',
     directory: 'Directory',
-    requests: 'Registration Requests',
     roles: 'Roles & Permissions',
     audit: 'Audit Log',
     profile: 'My Profile',
@@ -1309,7 +1308,6 @@ export default {
     goals: 'Goals & performance',
     tools: 'Calendar, messages & analytics',
     employees: 'Employees',
-    requests: 'Registration requests',
     roles: 'Roles & permissions',
     organisation: 'Departments & positions',
     finance: 'Money',
@@ -1642,6 +1640,11 @@ export default {
       },
     },
     employees: {
+      create: {
+        label: 'Make employee accounts',
+        description:
+          'Create somebody an account and hand it over. Held together with the permission to assign roles, since an account with no role cannot be used.',
+      },
       view: {
         label: 'View the directory',
         description:

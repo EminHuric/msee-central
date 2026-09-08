@@ -224,28 +224,20 @@ service cloud.firestore {
     }
 
     /* ------------------------------------------------------------------ *
-     * registrationRequests
+     * registrationRequests — retired
      *
-     * Written once by the applicant, thereafter only by a reviewer. The
-     * applicant cannot approve themselves because they cannot update at all.
+     * People are given accounts by the CEO; nobody signs themselves up. That
+     * removed the only public write in the system, so this is now closed
+     * outright rather than narrowed.
+     *
+     * Existing documents are left where they are and become unreadable, which
+     * is the same treatment contracts and chat threads got: inert, not
+     * destroyed, because deleting somebody's data as a side effect of an
+     * upgrade is not a decision a rule change should take.
      * ------------------------------------------------------------------ */
 
     match /registrationRequests/{uid} {
-      allow read: if isSelf(uid) || can('registration_requests.view');
-
-      allow create: if isSelf(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.rejectionReason == null
-        && request.resource.data.email == request.auth.token.email;
-
-      allow update: if (can('registration_requests.approve') || can('registration_requests.reject'))
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.submittedAt == resource.data.submittedAt;
-
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     /* ------------------------------------------------------------------ *
@@ -261,7 +253,7 @@ service cloud.firestore {
       /* Own record always; everybody else's only from inside the company. */
       allow read: if isSelf(uid) || (isInternal() && can('employees.view'));
 
-      allow create: if can('registration_requests.approve')
+      allow create: if can('employees.create')
         && request.resource.data.uid == uid;
 
       /*

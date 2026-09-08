@@ -12,13 +12,6 @@ const router = useRouter()
 const { t } = useI18n()
 
 const message = computed(() => {
-  switch (auth.state) {
-    case 'rejected':
-      return t('auth.rejectedMessage')
-    default:
-      break
-  }
-
   switch (auth.status) {
     case 'suspended':
       return t('auth.suspendedMessage')
@@ -29,9 +22,11 @@ const message = computed(() => {
   }
 })
 
-/** A rejection reason is shown only when the CEO chose to give one. */
-const reason = computed(() => auth.request?.rejectionReason ?? null)
-
+/*
+ * No status at all means an account with no access document — somebody who
+ * created a login against the project rather than being given one. There is
+ * nothing to explain to them beyond that they cannot come in.
+ */
 async function leave(): Promise<void> {
   await auth.signOut()
   await router.replace('/login')
@@ -46,13 +41,6 @@ async function leave(): Promise<void> {
       <div>
         <h1 class="blocked-title">{{ t('auth.blockedTitle') }}</h1>
         <p class="muted blocked-text">{{ message }}</p>
-      </div>
-
-      <div v-if="reason" class="alert alert-warn reason">
-        <span>
-          <strong>{{ t('auth.rejectionReason') }}:</strong>
-          {{ reason }}
-        </span>
       </div>
 
       <button type="button" class="btn btn-secondary btn-block" @click="leave">

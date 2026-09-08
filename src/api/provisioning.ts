@@ -248,3 +248,19 @@ export function suggestPassword(): string {
   const digits = (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) % 100
   return `${pick()}-${pick()}-${pick()}-${String(digits).padStart(2, '0')}`
 }
+
+/**
+ * Next employee number.
+ *
+ * Derived from how many employees already exist. Two creations in the same
+ * second could collide, which at this scale means the CEO clicking twice in
+ * two browser tabs — the code is a label, not a key, so a duplicate is a
+ * cosmetic fix rather than data loss. A counter document would be the answer
+ * if that ever stops being true.
+ *
+ * It lived beside the approval flow until that was removed; it belongs here,
+ * with the only thing that still creates an employee.
+ */
+export function nextEmployeeCode(existingCount: number): string {
+  return `MSEE-${String(existingCount + 1).padStart(4, '0')}`
+}

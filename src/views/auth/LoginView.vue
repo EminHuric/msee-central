@@ -130,11 +130,13 @@ async function requestReset(): Promise<void> {
       </button>
     </form>
 
+    <!--
+      No sign-up link, because there is no sign-up. Accounts are made by the
+      CEO and handed over, which is why this says who to ask rather than
+      offering a form that would only ever produce an account with no access.
+    -->
     <template #below>
-      <p class="muted auth-alt">
-        {{ t('auth.noAccount') }}
-        <RouterLink to="/register">{{ t('auth.register') }}</RouterLink>
-      </p>
+      <p class="muted auth-alt">{{ t('auth.noAccount') }}</p>
     </template>
   </AuthShell>
 </template>

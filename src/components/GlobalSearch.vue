@@ -161,13 +161,6 @@ const PAGES: PageEntry[] = [
     internalOnly: true,
   },
   {
-    to: '/settings/requests',
-    labelKey: 'nav.requests',
-    icon: 'inbox',
-    permission: PERMISSIONS.REQUESTS_VIEW,
-    internalOnly: true,
-  },
-  {
     to: '/settings/fields',
     labelKey: 'fields.title',
     icon: 'edit',

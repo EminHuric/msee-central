@@ -37,18 +37,6 @@ const routes: RouteRecordRaw[] = [
     meta: { guestOnly: true, titleKey: 'auth.signIn' },
   },
   {
-    path: '/register',
-    name: 'register',
-    component: () => import('@/views/auth/RegisterView.vue'),
-    meta: { guestOnly: true, titleKey: 'auth.registerTitle' },
-  },
-  {
-    path: '/pending',
-    name: 'pending',
-    component: () => import('@/views/auth/PendingView.vue'),
-    meta: { titleKey: 'pending.title' },
-  },
-  {
     path: '/blocked',
     name: 'blocked',
     component: () => import('@/views/auth/BlockedView.vue'),
@@ -218,12 +206,6 @@ const routes: RouteRecordRaw[] = [
             name: 'settings-organization',
             component: () => import('@/views/admin/OrganizationView.vue'),
             meta: { permission: PERMISSIONS.DEPARTMENTS_MANAGE, titleKey: 'nav2.organization' },
-          },
-          {
-            path: 'requests',
-            name: 'settings-requests',
-            component: () => import('@/views/admin/RequestsView.vue'),
-            meta: { permission: PERMISSIONS.REQUESTS_VIEW, titleKey: 'nav.requests' },
           },
           {
             path: 'roles',

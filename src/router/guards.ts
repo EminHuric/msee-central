@@ -27,23 +27,19 @@ export function installAuthGuard(router: Router): void {
       if (to.meta.requiresAuth) {
         return { name: 'login', query: { redirect: to.fullPath } }
       }
-      if (to.name === 'pending' || to.name === 'blocked') {
+      if (to.name === 'blocked') {
         return { name: 'login' }
       }
       return true
     }
 
-    // Signed in but not yet allowed through.
-    if (state === 'pending') {
-      return to.name === 'pending' ? true : { name: 'pending' }
-    }
-
-    if (state === 'rejected' || state === 'blocked') {
+    /* Signed in, but this account has no access here. */
+    if (state === 'blocked') {
       return to.name === 'blocked' ? true : { name: 'blocked' }
     }
 
     // Signed in and active.
-    if (to.meta.guestOnly || to.name === 'pending' || to.name === 'blocked') {
+    if (to.meta.guestOnly || to.name === 'blocked') {
       return { name: 'dashboard' }
     }
 

@@ -69,7 +69,7 @@ export default {
     password: 'Lozinka',
     confirmPassword: 'Potvrdi lozinku',
     forgotPassword: 'Zaboravljena lozinka?',
-    noAccount: 'Još nemaš nalog?',
+    noAccount: 'Nemaš nalog? Naloge pravi kompanija — pitaj onoga ko vodi MsEe Central.',
     haveAccount: 'Već imaš nalog?',
     signingIn: 'Prijavljivanje…',
     invalidCredentials: 'Pogrešan email ili lozinka.',
@@ -1237,7 +1237,6 @@ export default {
     dashboard: 'Kontrolna tabla',
     employees: 'Zaposleni',
     directory: 'Imenik',
-    requests: 'Zahtevi za registraciju',
     roles: 'Uloge i dozvole',
     audit: 'Revizioni dnevnik',
     profile: 'Moj profil',
@@ -1308,7 +1307,6 @@ export default {
     goals: 'Ciljevi i učinak',
     tools: 'Kalendar, poruke i analitika',
     employees: 'Zaposleni',
-    requests: 'Zahtevi za registraciju',
     roles: 'Uloge i dozvole',
     organisation: 'Sektori i pozicije',
     finance: 'Novac',
@@ -1641,6 +1639,11 @@ export default {
       },
     },
     employees: {
+      create: {
+        label: 'Pravi naloge zaposlenima',
+        description:
+          'Pravi nekome nalog i predaje ga. Ide zajedno sa dozvolom za dodelu uloga, jer nalog bez uloge ne može da se koristi.',
+      },
       view: {
         label: 'Pregled imenika',
         description:

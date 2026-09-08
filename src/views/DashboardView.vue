@@ -27,7 +27,6 @@ import PeriodPicker from '@/components/PeriodPicker.vue'
 import RankChart from '@/components/ui/RankChart.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
-import { fetchRequests } from '@/api/approval'
 import { fetchRecentActivity } from '@/api/records'
 import {
   EMPTY_SNAPSHOT,
@@ -60,7 +59,6 @@ import {
   type DashboardLayout,
 } from '@/types/dashboard'
 import type { ActivityEntry } from '@/types/records'
-import type { RegistrationRequest } from '@/types/domain'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -70,13 +68,11 @@ const { t, locale } = useI18n()
 const loading = ref(true)
 const snap = ref<Snapshot>(EMPTY_SNAPSHOT)
 const activity = ref<ActivityEntry[]>([])
-const requests = ref<RegistrationRequest[]>([])
 const period = ref<Period>(periodOf('month'))
 
 const today = new Date().toISOString().slice(0, 10)
 
 const canMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
-const canRequests = computed(() => auth.hasPermission(PERMISSIONS.REQUESTS_VIEW))
 const isAffiliate = computed(() => auth.access?.accountType === 'affiliate')
 
 const current = computed(() => slice(snap.value, period.value))
@@ -191,17 +187,6 @@ const alerts = computed<Alert[]>(() => {
       count: pendingWork.length,
       detail: pendingWork[0]?.title ?? '',
       link: '/bonuses',
-      tone: 'warn',
-    })
-  }
-
-  if (requests.value.length) {
-    out.push({
-      key: 'requests',
-      label: t('dashboard.pendingRequests'),
-      count: requests.value.length,
-      detail: t('dashboard.review'),
-      link: '/settings?tab=requests',
       tone: 'warn',
     })
   }
@@ -429,15 +414,13 @@ async function restoreDefaults(): Promise<void> {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [s, a, r, l] = await Promise.all([
+    const [s, a, l] = await Promise.all([
       loadSnapshot(),
       fetchRecentActivity(12).catch(() => []),
-      canRequests.value ? fetchRequests().catch(() => []) : Promise.resolve([]),
       auth.uid ? fetchLayout(auth.uid) : Promise.resolve(null),
     ])
     snap.value = s
     activity.value = a
-    requests.value = r.filter((x) => x.status === 'pending')
     layout.value = l
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
