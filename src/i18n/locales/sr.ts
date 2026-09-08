@@ -518,6 +518,50 @@ export default {
     'expense.recorded': 'Trošak zabeležen',
     'settings.updated': 'Podešavanja izmenjena',
     'data.exported': 'Podaci izvezeni',
+    'auth.logout': 'Odjava',
+    'lead.created': 'Kontakt unet',
+    'lead.updated': 'Kontakt izmenjen',
+    'lead.converted': 'Kontakt konvertovan',
+    'sale.created': 'Prodaja upisana',
+    'sale.updated': 'Prodaja izmenjena',
+    'sale.won': 'Prodaja zaključena',
+    'sale.lost': 'Prodaja izgubljena',
+    'transaction.recorded': 'Novac upisan',
+    'transaction.updated': 'Finansijski zapis izmenjen',
+    'payment.recorded': 'Uplata upisana',
+    'payment.deleted': 'Uplata uklonjena',
+    'invoice.issued': 'Faktura izdata',
+    'invoice.cancelled': 'Faktura otkazana',
+    'contract.created': 'Ugovor napravljen',
+    'contract.updated': 'Ugovor izmenjen',
+    'contract.status_changed': 'Status ugovora promenjen',
+    'commission.earned': 'Provizija zarađena',
+    'commission.approved': 'Provizija odobrena',
+    'commission.rejected': 'Provizija odbijena',
+    'commission.paid': 'Provizija isplaćena',
+    'affiliate.created': 'Partner dodat',
+    'affiliate.updated': 'Partner izmenjen',
+    'goal.created': 'Cilj postavljen',
+    'goal.updated': 'Cilj izmenjen',
+    'goal.deleted': 'Cilj uklonjen',
+    'task.created': 'Zadatak napravljen',
+    'task.updated': 'Zadatak izmenjen',
+    'task.deleted': 'Zadatak uklonjen',
+    'event.created': 'Stavka kalendara dodata',
+    'event.deleted': 'Stavka kalendara uklonjena',
+    'field.changed': 'Prilagođeno polje izmenjeno',
+    'announcement.sent': 'Objava poslata',
+    'bonus.programme_created': 'Program bonusa napravljen',
+    'bonus.awarded': 'Bonus dodeljen',
+    'bonus.approved': 'Bonus odobren',
+    'bonus.rejected': 'Bonus odbijen',
+    'bonus.paid': 'Bonus isplaćen',
+    'work.assigned': 'Dodatni rad dodeljen',
+    'work.submitted': 'Rad predat',
+    'work.reviewed': 'Rad pregledan',
+    'record.deleted': 'Zapis premešten u korpu',
+    'record.restored': 'Zapis vraćen',
+    'record.purged': 'Zapis trajno uništen',
   },
 
   nav2: {
@@ -906,11 +950,11 @@ export default {
   leadStage: {
     new: 'Novi',
     contacted: 'Kontaktiran',
-    interested: 'Zainteresovan',
-    offer_sent: 'Ponuda poslata',
     negotiation: 'Pregovori',
     won: 'Dobijen',
     lost: 'Izgubljen',
+    qualified: 'Kvalifikovan',
+    proposal: 'Ponuda poslata',
   },
 
   leads: {
@@ -962,11 +1006,12 @@ export default {
   },
 
   projectStatus: {
-    draft: 'Nacrt',
     active: 'U toku',
     on_hold: 'Pauziran',
     completed: 'Završen',
     cancelled: 'Otkazan',
+    planning: 'U pripremi',
+    at_risk: 'Ugrožen',
   },
 
   projects: {
@@ -1238,12 +1283,12 @@ export default {
     label: 'Vidljivost',
     everyone: 'Svi',
     management: 'Samo menadžment',
-    private: 'Privatno',
     everyoneHint: 'Svi zaposleni koji imaju pristup imeniku',
     managementHint: 'Ti, CEO i ovlašćeni menadžment',
-    privateHint: 'Samo ti i CEO',
     ceoNotice:
       'CEO uvek zadržava pristup podacima potrebnim za upravljanje kompanijom. Podešavanja privatnosti određuju šta vide kolege.',
+    owner: 'Samo osoba na koju se odnosi',
+    ownerHint: 'Vidi je osoba na koju se odnosi i rukovodstvo.',
   },
 
   noteCategory: {
@@ -1257,9 +1302,6 @@ export default {
   },
 
   permissionGroup: {
-    pipeline: 'Kontakti i prodaja',
-    contracts: 'Ugovori',
-    tasks: 'Zadaci',
     affiliates: 'Partnerski program',
     goals: 'Ciljevi i učinak',
     tools: 'Kalendar, poruke i analitika',
@@ -1267,11 +1309,17 @@ export default {
     requests: 'Zahtevi za registraciju',
     roles: 'Uloge i dozvole',
     organisation: 'Sektori i pozicije',
-    business: 'Klijenti i projekti',
     finance: 'Novac',
     notes: 'CEO beleške',
     audit: 'Revizioni dnevnik',
     settings: 'Podešavanja kompanije',
+    clients: 'Klijenti',
+    leads: 'Kontakti',
+    projects: 'Projekti',
+    sales: 'Prodaja',
+    services: 'Usluge',
+    bonuses: 'Bonusi i nagrade',
+    recycle: 'Korpa za otpatke',
   },
 
   permission: {
@@ -1791,8 +1839,8 @@ export default {
     fixed: 'Fiksna cena',
     hourly: 'Po satu',
     monthly: 'Mesečno',
-    commission: 'Provizija',
     custom: 'Dogovor po klijentu',
+    per_unit: 'Po jedinici',
   },
 
   referral: {
@@ -1955,7 +2003,6 @@ export default {
     expense: 'Trošak',
     refund: 'Povraćaj',
     transfer: 'Prenos',
-    revenue: 'Prihod',
 
   },
 
@@ -2092,12 +2139,12 @@ export default {
     new_clients: 'Novi klijenti',
     new_leads: 'Novi kontakti',
     leads_converted: 'Pretvoreni kontakti',
-    sales_won: 'Dobijeni poslovi',
     sales_value: 'Prodata vrednost',
     projects_completed: 'Završeni projekti',
-    tasks_completed: 'Završeni zadaci',
     affiliate_revenue: 'Prihod iz preporuka',
     manual: 'Ručno praćenje',
+    collected: 'Naplaćen novac',
+    sales_count: 'Broj prodaja',
   },
 
   goalScope: {
@@ -2158,13 +2205,13 @@ export default {
   kpi: {
     leads_created: 'Uneti kontakti',
     leads_converted: 'Pretvoreni kontakti',
-    sales_won: 'Dobijeni poslovi',
     sales_value: 'Prodata vrednost',
-    revenue_generated: 'Ostvaren prihod',
-    tasks_completed: 'Završeni zadaci',
-    tasks_overdue: 'Zadaci u kašnjenju',
     projects_completed: 'Završeni projekti',
     commission_generated: 'Ostvarena provizija',
+    sales_count: 'Broj prodaja',
+    revenue_collected: 'Naplaćen prihod',
+    new_clients: 'Novi klijenti',
+    bonuses_earned: 'Zarađeni bonusi',
   },
 
   performance: {
@@ -2189,11 +2236,10 @@ export default {
   eventKind: {
     meeting: 'Sastanak',
     deadline: 'Rok',
-    task: 'Zadatak',
-    contract: 'Ugovor',
     payment: 'Plaćanje',
     reminder: 'Podsetnik',
     other: 'Ostalo',
+    goal: 'Cilj',
   },
 
   calendar: {
@@ -2253,18 +2299,22 @@ export default {
     lead_new: 'Nov kontakt',
     lead_stale: 'Kontakt se hladi',
     client_new: 'Nov klijent',
-    sale_won: 'Posao dobijen',
     payment_received: 'Uplata primljena',
     payment_overdue: 'Plaćanje kasni',
-    contract_expiring: 'Ugovor ističe',
     project_deadline: 'Rok se približava',
-    task_assigned: 'Zadatak dodeljen',
-    task_overdue: 'Zadatak kasni',
     registration_request: 'Zahtev za nalog',
     commission_earned: 'Provizija ostvarena',
     goal_achieved: 'Cilj ostvaren',
     announcement: 'Obaveštenje',
-    message: 'Poruka',
+    lead_assigned: 'Kontakt prosleđen',
+    sale_new: 'Nova prodaja',
+    expense_recorded: 'Upisan trošak',
+    project_assigned: 'Dodat na projekat',
+    affiliate_lead: 'Kontakt od partnera',
+    bonus_earned: 'Bonus zarađen',
+    bonus_approved: 'Bonus odobren',
+    work_assigned: 'Dodeljen dodatni rad',
+    work_submitted: 'Rad predat na odobrenje',
   },
 
   notificationPriority: {
@@ -2374,11 +2424,9 @@ export default {
     custom: 'Dogovor po klijentu',
   },
   payStatus: {
-    unpaid: 'Neplaćeno',
-    advance_due: 'Traži se avans',
-    part_paid: 'Delimično plaćeno',
     paid: 'Plaćeno',
-    overpaid: 'Preplaćeno',
+    pending: 'Čeka uplatu',
+    overdue: 'Kasni',
   },
   payState: {
     paid: 'Plaćeno',
@@ -2578,6 +2626,8 @@ export default {
       boolean: 'Da / ne',
       select: 'Izbor jednog',
       multi_select: 'Izbor više',
+      currency: 'Novac',
+      url: 'Link',
     },
     visibility: {
       everyone: 'Svi',

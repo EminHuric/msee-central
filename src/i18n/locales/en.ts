@@ -519,6 +519,50 @@ export default {
     'expense.recorded': 'Expense recorded',
     'settings.updated': 'Settings changed',
     'data.exported': 'Data exported',
+    'auth.logout': 'Signed out',
+    'lead.created': 'Lead added',
+    'lead.updated': 'Lead changed',
+    'lead.converted': 'Lead converted',
+    'sale.created': 'Sale recorded',
+    'sale.updated': 'Sale changed',
+    'sale.won': 'Sale won',
+    'sale.lost': 'Sale lost',
+    'transaction.recorded': 'Money recorded',
+    'transaction.updated': 'Financial record changed',
+    'payment.recorded': 'Payment recorded',
+    'payment.deleted': 'Payment removed',
+    'invoice.issued': 'Invoice issued',
+    'invoice.cancelled': 'Invoice cancelled',
+    'contract.created': 'Contract created',
+    'contract.updated': 'Contract changed',
+    'contract.status_changed': 'Contract status changed',
+    'commission.earned': 'Commission earned',
+    'commission.approved': 'Commission approved',
+    'commission.rejected': 'Commission rejected',
+    'commission.paid': 'Commission paid',
+    'affiliate.created': 'Partner added',
+    'affiliate.updated': 'Partner changed',
+    'goal.created': 'Goal set',
+    'goal.updated': 'Goal changed',
+    'goal.deleted': 'Goal removed',
+    'task.created': 'Task created',
+    'task.updated': 'Task changed',
+    'task.deleted': 'Task removed',
+    'event.created': 'Calendar entry added',
+    'event.deleted': 'Calendar entry removed',
+    'field.changed': 'Custom field changed',
+    'announcement.sent': 'Announcement sent',
+    'bonus.programme_created': 'Bonus programme created',
+    'bonus.awarded': 'Bonus awarded',
+    'bonus.approved': 'Bonus approved',
+    'bonus.rejected': 'Bonus rejected',
+    'bonus.paid': 'Bonus paid',
+    'work.assigned': 'Extra work assigned',
+    'work.submitted': 'Work submitted',
+    'work.reviewed': 'Work reviewed',
+    'record.deleted': 'Record moved to the recycle bin',
+    'record.restored': 'Record restored',
+    'record.purged': 'Record destroyed permanently',
   },
 
   nav2: {
@@ -907,11 +951,11 @@ export default {
   leadStage: {
     new: 'New',
     contacted: 'Contacted',
-    interested: 'Interested',
-    offer_sent: 'Offer sent',
     negotiation: 'Negotiation',
     won: 'Won',
     lost: 'Lost',
+    qualified: 'Qualified',
+    proposal: 'Proposal sent',
   },
 
   leads: {
@@ -963,11 +1007,12 @@ export default {
   },
 
   projectStatus: {
-    draft: 'Draft',
     active: 'Active',
     on_hold: 'On hold',
     completed: 'Completed',
     cancelled: 'Cancelled',
+    planning: 'Planning',
+    at_risk: 'At risk',
   },
 
   projects: {
@@ -1239,12 +1284,12 @@ export default {
     label: 'Visibility',
     everyone: 'Everyone',
     management: 'Management only',
-    private: 'Private',
     everyoneHint: 'Every employee who can view the directory',
     managementHint: 'You, the CEO and authorised management',
-    privateHint: 'Only you and the CEO',
     ceoNotice:
       'The CEO always retains access to information required for company administration. Privacy settings control what coworkers see.',
+    owner: 'Only the person concerned',
+    ownerHint: 'Visible to the person it is about, and to management.',
   },
 
   noteCategory: {
@@ -1258,9 +1303,6 @@ export default {
   },
 
   permissionGroup: {
-    pipeline: 'Leads & sales',
-    contracts: 'Contracts',
-    tasks: 'Tasks',
     affiliates: 'Affiliate programme',
     goals: 'Goals & performance',
     tools: 'Calendar, messages & analytics',
@@ -1268,11 +1310,17 @@ export default {
     requests: 'Registration requests',
     roles: 'Roles & permissions',
     organisation: 'Departments & positions',
-    business: 'Clients & projects',
     finance: 'Money',
     notes: 'CEO notes',
     audit: 'Audit log',
     settings: 'Company settings',
+    clients: 'Clients',
+    leads: 'Leads',
+    projects: 'Projects',
+    sales: 'Sales',
+    services: 'Services',
+    bonuses: 'Bonuses & rewards',
+    recycle: 'Recycle bin',
   },
 
   permission: {
@@ -1792,8 +1840,8 @@ export default {
     fixed: 'Fixed price',
     hourly: 'Per hour',
     monthly: 'Per month',
-    commission: 'Commission',
     custom: 'Agreed per client',
+    per_unit: 'Per unit',
   },
 
   referral: {
@@ -1956,7 +2004,6 @@ export default {
     expense: 'Expense',
     refund: 'Refund',
     transfer: 'Transfer',
-    revenue: 'Revenue',
 
   },
 
@@ -2093,12 +2140,12 @@ export default {
     new_clients: 'New clients',
     new_leads: 'Leads created',
     leads_converted: 'Leads converted',
-    sales_won: 'Deals won',
     sales_value: 'Value sold',
     projects_completed: 'Projects completed',
-    tasks_completed: 'Tasks completed',
     affiliate_revenue: 'Affiliate revenue',
     manual: 'Tracked by hand',
+    collected: 'Money collected',
+    sales_count: 'Number of sales',
   },
 
   goalScope: {
@@ -2159,13 +2206,13 @@ export default {
   kpi: {
     leads_created: 'Leads created',
     leads_converted: 'Leads converted',
-    sales_won: 'Deals won',
     sales_value: 'Value sold',
-    revenue_generated: 'Revenue generated',
-    tasks_completed: 'Tasks completed',
-    tasks_overdue: 'Tasks overdue',
     projects_completed: 'Projects completed',
     commission_generated: 'Commission generated',
+    sales_count: 'Number of sales',
+    revenue_collected: 'Revenue collected',
+    new_clients: 'New clients',
+    bonuses_earned: 'Bonuses earned',
   },
 
   performance: {
@@ -2190,11 +2237,10 @@ export default {
   eventKind: {
     meeting: 'Meeting',
     deadline: 'Deadline',
-    task: 'Task',
-    contract: 'Contract',
     payment: 'Payment',
     reminder: 'Reminder',
     other: 'Other',
+    goal: 'Goal',
   },
 
   calendar: {
@@ -2254,18 +2300,22 @@ export default {
     lead_new: 'New lead',
     lead_stale: 'Lead going cold',
     client_new: 'New client',
-    sale_won: 'Deal won',
     payment_received: 'Payment received',
     payment_overdue: 'Payment overdue',
-    contract_expiring: 'Contract expiring',
     project_deadline: 'Deadline approaching',
-    task_assigned: 'Task assigned',
-    task_overdue: 'Task overdue',
     registration_request: 'Registration request',
     commission_earned: 'Commission earned',
     goal_achieved: 'Goal achieved',
     announcement: 'Announcement',
-    message: 'Message',
+    lead_assigned: 'Lead handed over',
+    sale_new: 'New sale',
+    expense_recorded: 'Expense recorded',
+    project_assigned: 'Added to a project',
+    affiliate_lead: 'Lead from a partner',
+    bonus_earned: 'Bonus earned',
+    bonus_approved: 'Bonus approved',
+    work_assigned: 'Extra work assigned',
+    work_submitted: 'Work submitted for approval',
   },
 
   notificationPriority: {
@@ -2375,11 +2425,9 @@ export default {
     custom: 'Agreed per client',
   },
   payStatus: {
-    unpaid: 'Unpaid',
-    advance_due: 'Advance required',
-    part_paid: 'Partly paid',
     paid: 'Paid',
-    overpaid: 'Overpaid',
+    pending: 'Awaiting payment',
+    overdue: 'Overdue',
   },
   payState: {
     paid: 'Paid',
@@ -2579,6 +2627,8 @@ export default {
       boolean: 'Yes / no',
       select: 'Choose one',
       multi_select: 'Choose several',
+      currency: 'Money',
+      url: 'Link',
     },
     visibility: {
       everyone: 'Everyone',

@@ -72,6 +72,14 @@ export const FIELD_TYPES = [
   'boolean',
   'select',
   'multi_select',
+  /*
+   * `currency` is a number the screen formats as money, not a Money record.
+   * A custom field cannot carry a frozen exchange rate, so it must never be
+   * summed into a company total — it is a note about an amount, and the
+   * amounts the business runs on live on sales and transactions.
+   */
+  'currency',
+  'url',
 ] as const
 export type FieldType = (typeof FIELD_TYPES)[number]
 

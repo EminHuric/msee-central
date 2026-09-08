@@ -15,6 +15,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LIMITS } from '@/lib/validation'
+import { BASE_CURRENCY } from '@/types/money'
 import type { CustomFieldDef, CustomValues } from '@/types/records'
 
 const props = defineProps<{
@@ -100,6 +101,34 @@ function boolOf(key: string): boolean {
           @input="set(field.key, Number(($event.target as HTMLInputElement).value))"
         />
 
+        <!--
+          Money as a plain decimal, with the base currency shown beside it.
+          Deliberately not a Money record: see the note on FIELD_TYPES.
+        -->
+        <div v-else-if="field.type === 'currency'" class="money-field">
+          <input
+            :id="`cf-${field.id}`"
+            class="input"
+            type="number"
+            step="0.01"
+            inputmode="decimal"
+            :value="numberOf(field.key)"
+            @input="set(field.key, Number(($event.target as HTMLInputElement).value))"
+          />
+          <span class="money-unit">{{ BASE_CURRENCY }}</span>
+        </div>
+
+        <input
+          v-else-if="field.type === 'url'"
+          :id="`cf-${field.id}`"
+          class="input"
+          type="url"
+          inputmode="url"
+          placeholder="https://"
+          :value="textOf(field.key)"
+          @input="set(field.key, ($event.target as HTMLInputElement).value)"
+        />
+
         <input
           v-else-if="field.type === 'date'"
           :id="`cf-${field.id}`"
@@ -167,4 +196,8 @@ function boolOf(key: string): boolean {
   border-top: 1px solid var(--border-subtle);
 }
 .options { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+
+.money-field { display: flex; align-items: center; gap: var(--space-2); }
+.money-field .input { flex: 1; min-width: 0; }
+.money-unit { color: var(--text-tertiary); font-size: var(--text-sm); white-space: nowrap; }
 </style>
