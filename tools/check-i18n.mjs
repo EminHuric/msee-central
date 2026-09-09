@@ -58,6 +58,8 @@ import {
   SALE_CHANNELS,
   TRANSACTION_CATEGORIES,
   TRANSACTION_TYPES,
+  WALLET_KINDS,
+  WALLET_STATUSES,
   WORK_STATUSES,
 } from './i18n-sources.mjs'
 import { ALL_PERMISSIONS } from '../src/types/permissions.ts'
@@ -227,6 +229,8 @@ const DYNAMIC_KEYS = {
   transactionCategory: TRANSACTION_CATEGORIES,
   transactionType: TRANSACTION_TYPES,
   visibility: withHints(FIELD_VISIBILITY),
+  walletKind: WALLET_KINDS,
+  walletStatus: WALLET_STATUSES,
   workStatus: WORK_STATUSES,
 }
 

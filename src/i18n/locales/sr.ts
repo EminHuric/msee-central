@@ -566,6 +566,8 @@ export default {
     'record.deleted': 'Zapis premešten u korpu',
     'record.restored': 'Zapis vraćen',
     'record.purged': 'Zapis trajno uništen',
+    'wallet.entry_added': 'Stavka zarade dodata',
+    'wallet.status_changed': 'Stavka zarade izmenjena',
   },
 
   nav2: {
@@ -1328,9 +1330,27 @@ export default {
     services: 'Usluge',
     bonuses: 'Bonusi i nagrade',
     recycle: 'Korpa za otpatke',
+    wallet: 'Zarada zaposlenih',
   },
 
   permission: {
+    wallet: {
+      adjust: {
+        label: 'Upisuje i odobrava zaradu',
+        description:
+          'Upisuje nekome, odobrava stavku, beleži isplatu. Nikad sebi — baza to odbija.',
+      },
+      view_all: {
+        label: 'Vidi tuđu zaradu',
+        description:
+          'Koliko je neko plaćen je njegova stvar dok se ovo ne dodeli.',
+      },
+      view_own: {
+        label: 'Vidi svoju zaradu',
+        description:
+          'Čita sopstvenu knjigu: provizije, bonuse i šta je isplaćeno.',
+      },
+    },
     recycle_bin: {
       view: {
         label: 'Vidi korpu za otpatke',
@@ -1585,6 +1605,11 @@ export default {
       },
     },
     goals: {
+      create_personal: {
+        label: 'Postavlja sebi cilj',
+        description:
+          'Lični cilj. Ne postaje KPI kompanije i ne pomera brojke učinka.',
+      },
       view: {
         label: 'Vidi ciljeve',
         description: 'Čita ciljeve firme, tima i pojedinaca, i dokle se stiglo.',
@@ -1637,6 +1662,11 @@ export default {
       },
     },
     services: {
+      view_price: {
+        label: 'Vidi cenu usluge',
+        description:
+          'Bez toga neko može da proda uslugu a da mu se ne prikaže cena, marža ni pravilo provizije.',
+      },
       manage: {
         label: 'Menja cenovnik',
         description: 'Dodaje usluge, menja cene i povlači uslugu iz upotrebe.',
@@ -2329,6 +2359,7 @@ export default {
     bonus_approved: 'Bonus odobren',
     work_assigned: 'Dodeljen dodatni rad',
     work_submitted: 'Rad predat na odobrenje',
+    wallet_entry: 'Tvoja zarada je promenjena',
   },
 
   notificationPriority: {
@@ -2779,6 +2810,46 @@ export default {
     clients: 'Novi klijenti',
     leads: 'Novi kontakti',
     sales: 'Prodaje',
+  },
+
+  wallet: {
+    title: 'Moja zarada',
+    subtitle: 'Svaka cifra ispod je zbir stavki koje stoje ispod nje.',
+    available: 'Duguje ti se',
+    availableHint: 'Odobreno a još nije isplaćeno.',
+    pending: 'Čeka odobrenje',
+    pendingHint: 'Predloženo, još nije potvrđeno.',
+    paid: 'Isplaćeno',
+    earnedTotal: 'Ukupno zarađeno',
+    thisMonth: 'Ovog meseca',
+    thisYear: 'Ove godine',
+    history: 'Sve stavke',
+    historyHint: 'Ovde se ništa ne menja. Ispravka je nova stavka.',
+    empty: 'Još nema ničega',
+    emptyHint: 'Provizije, bonusi i isplate pojavljuju se ovde kako nastaju.',
+    kind: 'Vrsta',
+    reason: 'Razlog',
+    addEntry: 'Dodaj u ovu knjigu',
+    amountLabel: 'Iznos',
+    entryAdded: 'Dodato u knjigu.',
+    noSelfCredit: 'Niko ne upisuje u sopstvenu knjigu.',
+    markPaid: 'Označi kao isplaćeno',
+    approve: 'Odobri',
+  },
+
+  walletKind: {
+    commission: 'Provizija',
+    bonus: 'Bonus',
+    adjustment: 'Korekcija',
+    deduction: 'Odbitak',
+    payout: 'Isplata',
+  },
+
+  walletStatus: {
+    pending: 'Čeka odobrenje',
+    approved: 'Odobreno',
+    paid: 'Isplaćeno',
+    cancelled: 'Otkazano',
   },
 
 }

@@ -567,6 +567,8 @@ export default {
     'record.deleted': 'Record moved to the recycle bin',
     'record.restored': 'Record restored',
     'record.purged': 'Record destroyed permanently',
+    'wallet.entry_added': 'Earnings entry added',
+    'wallet.status_changed': 'Earnings entry changed',
   },
 
   nav2: {
@@ -1329,9 +1331,27 @@ export default {
     services: 'Services',
     bonuses: 'Bonuses & rewards',
     recycle: 'Recycle bin',
+    wallet: 'Employee earnings',
   },
 
   permission: {
+    wallet: {
+      adjust: {
+        label: 'Add to and approve earnings',
+        description:
+          'Credit somebody, approve an entry, record a payout. Never for yourself — the database refuses that.',
+      },
+      view_all: {
+        label: 'See everyone\'s earnings',
+        description:
+          'What one person is paid is theirs until this is granted.',
+      },
+      view_own: {
+        label: 'See your own earnings',
+        description:
+          'Read your own ledger: commissions, bonuses and what has been paid.',
+      },
+    },
     recycle_bin: {
       view: {
         label: 'See the recycle bin',
@@ -1586,6 +1606,11 @@ export default {
       },
     },
     goals: {
+      create_personal: {
+        label: 'Set yourself a target',
+        description:
+          'A personal goal. It does not become a company KPI and does not move anybody performance figures.',
+      },
       view: {
         label: 'See goals',
         description: 'Read company, team and individual targets, and how far along they are.',
@@ -1638,6 +1663,11 @@ export default {
       },
     },
     services: {
+      view_price: {
+        label: 'See what a service costs',
+        description:
+          'Without it somebody can sell a service without being shown the price, the margin or the commission rule.',
+      },
       manage: {
         label: 'Edit the price list',
         description: 'Add services, change list prices and take a service out of use.',
@@ -2330,6 +2360,7 @@ export default {
     bonus_approved: 'Bonus approved',
     work_assigned: 'Extra work assigned',
     work_submitted: 'Work submitted for approval',
+    wallet_entry: 'Your earnings changed',
   },
 
   notificationPriority: {
@@ -2780,6 +2811,46 @@ export default {
     clients: 'New clients',
     leads: 'New leads',
     sales: 'Sales',
+  },
+
+  wallet: {
+    title: 'My earnings',
+    subtitle: 'Every figure below is the sum of the entries underneath it.',
+    available: 'Owed to you',
+    availableHint: 'Approved and not yet paid out.',
+    pending: 'Awaiting approval',
+    pendingHint: 'Proposed, not yet confirmed.',
+    paid: 'Paid out',
+    earnedTotal: 'Earned in total',
+    thisMonth: 'This month',
+    thisYear: 'This year',
+    history: 'Every entry',
+    historyHint: 'Nothing here is ever edited. A correction is a new line.',
+    empty: 'Nothing here yet',
+    emptyHint: 'Commissions, bonuses and payouts appear here as they happen.',
+    kind: 'Type',
+    reason: 'Reason',
+    addEntry: 'Add to this ledger',
+    amountLabel: 'Amount',
+    entryAdded: 'Added to the ledger.',
+    noSelfCredit: 'Nobody adds to their own ledger.',
+    markPaid: 'Mark as paid out',
+    approve: 'Approve',
+  },
+
+  walletKind: {
+    commission: 'Commission',
+    bonus: 'Bonus',
+    adjustment: 'Adjustment',
+    deduction: 'Deduction',
+    payout: 'Paid out',
+  },
+
+  walletStatus: {
+    pending: 'Awaiting approval',
+    approved: 'Approved',
+    paid: 'Paid',
+    cancelled: 'Cancelled',
   },
 
 }

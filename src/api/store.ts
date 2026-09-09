@@ -51,6 +51,7 @@ export type CollectionName =
   | 'bonusPrograms'
   | 'bonusAwards'
   | 'incentiveWork'
+  | 'walletEntries'
   | 'calendarEvents'
   | 'notes'
   | 'activity'

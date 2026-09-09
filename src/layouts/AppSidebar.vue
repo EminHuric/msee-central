@@ -140,6 +140,12 @@ const sections = computed<NavSection[]>(() => {
           internalOnly: true,
         },
         {
+          to: '/earnings',
+          labelKey: 'wallet.title',
+          icon: 'wallet',
+          permission: PERMISSIONS.WALLET_VIEW_OWN,
+        },
+        {
           to: '/performance',
           labelKey: 'modules.performance',
           icon: 'gauge',

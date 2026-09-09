@@ -398,6 +398,8 @@ export const AUDIT_ACTIONS = [
   'bonus.awarded',
   'bonus.approved',
   'bonus.paid',
+  'wallet.entry_added',
+  'wallet.status_changed',
   'bonus.rejected',
   'work.assigned',
   'work.submitted',
@@ -430,6 +432,7 @@ export type AuditTargetType =
   | 'project'
   | 'transaction'
   | 'bonus'
+  | 'wallet'
   | 'work'
   | 'settings'
 

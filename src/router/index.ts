@@ -143,6 +143,16 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.GOALS_VIEW, titleKey: 'goals.title' },
       },
       {
+        /*
+         * Everybody who earns anything can see their own ledger. The rules
+         * scope it to them;  is what opens somebody else's.
+         */
+        path: 'earnings',
+        name: 'earnings',
+        component: () => import('@/views/MyEarningsView.vue'),
+        meta: { permission: PERMISSIONS.WALLET_VIEW_OWN, titleKey: 'wallet.title' },
+      },
+      {
         path: 'bonuses',
         name: 'bonuses',
         component: () => import('@/views/business/BonusesView.vue'),

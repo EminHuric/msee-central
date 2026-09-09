@@ -55,6 +55,16 @@ export const PERMISSIONS = {
 
   // --- Services --------------------------------------------------------
   SERVICES_VIEW: 'services.view',
+  /*
+   * Seeing a service and seeing its price are separate decisions.
+   *
+   * A salesperson needs the catalogue to sell from; they do not need the
+   * margin, the internal cost, or the commission rule. Splitting these is what
+   * lets somebody sell a service without being shown what the company makes
+   * on it — and the split has to be real, which means the value never reaches
+   * the browser rather than being hidden once it has.
+   */
+  SERVICES_VIEW_PRICE: 'services.view_price',
   SERVICES_MANAGE: 'services.manage',
 
   // --- Affiliate programme ----------------------------------------------
@@ -101,9 +111,25 @@ export const PERMISSIONS = {
   /** Everybody sees their own earnings; this is the wider view. */
   EARNINGS_VIEW_ALL: 'earnings.view_all',
 
+  // --- The employee earnings ledger -------------------------------------
+  /** Read your own ledger. Everybody who earns anything needs this. */
+  WALLET_VIEW_OWN: 'wallet.view_own',
+  /** Read anybody's. What one person is paid is theirs until this is granted. */
+  WALLET_VIEW_ALL: 'wallet.view_all',
+  /** Add to somebody's ledger, approve an entry, record a payout. */
+  WALLET_ADJUST: 'wallet.adjust',
+
   // --- Goals & performance ----------------------------------------------
   GOALS_VIEW: 'goals.view',
   GOALS_MANAGE: 'goals.manage',
+  /*
+   * Set yourself a target.
+   *
+   * Separate from `goals.manage` on purpose: a personal goal is somebody
+   * deciding to call twenty people this week, and it must not become a company
+   * KPI or move anybody's performance figures by being created.
+   */
+  GOALS_CREATE_PERSONAL: 'goals.create_personal',
   PERFORMANCE_VIEW: 'performance.view',
   /** See other people's numbers. Without it you see only your own. */
   PERFORMANCE_VIEW_ALL: 'performance.view_all',
@@ -221,7 +247,11 @@ export const PERMISSION_GROUPS = [
   },
   {
     key: 'services',
-    permissions: [PERMISSIONS.SERVICES_VIEW, PERMISSIONS.SERVICES_MANAGE],
+    permissions: [
+      PERMISSIONS.SERVICES_VIEW,
+      PERMISSIONS.SERVICES_VIEW_PRICE,
+      PERMISSIONS.SERVICES_MANAGE,
+    ],
   },
   {
     key: 'affiliates',
@@ -242,6 +272,14 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'wallet',
+    permissions: [
+      PERMISSIONS.WALLET_VIEW_OWN,
+      PERMISSIONS.WALLET_VIEW_ALL,
+      PERMISSIONS.WALLET_ADJUST,
+    ],
+  },
+  {
     key: 'employees',
     permissions: [
       PERMISSIONS.EMPLOYEES_VIEW,
@@ -258,6 +296,7 @@ export const PERMISSION_GROUPS = [
     key: 'goals',
     permissions: [
       PERMISSIONS.GOALS_VIEW,
+      PERMISSIONS.GOALS_CREATE_PERSONAL,
       PERMISSIONS.GOALS_MANAGE,
       PERMISSIONS.PERFORMANCE_VIEW,
       PERMISSIONS.PERFORMANCE_VIEW_ALL,

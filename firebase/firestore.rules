@@ -870,6 +870,45 @@ service cloud.firestore {
       allow create: if isActive() && request.resource.data.get('actorUid', me()) == me();
     }
 
+    /* ------------------------------------------------------------------ *
+     * walletEntries — what the company owes a person, and why
+     *
+     * Append-only, and that is the whole design. The balance is never stored;
+     * it is the sum of these lines. So an amount, once written, is not
+     * writable again — a mistake is corrected by a second entry, which keeps
+     * the record of what the company believed it owed even when it was wrong.
+     *
+     * Three refusals matter here:
+     *
+     *   nobody adds to their own ledger, whatever else they hold;
+     *   nobody reads somebody else's without wallet.view_all;
+     *   nothing but the status ever changes, and only with wallet.adjust.
+     * ------------------------------------------------------------------ */
+
+    match /walletEntries/{entryId} {
+      allow read: if isActive()
+        && (resource.data.employeeUid == me() || can('wallet.view_all'));
+
+      allow create: if isInternal()
+        && can('wallet.adjust')
+        /* The one that matters: never for yourself. */
+        && request.resource.data.employeeUid != me()
+        && request.resource.data.createdBy == me();
+
+      /*
+       * Only the status moves. The amount, the person and the reason are the
+       * record; changing them after the fact is exactly what a ledger is for
+       * preventing.
+       */
+      allow update: if isInternal()
+        && can('wallet.adjust')
+        && resource.data.employeeUid != me()
+        && changedOnly(['status', 'approvedBy', 'approvedAt', 'paidAt', 'updatedAt']);
+
+      /* An entry is cancelled, never deleted. */
+      allow delete: if false;
+    }
+
     match /notificationPrefs/{uid} {
       allow read, write: if isSelf(uid);
     }

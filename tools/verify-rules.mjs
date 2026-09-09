@@ -153,6 +153,7 @@ let affiliateUid = null
  * from earlier runs go too.
  */
 const TEST_COLLECTIONS = [
+  'walletEntries',
   'dashboardLayouts',
   'leads',
   'clients',
@@ -480,6 +481,63 @@ try {
       await adminDb.collection('roles').doc('employee').set(before)
     }
   }
+
+  /*
+   * The earnings ledger.
+   *
+   * The balance is the sum of these entries, so writing one is writing money.
+   * This account holds every permission in the catalogue and still cannot
+   * credit itself, and cannot change an amount once it exists.
+   */
+  await mustDeny('co-owner CANNOT credit their own wallet', () =>
+    setDoc(doc(db, 'walletEntries', `rules-wallet-self-${stamp}`), {
+      id: `rules-wallet-self-${stamp}`,
+      employeeUid: ownerUid,
+      employeeName: 'Rules Owner',
+      kind: 'bonus',
+      amountBaseMinor: 500000,
+      status: 'approved',
+      reason: 'forged',
+      date: '2026-01-01',
+      createdBy: ownerUid,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow("co-owner CAN credit somebody else's wallet", () =>
+    setDoc(doc(db, 'walletEntries', `rules-wallet-${stamp}`), {
+      id: `rules-wallet-${stamp}`,
+      employeeUid: 'somebody-else',
+      employeeName: 'Somebody Else',
+      kind: 'bonus',
+      amountBaseMinor: 5000,
+      status: 'pending',
+      reason: 'rules check',
+      date: '2026-01-01',
+      createdBy: ownerUid,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  /* The ledger is append-only: an amount, once written, is a fact. */
+  await mustDeny('co-owner CANNOT change the amount of an existing entry', () =>
+    updateDoc(doc(db, 'walletEntries', `rules-wallet-${stamp}`), { amountBaseMinor: 999999 }),
+  )
+
+  await mustAllow('co-owner CAN move an entry to approved', () =>
+    updateDoc(doc(db, 'walletEntries', `rules-wallet-${stamp}`), {
+      status: 'approved',
+      approvedBy: ownerUid,
+      approvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('co-owner CANNOT delete a wallet entry', () =>
+    deleteDoc(doc(db, 'walletEntries', `rules-wallet-${stamp}`)),
+  )
 
   /*
    * Deleting is soft. Destroying a record for good is `recycle_bin.purge`,

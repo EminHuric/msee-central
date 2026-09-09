@@ -231,6 +231,8 @@ export const NOTIFICATION_KINDS = [
   'goal_achieved',
   'bonus_earned',
   'bonus_approved',
+  /* Money added to somebody's ledger, or moved along it. */
+  'wallet_entry',
   'work_assigned',
   'work_submitted',
   'announcement',
