@@ -141,7 +141,35 @@ Zaposleni sam pomera svoj rad do `submitted`. Dalje ne može.
 
 ---
 
-## 7. Tabla pripada onome ko je gleda
+## 7. Grafikon pregleda: dve grupe, nikad dve ose
+
+Sest metrika na jednom grafikonu, svaka se pali i gasi, i uz svaku poredjenje sa
+prethodnim periodom.
+
+**Zasto dve grupe, a ne dve ose.** Prihod je novac; klijenti su broj ljudi. Na
+istoj skali, cetrdeset klijenata je ravna linija po dnu grafikona ciji je vrh
+osam hiljada evra. Uobicajeni izlaz je druga y-osa, i on je gori od problema:
+sa dve skale **autor bira gde se linije seku**, pa se slika moze namestiti da
+pokaze vezu koje u podacima nema. To je crtez, ne merenje.
+
+Zato su metrike grupisane po tome sta jesu - novac ili aktivnost - i crta se
+jedna grupa na jednoj postenoj osi. Prebacivanje je jedan klik i nista nije
+sakriveno.
+
+**Boje su izracunate, ne izabrane.** Zeleno za prihod i crveno za rashode je
+ocigledan par i zamalo pogresan: udzbenicki zelena pored ove crvene razlikuje
+se za dE 6 kod deuteranopije, sto daltonista ne moze da koristi. Povlacenje
+zelene ka cijanu dize par na 9,4 a i dalje se cita kao novac koji ulazi. Svaki
+korak je prosao kroz validator palete - opseg svetline, prag hrome,
+razdvojenost pod dve simulirane deficijencije, prag za normalan vid, kontrast
+prema podlozi - u obe teme i po grupama. Sve prolazi.
+
+Boja prati metriku, nikad njen redni broj: prihod je ta zelena i kad je sam i
+kad je jedan od tri. Gasenje jedne metrike ne prefarbava ostale.
+
+---
+
+## 8. Tabla pripada onome ko je gleda
 
 Jedna tabla dobro služi direktoru i traći ekran svima ostalima. Prodavac hoće
 svoj tok, čovek iz finansija hoće šta nije naplaćeno. Zato svako bira svoje
@@ -167,7 +195,7 @@ koje treba zapamtiti.
 
 ---
 
-## 8. Učinak nema jedinstvenu ocenu
+## 9. Učinak nema jedinstvenu ocenu
 
 Programer i prodavac se ne mere istom osom. Prosek ta dva broja je precizan i
 besmislen, i ljudi brzo nauče da rade za broj umesto za posao.
@@ -179,7 +207,7 @@ podacima koje je neko o njemu ukucao.
 
 ---
 
-## 9. Brisanje je uvek meko
+## 10. Brisanje je uvek meko
 
 `deletedAt` na zapisu, ne kopija u drugoj kolekciji. Svako čitanje ga filtrira,
 korpa ga prikazuje sa preostalim danima, `RETENTION_DAYS` (30) odlučuje dokle.
@@ -194,7 +222,7 @@ zapis i prepravljati ga su dve različite stvari.
 
 ---
 
-## 10. Drugi sistemi: referenca, ne veza
+## 11. Drugi sistemi: referenca, ne veza
 
 Klijent nosi listu `externalRefs` — u kojim još našim sistemima postoji
 (StayBrain, sistem rezervacija, sajt), koji mu je id tamo i link.
@@ -208,7 +236,7 @@ klijente, pa njena prva verzija nema šta da migrira.
 
 ---
 
-## 11. Prilagođena polja
+## 12. Prilagođena polja
 
 Sistem ne zna sve što firma beleži. Zato `customFields` čuva definicije po
 entitetu (naziv, tip, obavezno, vidljivost, podrazumevana vrednost), a vrednosti
@@ -220,7 +248,7 @@ koji opisuje.
 
 ---
 
-## 12. Sigurnost je u pravilima, ne u interfejsu
+## 13. Sigurnost je u pravilima, ne u interfejsu
 
 `firebase/firestore.rules` je granica. Sve u `src/` što proverava dozvolu radi
 to radi udobnosti: da sakrije dugme, da preskoči zahtev koji bi svakako pao.
@@ -253,7 +281,7 @@ sledeći korak.
 
 ---
 
-## 13. Navigacija
+## 14. Navigacija
 
 ```
 PREGLED     Kontrolna tabla · Moj prostor
@@ -270,6 +298,11 @@ Administracija (uloge, organizacija, prilagođena polja, korpa, revizioni
 dnevnik) živi **unutar Podešavanja**. To su stvari koje se
 podese jednom; pored svakodnevnog posla samo su produžavale meni.
 
+**Na telefonu nema sidebar-a.** Cetiri odredista stoje stalno na dnu, na dohvat
+palca, a sve ostalo je iza "Vise" - koje otvara isti sidebar, pa postoji jedan
+meni a ne dva koja mogu da se raziju. Podignuto dugme u sredini pravi novo:
+to je jedina kontrola tamo koja nije odrediste.
+
 **Niko se ne prijavljuje sam.** Naloge pravi direktor i predaje ih. Time je
 nestao i jedini javni upis u sistem: `registrationRequests` je sada zatvoren
 (`allow read, write: if false`), a ne samo sužen.
@@ -285,7 +318,7 @@ bi drugo mesto na koje se ide da bi se saznalo isto.
 
 ---
 
-## 14. Automatizacije
+## 15. Automatizacije
 
 Rade same, iz podataka koje sistem već ima. Nema šta da se podešava i nema šta
 da tiho prestane da radi:
@@ -305,7 +338,7 @@ roku koji je odavno ispoštovan.
 
 ---
 
-## 15. Alati koji čuvaju sistem
+## 16. Alati koji čuvaju sistem
 
 | Komanda | Šta hvata |
 | --- | --- |
@@ -336,7 +369,7 @@ mesto u novom modelu idu u korpu, gde ih čovek pogleda pre nego što nestanu.
 
 ---
 
-## 16. Pravila koja se ne krše
+## 17. Pravila koja se ne krše
 
 1. **Sigurnost je u `firestore.rules`,** nikad u interfejsu.
 2. **Svaka nova kolekcija dobija pravilo i test** pre nego što dobije ekran.
@@ -349,7 +382,7 @@ mesto u novom modelu idu u korpu, gde ih čovek pogleda pre nego što nestanu.
 
 ---
 
-## 17. Šta namerno nije napravljeno
+## 18. Šta namerno nije napravljeno
 
 **AI sloj.** Doći će posebno, iznad ovoga. Zato je sve ovde napravljeno tako da
 se može čitati: jedan snimak podataka, izvedene brojke bez keša, analiza prodaje
@@ -367,9 +400,9 @@ gde da se dopisuje, a poruka u sistemu koji niko ne drži otvoren je poruka koja
 nije stigla. Ono što mora da stigne ide kroz obaveštenja.
 
 **Prava integracija sa StayBrain-om i sistemom rezervacija.** Nema API-ja među
-njima. Vidi sekciju 10: sistem beleži referencu, i ne pretvara se da je to veza.
+njima. Vidi sekciju 11: sistem beleži referencu, i ne pretvara se da je to veza.
 
 **Telegram i eksterni izveštaji.** Traže server koji čuva token. Bot token u
 frontend kodu je token koji je javan, pa dok backend ne postoji, ovoga nema.
 
-**Jedinstvena ocena učinka.** Vidi sekciju 8.
+**Jedinstvena ocena učinka.** Vidi sekciju 9.
