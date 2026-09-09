@@ -286,6 +286,37 @@ export interface Project extends SoftDeletable {
 export const PRICING_MODELS = ['fixed', 'hourly', 'monthly', 'per_unit', 'custom'] as const
 export type PricingModel = (typeof PRICING_MODELS)[number]
 
+/**
+ * What a service costs, and what the company makes on it.
+ *
+ * Kept in a separate document — `services/{id}/commercial/terms` — rather than
+ * as fields on the service, and that is the whole point of it.
+ *
+ * Firestore rules are document-level. A person who may read a document reads
+ * every field on it, so a price stored beside the name reaches the browser of
+ * anybody who can see the service at all, whatever the interface chooses to
+ * draw. Hiding it in the UI would be a decoration, not a permission.
+ *
+ * Splitting the document is what makes `services.view_price` real: without it
+ * the read is refused by the database and the number never leaves it. That is
+ * also why a salesperson without the permission cannot have the sale value
+ * prefilled — the alternative would be leaking the figure in order to hide it.
+ */
+export interface ServiceTerms {
+  serviceId: string
+  defaultPrice: Money
+  /**
+   * How this service is normally paid for.
+   *
+   * Copied onto a sale when one is made, and editable there: a structure is a
+   * default, not a rule, because somebody will always agree something else.
+   */
+  payment: PaymentStructure
+  /** Default commission for affiliates who sell it, as a percentage. */
+  commissionPercent: number
+  updatedAt: string
+}
+
 export interface Service extends SoftDeletable {
   id: string
   name: string
@@ -296,20 +327,8 @@ export interface Service extends SoftDeletable {
   /** Free text so a new line of business needs no code change. */
   category: string
   pricingModel: PricingModel
-  defaultPrice: Money
   /** "per month", "per page", "per hour" — free text, it only ever prints. */
   unit: string
-
-  /**
-   * How this service is normally paid for.
-   *
-   * Copied onto a sale when one is made, and editable there: a structure is a
-   * default, not a rule, because somebody will always agree something else.
-   */
-  payment: PaymentStructure
-
-  /** Default commission for affiliates who sell it, as a percentage. */
-  commissionPercent: number
   status: 'active' | 'inactive'
   notes: string
   custom: CustomValues

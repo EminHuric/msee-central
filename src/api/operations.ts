@@ -12,12 +12,15 @@
  * your customers came from.
  */
 
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+
+import { getDb } from '@/lib/firebase'
 import { logAudit } from './audit'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
 import { actor, readAll, readOne, readWhere, today, where, write } from './store'
 import { saveClient, blankClient } from './clients'
-import { blankSale, saveSale, structureFromService } from './sales'
+import { blankSale, saveSale, structureFromTerms } from './sales'
 import {
   NO_REFERRAL,
   type Client,
@@ -25,6 +28,7 @@ import {
   type LeadStage,
   type Project,
   type Service,
+  type ServiceTerms,
 } from '@/types/business'
 import { NO_STRUCTURE } from '@/types/revenue'
 import { moneyOf } from './sales'
@@ -224,9 +228,15 @@ export async function convertLead(
       affiliateId: lead.affiliateId,
       affiliateName: lead.affiliateName,
       value,
-      payment: options.service
-        ? structureFromService(options.service, value.baseMinor)
-        : { ...NO_STRUCTURE },
+      /*
+       * Terms are fetched rather than taken from the service, and come back
+       * null for somebody who may not see prices — the sale is then created
+       * with the plain structure and whoever can see the figures sets it.
+       */
+      payment: structureFromTerms(
+        options.service ? await fetchTerms(options.service.id) : null,
+        value.baseMinor,
+      ),
       channel: lead.affiliateId ? 'affiliate' : 'inbound',
     })
   }
@@ -369,10 +379,7 @@ export function blankService(): Service {
     details: '',
     category: '',
     pricingModel: 'fixed',
-    defaultPrice: moneyOf(0, 'RSD'),
     unit: '',
-    payment: { ...NO_STRUCTURE },
-    commissionPercent: 0,
     status: 'active',
     notes: '',
     custom: {},
@@ -398,12 +405,86 @@ export async function saveService(input: Service): Promise<string> {
       entity: 'service',
       new: isNew,
       status: input.status,
-      price: input.defaultPrice.baseMinor,
-      payment: input.payment?.model,
     },
   })
 
   return id
+}
+
+/* ------------------------------------------------------------------ *
+ * Commercial terms
+ *
+ * A separate document so that `services.view_price` can be enforced by the
+ * database rather than by the interface. See the note on `ServiceTerms`.
+ * ------------------------------------------------------------------ */
+
+const termsRef = (serviceId: string) =>
+  doc(getDb(), 'services', serviceId, 'commercial', 'terms')
+
+export function blankTerms(serviceId: string): ServiceTerms {
+  return {
+    serviceId,
+    defaultPrice: moneyOf(0, 'RSD'),
+    payment: { ...NO_STRUCTURE },
+    commissionPercent: 0,
+    updatedAt: '',
+  }
+}
+
+/**
+ * Terms for one service, or null when the read is refused.
+ *
+ * Null is a legitimate answer here, not an error: it is what somebody without
+ * `services.view_price` sees, and every caller has to cope with not knowing
+ * the price rather than assuming zero.
+ */
+export async function fetchTerms(serviceId: string): Promise<ServiceTerms | null> {
+  try {
+    const snap = await getDoc(termsRef(serviceId))
+    return snap.exists() ? (snap.data() as ServiceTerms) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Terms for a list of services, as a map.
+ *
+ * Comes back empty for somebody who may not see prices, which is the point:
+ * the figures are never fetched, so they are never in the page to leak.
+ */
+export async function fetchTermsFor(serviceIds: string[]): Promise<Map<string, ServiceTerms>> {
+  const found = new Map<string, ServiceTerms>()
+
+  await Promise.all(
+    serviceIds.map(async (id) => {
+      const terms = await fetchTerms(id)
+      if (terms) found.set(id, terms)
+    }),
+  )
+
+  return found
+}
+
+export async function saveTerms(input: ServiceTerms): Promise<void> {
+  await setDoc(
+    termsRef(input.serviceId),
+    { ...input, updatedAt: new Date().toISOString() },
+    { merge: true },
+  )
+
+  await logAudit({
+    action: 'settings.updated',
+    targetType: 'settings',
+    targetId: input.serviceId,
+    targetLabel: 'service terms',
+    metadata: {
+      entity: 'service_terms',
+      price: input.defaultPrice.baseMinor,
+      payment: input.payment?.model,
+      commission: input.commissionPercent,
+    },
+  })
 }
 
 export const deleteService = (service: Service) => remove('services', service.id, service.name)

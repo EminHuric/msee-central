@@ -17,12 +17,13 @@ import { logAudit } from './audit'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
 import { actor, readAll, readOne, readWhere, today, where, write } from './store'
-import type { Service } from '@/types/business'
+
 import { toMinor, type CurrencyCode, type Money } from '@/types/money'
 import {
   EMPTY_ANALYSIS,
   NO_STRUCTURE,
   balanceOf,
+  type PaymentStructure,
   type Sale,
   type SaleBalance,
   type Transaction,
@@ -89,8 +90,16 @@ export function blankSale(ownerUid: string | null, ownerName: string): Sale {
  * year cannot rewrite what last year's customer agreed to. An advance defined
  * as a share of the price is resolved to an amount here, for the same reason.
  */
-export function structureFromService(service: Service | null | undefined, valueBaseMinor: number) {
-  const base = service?.payment ?? NO_STRUCTURE
+export function structureFromTerms(
+  terms: { payment: PaymentStructure } | null | undefined,
+  valueBaseMinor: number,
+) {
+  /*
+   * No terms means the reader may not see prices — see `ServiceTerms`. The
+   * sale still gets a structure; it just gets the plain one, and whoever can
+   * see the figures sets the rest.
+   */
+  const base = terms?.payment ?? NO_STRUCTURE
 
   return {
     ...base,

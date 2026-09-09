@@ -603,6 +603,24 @@ service cloud.firestore {
       allow delete: if canPurge();
     }
 
+    /*
+     * What a service costs, and what the company makes on it.
+     *
+     * A SEPARATE DOCUMENT, and that is the entire point. These rules are
+     * document-level: whoever may read a document reads every field on it, so
+     * a price stored beside the service name reaches the browser of anybody
+     * who can see the service at all — whatever the interface chooses to draw.
+     * Hiding it in the UI would be a decoration, not a permission.
+     *
+     * Splitting it is what makes services.view_price real. Without that
+     * permission the read is refused here and the figure never leaves the
+     * database.
+     */
+    match /services/{serviceId}/commercial/{document} {
+      allow read: if isInternal() && can('services.view_price');
+      allow write: if isInternal() && can('services.manage');
+    }
+
     /* ---- Finance ------------------------------------------------------ */
 
     /*

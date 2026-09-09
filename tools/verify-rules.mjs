@@ -483,6 +483,41 @@ try {
   }
 
   /*
+   * Service prices: the permission has to be real.
+   *
+   * The account is briefly given `services.view` WITHOUT `services.view_price`
+   * — which is the whole point of splitting the commercial terms into their
+   * own document. If the price were a field on the service, this read would
+   * succeed and the figure would be in the browser whatever the screen drew.
+   */
+  {
+    const full = (await adminDb.collection('userPermissions').doc(ownerUid).get()).data()
+    const service = (await adminDb.collection('services').limit(1).get()).docs[0]
+
+    if (service && full) {
+      await adminDb.collection('userPermissions').doc(ownerUid).set(
+        { isCeo: false, permissions: ['services.view'] },
+        { merge: true },
+      )
+
+      await mustAllow('without view_price, the service itself is readable', () =>
+        getDoc(doc(db, 'services', service.id)),
+      )
+
+      await mustDeny('without view_price, the price is NOT readable', () =>
+        getDoc(doc(db, 'services', service.id, 'commercial', 'terms')),
+      )
+
+      /* Give it everything back before the rest of the phase runs. */
+      await adminDb.collection('userPermissions').doc(ownerUid).set(full)
+
+      await mustAllow('with view_price, the price is readable', () =>
+        getDoc(doc(db, 'services', service.id, 'commercial', 'terms')),
+      )
+    }
+  }
+
+  /*
    * The earnings ledger.
    *
    * The balance is the sum of these entries, so writing one is writing money.

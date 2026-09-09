@@ -30,7 +30,7 @@ import {
   fetchSales,
   moneyOf,
   saveSale,
-  structureFromService,
+  structureFromTerms,
   totalsOf,
 } from '@/api/sales'
 import { blankTransaction, fetchTransactions, saveTransaction } from '@/api/finance'
@@ -38,7 +38,7 @@ import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Client, Project, Service } from '@/types/business'
+import type { Client, Project, Service, ServiceTerms } from '@/types/business'
 import {
   CONTACT_CHANNELS,
   PAYMENT_MODELS,
@@ -73,6 +73,9 @@ const sales = ref<Sale[]>([])
 const transactions = ref<Transaction[]>([])
 const clients = ref<Client[]>([])
 const services = ref<Service[]>([])
+
+/* Empty for anybody without `services.view_price`; see the note where it is used. */
+const serviceTerms = ref<Map<string, ServiceTerms>>(new Map())
 const projects = ref<Project[]>([])
 const people = ref<EmployeePublic[]>([])
 const affiliates = ref<Affiliate[]>([])
@@ -197,12 +200,22 @@ function onServiceChange(id: string): void {
   if (!service) return
 
   d.serviceName = service.name
-  if (!draftValue.value) {
-    draftValue.value = fromMinor(service.defaultPrice.minor, service.defaultPrice.currency)
-    draftCurrency.value = service.defaultPrice.currency
+
+  /*
+   * Prefill the value only if the terms could be read.
+   *
+   * Somebody without `services.view_price` gets an empty box and types what
+   * was agreed; whoever can see prices sets the rest. The alternative would be
+   * fetching the figure in order to hide it, which is not hiding it.
+   */
+  const terms = serviceTerms.value.get(id) ?? null
+
+  if (!draftValue.value && terms) {
+    draftValue.value = fromMinor(terms.defaultPrice.minor, terms.defaultPrice.currency)
+    draftCurrency.value = terms.defaultPrice.currency
   }
 
-  const structure = structureFromService(service, toMinor(draftValue.value, draftCurrency.value))
+  const structure = structureFromTerms(terms, toMinor(draftValue.value, draftCurrency.value))
   d.payment = { ...structure }
   draftAdvance.value = fromMinor(structure.advanceBaseMinor, BASE_CURRENCY)
 

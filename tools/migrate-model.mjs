@@ -195,6 +195,49 @@ async function write(ref, data) {
 }
 
 /* ------------------------------------------------------------------ *
+ * 3b. Service prices move into their own document
+ *
+ * Firestore rules are document-level, so a price stored beside the service
+ * name is readable by anybody who can read the service. Moving the commercial
+ * terms into a `commercial/terms` document underneath it is what makes the
+ * `services.view_price` permission enforceable rather than decorative.
+ *
+ * The old fields are removed from the parent afterwards — leaving them would
+ * defeat the whole exercise.
+ * ------------------------------------------------------------------ */
+
+{
+  const snap = await db.collection('services').get()
+  let moved = 0
+
+  for (const doc of snap.docs) {
+    const data = doc.data()
+    const termsRef = doc.ref.collection('commercial').doc('terms')
+
+    if ((await termsRef.get()).exists) continue
+
+    await write(termsRef, {
+      serviceId: doc.id,
+      defaultPrice: money(data.defaultPrice),
+      payment: data.payment ?? { ...STRUCTURE },
+      commissionPercent: data.commissionPercent ?? 0,
+      updatedAt: now,
+    })
+
+    await write(doc.ref, {
+      defaultPrice: FieldValue.delete(),
+      payment: FieldValue.delete(),
+      commissionPercent: FieldValue.delete(),
+      updatedAt: now,
+    })
+
+    moved += 1
+  }
+
+  note(`service terms split        ${moved}/${snap.size}`)
+}
+
+/* ------------------------------------------------------------------ *
  * 4. Clients — the fields the new list and profile read
  * ------------------------------------------------------------------ */
 

@@ -19,13 +19,21 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CustomFields from '@/components/CustomFields.vue'
 import { fetchSales } from '@/api/sales'
-import { blankService, deleteService, fetchServices, saveService } from '@/api/operations'
+import {
+  blankService,
+  blankTerms,
+  deleteService,
+  fetchServices,
+  fetchTermsFor,
+  saveService,
+  saveTerms,
+} from '@/api/operations'
 import { fieldsFor, fetchFieldDefs } from '@/api/records'
 import { moneyOf } from '@/api/sales'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { PRICING_MODELS, type Service } from '@/types/business'
+import { PRICING_MODELS, type Service, type ServiceTerms } from '@/types/business'
 import { PAYMENT_MODELS, type Sale } from '@/types/revenue'
 import {
   BASE_CURRENCY,
@@ -46,6 +54,14 @@ const loading = ref(true)
 const saving = ref(false)
 
 const services = ref<Service[]>([])
+
+/*
+ * Prices, keyed by service, and empty for anybody without
+ * `services.view_price` — the read is refused by the database rather than
+ * filtered here, so the figures are never in the page at all.
+ */
+const terms = ref<Map<string, ServiceTerms>>(new Map())
+const canSeePrice = computed(() => auth.hasPermission(PERMISSIONS.SERVICES_VIEW_PRICE))
 const sales = ref<Sale[]>([])
 const fieldDefs = ref<CustomFieldDef[]>([])
 
@@ -54,6 +70,7 @@ const categoryFilter = ref('')
 const showInactive = ref(false)
 
 const draft = ref<Service | null>(null)
+const draftTerms = ref<ServiceTerms | null>(null)
 const draftPrice = ref(0)
 const draftCurrency = ref<CurrencyCode>(BASE_CURRENCY)
 const draftAdvance = ref(0)
@@ -106,6 +123,7 @@ async function load(): Promise<void> {
       fetchFieldDefs().catch(() => []),
     ])
     services.value = sv
+    terms.value = canSeePrice.value ? await fetchTermsFor(sv.map((s) => s.id)) : new Map()
     sales.value = sl
     fieldDefs.value = f
   } catch {
@@ -117,16 +135,20 @@ async function load(): Promise<void> {
 
 function startNew(): void {
   draft.value = blankService()
+  draftTerms.value = blankTerms('')
   draftPrice.value = 0
   draftCurrency.value = BASE_CURRENCY
   draftAdvance.value = 0
 }
 
 function startEdit(service: Service): void {
-  draft.value = { ...service, payment: { ...service.payment } }
-  draftPrice.value = fromMinor(service.defaultPrice.minor, service.defaultPrice.currency)
-  draftCurrency.value = service.defaultPrice.currency
-  draftAdvance.value = fromMinor(service.payment?.advanceBaseMinor ?? 0, BASE_CURRENCY)
+  const existing = terms.value.get(service.id) ?? blankTerms(service.id)
+
+  draft.value = { ...service }
+  draftTerms.value = { ...existing, payment: { ...existing.payment } }
+  draftPrice.value = fromMinor(existing.defaultPrice.minor, existing.defaultPrice.currency)
+  draftCurrency.value = existing.defaultPrice.currency
+  draftAdvance.value = fromMinor(existing.payment?.advanceBaseMinor ?? 0, BASE_CURRENCY)
 }
 
 /** Half the price, as a starting point for an advance nobody has set yet. */
@@ -144,13 +166,28 @@ async function commit(): Promise<void> {
 
   saving.value = true
   try {
-    await saveService({
+    const id = await saveService({
       ...d,
       name: d.name.trim(),
       category: d.category.trim(),
-      defaultPrice: moneyOf(draftPrice.value, draftCurrency.value),
-      payment: { ...d.payment, advanceBaseMinor: toMinor(draftAdvance.value, BASE_CURRENCY) },
     })
+
+    /*
+     * The commercial terms are a second document, so this is a second write —
+     * and it is skipped entirely for somebody who may not see prices, who
+     * could not have changed them anyway.
+     */
+    if (canSeePrice.value && draftTerms.value) {
+      await saveTerms({
+        ...draftTerms.value,
+        serviceId: id,
+        defaultPrice: moneyOf(draftPrice.value, draftCurrency.value),
+        payment: {
+          ...draftTerms.value.payment,
+          advanceBaseMinor: toMinor(draftAdvance.value, BASE_CURRENCY),
+        },
+      })
+    }
     ui.notify('ok', t('services.saved'))
     draft.value = null
     await load()
@@ -183,7 +220,8 @@ async function confirmDelete(): Promise<void> {
 
 /** A one-line description of how a service is paid for. */
 function structureLabel(service: Service): string {
-  const p = service.payment
+  /* Nothing to say when the terms were not readable. */
+  const p = terms.value.get(service.id)?.payment
   if (!p || p.model === 'one_off') return t('paymentModel.one_off')
 
   if (p.model === 'advance_remainder') {
@@ -289,14 +327,14 @@ onMounted(load)
           <div class="field-grid">
             <div class="field">
               <label class="field-label" for="p-model">{{ t('sales.paymentModel') }}</label>
-              <select id="p-model" v-model="draft.payment.model" class="select">
+              <select id="p-model" v-model="draftTerms!.payment.model" class="select">
                 <option v-for="m in PAYMENT_MODELS" :key="m" :value="m">
                   {{ t(`paymentModel.${m}`) }}
                 </option>
               </select>
             </div>
 
-            <div v-if="draft.payment.model !== 'one_off'" class="field">
+            <div v-if="draftTerms!.payment.model !== 'one_off'" class="field">
               <label class="field-label" for="p-adv">{{ t('services.advanceRequired') }}</label>
               <div class="inline-row">
                 <input id="p-adv" v-model.number="draftAdvance" class="input" type="number" step="0.01" />
@@ -307,11 +345,11 @@ onMounted(load)
               <p class="field-hint">{{ t('services.advanceHint') }}</p>
             </div>
 
-            <div v-if="draft.payment.model === 'instalments'" class="field">
+            <div v-if="draftTerms!.payment.model === 'instalments'" class="field">
               <label class="field-label" for="p-count">{{ t('sales.instalmentCount') }}</label>
               <input
                 id="p-count"
-                v-model.number="draft.payment.instalmentCount"
+                v-model.number="draftTerms!.payment.instalmentCount"
                 class="input"
                 type="number"
                 min="0"
@@ -320,14 +358,14 @@ onMounted(load)
 
             <div class="field">
               <label class="field-label" for="p-due">{{ t('services.paymentDeadline') }}</label>
-              <input id="p-due" v-model.number="draft.payment.dueInDays" class="input" type="number" min="0" />
+              <input id="p-due" v-model.number="draftTerms!.payment.dueInDays" class="input" type="number" min="0" />
             </div>
 
             <div class="field">
               <label class="field-label" for="p-comm">{{ t('services.commissionPercent') }}</label>
               <input
                 id="p-comm"
-                v-model.number="draft.commissionPercent"
+                v-model.number="draftTerms!.commissionPercent"
                 class="input"
                 type="number"
                 min="0"
@@ -339,7 +377,7 @@ onMounted(load)
 
           <div class="field">
             <label class="field-label" for="p-note">{{ t('services.paymentNote') }}</label>
-            <input id="p-note" v-model="draft.payment.note" class="input" :maxlength="LIMITS.shortText" />
+            <input id="p-note" v-model="draftTerms!.payment.note" class="input" :maxlength="LIMITS.shortText" />
           </div>
         </fieldset>
 
@@ -423,18 +461,35 @@ onMounted(load)
 
         <p v-if="service.description" class="muted service-desc">{{ service.description }}</p>
 
-        <p class="service-price">
-          {{ money(service.defaultPrice.baseMinor, service.defaultPrice.currency) }}
-          <span v-if="service.unit" class="tertiary service-unit">/ {{ service.unit }}</span>
-        </p>
+<!--
+          The commercial block, drawn only when the terms were actually read.
 
-        <p class="structure">
-          <AppIcon name="wallet" :size="13" /> {{ structureLabel(service) }}
-        </p>
+          Somebody without `services.view_price` gets the service and not the
+          figures, and the figures were never fetched — the read is refused by
+          the database rather than filtered here.
+        -->
+        <template v-if="terms.get(service.id)">
+          <p class="service-price">
+            {{
+              money(
+                terms.get(service.id)!.defaultPrice.baseMinor,
+                terms.get(service.id)!.defaultPrice.currency,
+              )
+            }}
+            <span v-if="service.unit" class="tertiary service-unit">/ {{ service.unit }}</span>
+          </p>
 
-        <p v-if="service.commissionPercent" class="tertiary small">
-          {{ t('services.commissionPercent') }}: {{ service.commissionPercent }}%
-        </p>
+          <p class="structure">
+            <AppIcon name="wallet" :size="13" /> {{ structureLabel(service) }}
+          </p>
+
+          <p v-if="terms.get(service.id)!.commissionPercent" class="tertiary small">
+            {{ t('services.commissionPercent') }}:
+            {{ terms.get(service.id)!.commissionPercent }}%
+          </p>
+        </template>
+
+        <p v-else-if="service.unit" class="tertiary small">{{ service.unit }}</p>
 
         <dl v-if="canSeeMoney" class="stats">
           <div>
