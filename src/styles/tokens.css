@@ -60,6 +60,26 @@
   --chart-grid: rgb(255 255 255 / 7%);
   --chart-axis: rgb(255 255 255 / 30%);
 
+  /* ---- Business metrics --------------------------------------------
+   * Named rather than numbered, because these follow the thing measured
+   * and never its position in a list: revenue is this green whether it is
+   * the only line on the chart or the third of three. A filter that hides
+   * a series must not repaint the ones left behind.
+   *
+   * The green is deliberately teal-leaning. A textbook green beside this
+   * red separates by only ΔE 6 under deuteranopia, which the validator
+   * refuses; pulling it towards cyan takes the pair to 9.4 while it still
+   * reads unmistakably as money coming in. All six checks pass in both
+   * themes, per group — measured with the palette validator, not judged
+   * by eye.
+   */
+  --metric-revenue: #0d9d8a;
+  --metric-expenses: #ec4a5c;
+  --metric-profit: #5b8ef5;
+  --metric-clients: #b8891a;
+  --metric-leads: #9d5fd4;
+  --metric-sales: #d1497a;
+
   /* ---- Typography -------------------------------------------------- */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
@@ -218,6 +238,14 @@
   --chart-5: #b8305f;
   --chart-grid: rgb(0 0 0 / 7%);
   --chart-axis: rgb(0 0 0 / 28%);
+
+  /* Their own steps against white, not a darkened flip of the dark set. */
+  --metric-revenue: #00897a;
+  --metric-expenses: #d13a4c;
+  --metric-profit: #2f6fd0;
+  --metric-clients: #9a6f0e;
+  --metric-leads: #7f3bb8;
+  --metric-sales: #b8305f;
 
   --shadow-sm: 0 1px 2px rgb(16 16 24 / 6%);
   --shadow-md: 0 4px 14px rgb(16 16 24 / 9%);

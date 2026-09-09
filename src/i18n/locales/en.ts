@@ -2745,6 +2745,7 @@ export default {
     today: 'Today',
     quickActions: 'Quick actions',
     money: 'Money',
+    overview: 'Business overview chart',
     moneyChart: 'Money over time',
     byService: 'Income by service',
     bySource: 'Where sales came from',
@@ -2763,6 +2764,24 @@ export default {
 
   quickAdd: {
     title: 'Add',
+  },
+
+  overview: {
+    title: 'Business overview',
+    group: 'Which measures',
+    financial: 'Money',
+    activity: 'Activity',
+    versusPrevious: 'vs previous',
+    noComparison: 'no earlier period',
+  },
+
+  metric: {
+    revenue: 'Revenue',
+    expenses: 'Expenses',
+    profit: 'Profit',
+    clients: 'New clients',
+    leads: 'New leads',
+    sales: 'Sales',
   },
 
 }

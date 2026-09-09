@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import BusinessOverview, { type MetricInput } from '@/components/BusinessOverview.vue'
 import PeriodPicker from '@/components/PeriodPicker.vue'
 import RankChart from '@/components/ui/RankChart.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
@@ -314,6 +315,52 @@ const workCards = computed<Card[]>(() => [
 /* ---- Charts ---------------------------------------------------------- */
 
 const points = computed(() => seriesOver(current.value, period.value))
+
+/**
+ * The six metrics the overview chart draws, each with the period before it.
+ *
+ * Everything is derived from the one snapshot — the totals and the per-point
+ * values come from the same records, so the chart and the figure above it can
+ * never disagree.
+ */
+const overviewMetrics = computed<MetricInput[]>(() => [
+  {
+    key: 'revenue',
+    values: points.value.map((p) => p.income),
+    total: figures.value.incomeBaseMinor,
+    previousTotal: before.value.incomeBaseMinor,
+  },
+  {
+    key: 'expenses',
+    values: points.value.map((p) => p.expense),
+    total: figures.value.expenseBaseMinor,
+    previousTotal: before.value.expenseBaseMinor,
+  },
+  {
+    key: 'profit',
+    values: points.value.map((p) => p.profit),
+    total: figures.value.profitBaseMinor,
+    previousTotal: before.value.profitBaseMinor,
+  },
+  {
+    key: 'clients',
+    values: points.value.map((p) => p.clients),
+    total: figures.value.newClients,
+    previousTotal: before.value.newClients,
+  },
+  {
+    key: 'leads',
+    values: points.value.map((p) => p.leads),
+    total: figures.value.newLeads,
+    previousTotal: before.value.newLeads,
+  },
+  {
+    key: 'sales',
+    values: points.value.map((p) => p.salesCount),
+    total: figures.value.salesCount,
+    previousTotal: before.value.salesCount,
+  },
+])
 
 const moneyChart = computed(() => ({
   labels: points.value.map((p) => p.label),
@@ -610,6 +657,18 @@ onMounted(load)
           </button>
         </div>
         </template>
+
+        <!--
+          The overview: one chart, six metrics, each switchable, with the
+          period before it beside every figure. See the component for why the
+          money and the counts are two groups rather than two axes.
+        -->
+        <BusinessOverview
+          v-if="shows('overview') && canMoney"
+          :labels="moneyChart.labels"
+          :metrics="overviewMetrics"
+          :money="money"
+        />
 
         <!-- Charts ----------------------------------------------------- -->
         <section v-if="shows('moneyChart') && canMoney" class="card">

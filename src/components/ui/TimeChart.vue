@@ -21,6 +21,14 @@ export interface Series {
   label: string
   /** One value per point, same length as `labels`. */
   values: number[]
+  /**
+   * A CSS colour for this series, when what it measures has one of its own.
+   *
+   * Revenue is always the same green whether it is alone on the chart or the
+   * third of three — colour follows the entity, never its rank. Left unset,
+   * the series falls back to its position in the fixed categorical order.
+   */
+  color?: string
 }
 
 const props = withDefaults(
@@ -81,6 +89,11 @@ const gridLines = computed(() => [0, 0.25, 0.5, 0.75, 1].map((f) => PAD_T + plot
 
 const hasData = computed(() => props.series.some((s) => s.values.some((v) => v !== 0)))
 
+/** A series' own colour, or its place in the fixed categorical order. */
+function colorOf(s: Series, i: number): string {
+  return s.color ?? `var(--chart-${i + 1})`
+}
+
 /** Which point the pointer is nearest, so the whole column highlights. */
 function onMove(event: MouseEvent): void {
   const box = (event.currentTarget as SVGElement).getBoundingClientRect()
@@ -94,7 +107,7 @@ function onMove(event: MouseEvent): void {
     <!-- Legend: always present for two or more series, never for one. -->
     <div v-if="series.length > 1" class="legend">
       <span v-for="(s, i) in series" :key="s.key" class="legend-item">
-        <span class="swatch" :style="{ background: `var(--chart-${i + 1})` }" />
+        <span class="swatch" :style="{ background: colorOf(s, i) }" />
         {{ s.label }}
       </span>
     </div>
@@ -123,14 +136,14 @@ function onMove(event: MouseEvent): void {
           <path
             v-if="area && series.length === 1"
             :d="areaPath(s.values)"
-            :fill="`var(--chart-${i + 1})`"
+            :fill="colorOf(s, i)"
             fill-opacity="0.12"
             stroke="none"
           />
           <path
             :d="linePath(s.values)"
             fill="none"
-            :stroke="`var(--chart-${i + 1})`"
+            :stroke="colorOf(s, i)"
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -153,7 +166,7 @@ function onMove(event: MouseEvent): void {
             :cx="x(hover)"
             :cy="y(s.values[hover] ?? 0)"
             r="4"
-            :fill="`var(--chart-${i + 1})`"
+            :fill="colorOf(s, i)"
             class="marker"
           />
         </template>
@@ -170,7 +183,7 @@ function onMove(event: MouseEvent): void {
     <div v-if="hover !== null && hasData" class="tip">
       <span class="tip-label">{{ labels[hover] }}</span>
       <span v-for="(s, i) in series" :key="`t-${s.key}`" class="tip-row">
-        <span class="swatch" :style="{ background: `var(--chart-${i + 1})` }" />
+        <span class="swatch" :style="{ background: colorOf(s, i) }" />
         <span class="tip-name">{{ s.label }}</span>
         <span class="tip-value">{{ format(s.values[hover] ?? 0) }}</span>
       </span>

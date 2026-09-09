@@ -52,6 +52,7 @@ export const WIDGETS: WidgetDef[] = [
 
   /* ---- Money --------------------------------------------------------- */
   { id: 'money', labelKey: 'widget.money', permission: PERMISSIONS.FINANCE_VIEW, wide: true },
+  { id: 'overview', labelKey: 'widget.overview', permission: PERMISSIONS.FINANCE_VIEW, wide: true },
   { id: 'moneyChart', labelKey: 'widget.moneyChart', permission: PERMISSIONS.FINANCE_VIEW },
   { id: 'byService', labelKey: 'widget.byService', permission: PERMISSIONS.FINANCE_VIEW },
   { id: 'bySource', labelKey: 'widget.bySource', permission: PERMISSIONS.FINANCE_VIEW },

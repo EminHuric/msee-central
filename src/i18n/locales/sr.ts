@@ -2744,6 +2744,7 @@ export default {
     today: 'Danas',
     quickActions: 'Brze akcije',
     money: 'Novac',
+    overview: 'Grafikon pregleda poslovanja',
     moneyChart: 'Novac kroz vreme',
     byService: 'Prihod po usluzi',
     bySource: 'Odakle je došla prodaja',
@@ -2762,6 +2763,24 @@ export default {
 
   quickAdd: {
     title: 'Dodaj',
+  },
+
+  overview: {
+    title: 'Pregled poslovanja',
+    group: 'Koje mere',
+    financial: 'Novac',
+    activity: 'Aktivnost',
+    versusPrevious: 'u odnosu na prethodni',
+    noComparison: 'nema ranijeg perioda',
+  },
+
+  metric: {
+    revenue: 'Prihod',
+    expenses: 'Rashodi',
+    profit: 'Profit',
+    clients: 'Novi klijenti',
+    leads: 'Novi kontakti',
+    sales: 'Prodaje',
   },
 
 }

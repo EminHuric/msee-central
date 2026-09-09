@@ -235,7 +235,18 @@ const DYNAMIC_KEYS = {
  * indexed by something the code decides. Listing them is the deliberate act of
  * saying "no list backs this one", so they do not silently count as covered.
  */
-const FREEFORM_PREFIXES = new Set(['tabs', 'status', 'period', 'dossier', 'permission'])
+const FREEFORM_PREFIXES = new Set([
+  'tabs',
+  'status',
+  'period',
+  'dossier',
+  'permission',
+  /* Two small fixed sets belonging to the overview chart: the six metric
+     names, and the two groups they fall into. Both live in that component
+     rather than in an enum, because nothing else measures them. */
+  'metric',
+  'overview',
+])
 
 function dynamicPrefixes() {
   const found = new Map()

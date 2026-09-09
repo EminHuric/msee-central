@@ -319,6 +319,8 @@ export interface SeriesPoint {
   sold: number
   salesCount: number
   leads: number
+  /** New clients that started in this bucket. */
+  clients: number
 }
 
 /**
@@ -370,13 +372,20 @@ export function seriesOver(snap: Snapshot, period: Period): SeriesPoint[] {
     if (row) row.leads += 1
   }
 
+  /* When the relationship began, which is not always when the record was made. */
+  for (const client of snap.clients) {
+    const started = client.clientSince ?? (client.createdAt ?? '').slice(0, 10)
+    const row = buckets.get(keyOf(started))
+    if (row) row.clients += 1
+  }
+
   for (const row of buckets.values()) row.profit = row.income - row.expense
 
   return [...buckets.values()]
 }
 
 function blankPoint(label: string): SeriesPoint {
-  return { label, income: 0, expense: 0, profit: 0, sold: 0, salesCount: 0, leads: 0 }
+  return { label, income: 0, expense: 0, profit: 0, sold: 0, salesCount: 0, leads: 0, clients: 0 }
 }
 
 export interface Breakdown {
