@@ -102,7 +102,7 @@ function share(value: number): number {
   /* Rounded only at the data end; the baseline end stays square. */
   border-radius: 0 var(--radius-full) var(--radius-full) 0;
   background: var(--chart-1);
-  transition: width var(--dur-normal) var(--ease-out);
+  transition: width var(--dur-base) var(--ease-out);
 }
 .bar.is-other { background: var(--text-tertiary); }
 .bar.is-negative { background: var(--danger-500); }

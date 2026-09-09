@@ -22,7 +22,8 @@
     "purge-logins": "node --disable-warning=ExperimentalWarning tools/purge-logins.mjs",
     "migrate": "node --disable-warning=ExperimentalWarning tools/migrate-model.mjs",
     "buttons:check": "node --disable-warning=ExperimentalWarning tools/check-buttons.mjs",
-    "data:check": "node --disable-warning=ExperimentalWarning tools/check-data.mjs"
+    "data:check": "node --disable-warning=ExperimentalWarning tools/check-data.mjs",
+    "tokens:check": "node --disable-warning=ExperimentalWarning tools/check-tokens.mjs"
   },
   "dependencies": {
     "firebase": "^12.18.0",

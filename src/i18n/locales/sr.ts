@@ -1254,7 +1254,6 @@ export default {
     signOut: 'Odjavi se',
     openMenu: 'Otvori meni',
     closeMenu: 'Zatvori meni',
-    more: 'Više',
   },
 
   theme: {
@@ -2760,10 +2759,6 @@ export default {
     booking: 'Sistem rezervacija',
     website: 'Sajt',
     other: 'Nešto drugo',
-  },
-
-  quickAdd: {
-    title: 'Dodaj',
   },
 
   overview: {

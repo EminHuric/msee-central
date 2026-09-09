@@ -496,7 +496,7 @@ onMounted(load)
 
 .bar-row { display: flex; align-items: center; gap: var(--space-3); }
 .bar-track { flex: 1; height: 10px; border-radius: var(--radius-full); background: var(--bg-inset); overflow: hidden; }
-.bar { display: block; height: 100%; border-radius: var(--radius-full); transition: width var(--dur-normal) var(--ease-out); }
+.bar { display: block; height: 100%; border-radius: var(--radius-full); transition: width var(--dur-base) var(--ease-out); }
 .bar.is-ok { background: var(--ok-500); }
 .bar.is-behind { background: var(--warn-500); }
 .bar-pct { font-size: var(--text-sm); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }

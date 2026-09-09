@@ -123,13 +123,6 @@
   --topbar-height: 60px;
 
   /*
-   * Height of the bottom navigation on a phone. Zero above 900px, where the
-   * bar is not rendered — published as a variable so anything that has to sit
-   * clear of it (toasts, page padding) can ask rather than guess.
-   */
-  --bottom-nav-height: 0px;
-
-  /*
    * How wide the content is allowed to get.
    *
    * A fixed 1440px is right on a laptop and wrong on the screen this system is
@@ -266,14 +259,4 @@
 
 @media (min-width: 2400px) {
   :root { --content-max: 2160px; }
-}
-
-/* ---- Small screens ----------------------------------------------------- *
- *
- * The bottom navigation exists below 900px. Its height is declared here so the
- * page can leave room for it and toasts can sit above it.
- */
-
-@media (max-width: 900px) {
-  :root { --bottom-nav-height: 58px; }
 }

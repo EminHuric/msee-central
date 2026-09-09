@@ -143,15 +143,12 @@ const ICONS: Record<string, string> = {
   transform: scale(0.96);
 }
 
-/*
- * On a phone it spans the width and sits above the bottom navigation, whose
- * height is published as a variable so this does not have to guess.
- */
+/* On a phone it spans the width, clear of the home indicator. */
 @media (max-width: 900px) {
   .toast-host {
     left: var(--space-3);
     right: var(--space-3);
-    bottom: calc(var(--bottom-nav-height, 0px) + var(--space-3));
+    bottom: max(var(--space-3), env(safe-area-inset-bottom));
     max-width: none;
   }
 }

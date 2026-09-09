@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AppSidebar from './AppSidebar.vue'
-import MobileNav from './MobileNav.vue'
 import AppTopbar from './AppTopbar.vue'
 import { useUiStore } from '@/stores/ui'
 
@@ -30,9 +29,6 @@ const ui = useUiStore()
         </RouterView>
       </main>
     </div>
-
-    <!-- Phones and small tablets only; see the note in the component. -->
-    <MobileNav />
   </div>
 </template>
 

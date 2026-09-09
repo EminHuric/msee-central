@@ -107,6 +107,22 @@ onBeforeUnmount(() => {
  * between browsers, and `max-height` with an inner scroll means a long message
  * on a short screen scrolls inside the dialog rather than off the end of it.
  */
+/*
+ * A closed dialog stays closed.
+ *
+ * This rule needs `[open]` on it, and the reason is worth writing down: the
+ * browser hides a closed <dialog> with `dialog:not([open]) { display: none }`
+ * in its own stylesheet, and ANY author rule setting `display` beats that
+ * regardless of specificity. Writing a plain `display: flex` here therefore
+ * made every confirmation permanently visible, centred, on every page that has
+ * one — "delete this project?" sitting on the screen with no way to dismiss
+ * it, because it was never open in the first place.
+ */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
 .dialog {
   position: fixed;
   inset: 0;
@@ -115,8 +131,6 @@ onBeforeUnmount(() => {
   max-height: calc(100dvh - var(--space-8));
   padding: 0;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
