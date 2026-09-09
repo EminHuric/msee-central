@@ -141,7 +141,33 @@ Zaposleni sam pomera svoj rad do `submitted`. Dalje ne može.
 
 ---
 
-## 7. Učinak nema jedinstvenu ocenu
+## 7. Tabla pripada onome ko je gleda
+
+Jedna tabla dobro služi direktoru i traći ekran svima ostalima. Prodavac hoće
+svoj tok, čovek iz finansija hoće šta nije naplaćeno. Zato svako bira svoje
+vidžete i njihov redosled, i to mu se pamti.
+
+**Izbor vidžeta nikada ne proširuje ono što neko sme da vidi.** Tri sloja to
+drže, i samo poslednji nešto vredi:
+
+1. izbornik nudi samo vidžete za koje čovek ima dozvolu
+2. tabla to proverava **ponovo pri svakom crtanju** — raspored sačuvan dok je
+   neko imao `finance.view` prestaje da crta novac čim mu se dozvola oduzme
+3. podaci svakog vidžeta dolaze iz Firestore-a, koji istu dozvolu sprovodi u
+   svojim pravilima
+
+Prva dva čuvaju da ekran bude iskren. Treći čuva da bude bezbedan: raspored
+izmenjen ručno u bazi crta prazan vidžet, ne tuđe brojke. To je dokazano
+testom — nalog partnera sa **svim** dozvolama u katalogu sačuva raspored koji
+imenuje finansijske vidžete i i dalje ne pročita ništa.
+
+Dodavanje vidžeta je jedan red u `WIDGETS`, koji nosi svoju dozvolu. Izbornik,
+sačuvani raspored i provera pri crtanju čitaju istu listu — nema drugog mesta
+koje treba zapamtiti.
+
+---
+
+## 8. Učinak nema jedinstvenu ocenu
 
 Programer i prodavac se ne mere istom osom. Prosek ta dva broja je precizan i
 besmislen, i ljudi brzo nauče da rade za broj umesto za posao.
@@ -153,7 +179,7 @@ podacima koje je neko o njemu ukucao.
 
 ---
 
-## 8. Brisanje je uvek meko
+## 9. Brisanje je uvek meko
 
 `deletedAt` na zapisu, ne kopija u drugoj kolekciji. Svako čitanje ga filtrira,
 korpa ga prikazuje sa preostalim danima, `RETENTION_DAYS` (30) odlučuje dokle.
@@ -168,7 +194,21 @@ zapis i prepravljati ga su dve različite stvari.
 
 ---
 
-## 9. Prilagođena polja
+## 10. Drugi sistemi: referenca, ne veza
+
+Klijent nosi listu `externalRefs` — u kojim još našim sistemima postoji
+(StayBrain, sistem rezervacija, sajt), koji mu je id tamo i link.
+
+**Ništa se ne sinhronizuje.** Nema API-ja između ovoga i StayBrain-a, pa je
+ovo beleška koja čoveku pomaže da nađe hotel tamo. Zelena tačka koja bi
+sugerisala vezu bila bi gora nego da polja nema.
+
+Kad integracija bude napravljena, čita odavde: id-jevi su već upisani uz prave
+klijente, pa njena prva verzija nema šta da migrira.
+
+---
+
+## 11. Prilagođena polja
 
 Sistem ne zna sve što firma beleži. Zato `customFields` čuva definicije po
 entitetu (naziv, tip, obavezno, vidljivost, podrazumevana vrednost), a vrednosti
@@ -180,7 +220,7 @@ koji opisuje.
 
 ---
 
-## 10. Sigurnost je u pravilima, ne u interfejsu
+## 12. Sigurnost je u pravilima, ne u interfejsu
 
 `firebase/firestore.rules` je granica. Sve u `src/` što proverava dozvolu radi
 to radi udobnosti: da sakrije dugme, da preskoči zahtev koji bi svakako pao.
@@ -190,14 +230,15 @@ brisanje, vođenje, odobravanje, izvoz. Razlika između `view` i `view_all` se
 sprovodi u pravilima kroz `ownsRecord()`, ne u upitu koji klijent pošalje.
 
 **Dokazano, ne tvrđeno:** `npm run rules:verify` napada živa pravila pravim
-klijentom kroz tri faze — neodobreni nalog, suvlasnik sa svim dozvolama,
-partner sa svim dozvolama. **65 provera, 0 padova.**
+klijentom kroz tri faze — stranac koji je sam napravio nalog, suvlasnik sa svim
+dozvolama, partner sa svim dozvolama. **67 provera, 0 padova.**
 
 Ono što se time dokazuje:
 
 - osnivač je nedodirljiv čak i za suvlasnika sa svim dozvolama
 - partner sa **svim** dozvolama i dalje ne vidi nijedan interni podatak
 - partner sme da unese kontakt i da pročita svoj — tuđi ne
+- stranac sa nalogom bez pristupnog dokumenta ne može ništa
 - provizija se ne može napraviti već odobrena
 - niko ne dodeljuje bonus sam sebi
 - nagrada se ne može napraviti već isplaćena
@@ -212,7 +253,7 @@ sledeći korak.
 
 ---
 
-## 11. Navigacija
+## 13. Navigacija
 
 ```
 PREGLED     Kontrolna tabla · Moj prostor
@@ -225,9 +266,18 @@ SISTEM      Podešavanja
 
 Obaveštenja su na zvoncu u gornjoj traci, ne kao stavka menija.
 
-Administracija (uloge, organizacija, zahtevi za registraciju, prilagođena polja,
-korpa, revizioni dnevnik) živi **unutar Podešavanja**. To su stvari koje se
+Administracija (uloge, organizacija, prilagođena polja, korpa, revizioni
+dnevnik) živi **unutar Podešavanja**. To su stvari koje se
 podese jednom; pored svakodnevnog posla samo su produžavale meni.
+
+**Niko se ne prijavljuje sam.** Naloge pravi direktor i predaje ih. Time je
+nestao i jedini javni upis u sistem: `registrationRequests` je sada zatvoren
+(`allow read, write: if false`), a ne samo sužen.
+
+Vredi biti jasan oko čega to **ne** menja: svako ko ima veb API ključ i dalje
+može da napravi Firebase Auth nalog, na ovom projektu kao i na svakom drugom, i
+nijedno uklanjanje forme to ne sprečava. Ono što pravila mogu jeste da takvom
+nalogu ne daju ništa — i upravo to se testira.
 
 **Zadaci nisu zaseban modul.** Beleške sa rokom i kvačicom stoje uz zapis na koji
 se odnose — uz klijenta, uz projekat, uz kontakt. Poseban ekran za zadatke značio
@@ -235,7 +285,7 @@ bi drugo mesto na koje se ide da bi se saznalo isto.
 
 ---
 
-## 12. Automatizacije
+## 14. Automatizacije
 
 Rade same, iz podataka koje sistem već ima. Nema šta da se podešava i nema šta
 da tiho prestane da radi:
@@ -255,7 +305,7 @@ roku koji je odavno ispoštovan.
 
 ---
 
-## 13. Alati koji čuvaju sistem
+## 15. Alati koji čuvaju sistem
 
 | Komanda | Šta hvata |
 | --- | --- |
@@ -263,7 +313,9 @@ roku koji je odavno ispoštovan.
 | `npm run build` | greške u šablonu — **type-check ih ne hvata** |
 | `npm run i18n:check` | razliku između kataloga, duple ključeve, ključ koji se koristi a ne postoji, dozvolu bez objašnjenja |
 | `npm run links:check` | vezu koja vodi na rutu koja ne postoji, kroz ugnežđene rute |
-| `npm run rules:verify` | 65 tvrdnji o sigurnosti, protiv živih pravila |
+| `npm run rules:verify` | 67 tvrdnji o sigurnosti, protiv živih pravila |
+| `npm run buttons:check` | dugme ili link koji ne radi ništa |
+| `npm run data:check` | zapis bez pečata i referencu koja ne vodi nigde — **čita bazu, ne kod** |
 | `npm run permissions:sync` | katalog dozvola u bazi (`-- --prune` briše zastarele) |
 | `npm run rules:publish` | objavljivanje pravila |
 | `npm run migrate` | prevođenje postojećih zapisa na novi oblik (`-- --dry`) |
@@ -271,13 +323,20 @@ roku koji je odavno ispoštovan.
 Svaka od ovih provera postoji jer je odgovarajuća greška **već napravljena**
 bar jednom. Nijedna nije dodata preventivno.
 
+`data:check` je jedina koja čita **bazu** umesto koda, i postoji zbog greške
+koju nijedna druga nije mogla da vidi: `write()` je zaključivao da je zapis nov
+po tome da li mu je prosleđen id — a klijent svoj id dobija kao slug pre upisa,
+pa je svaki novi klijent sačuvan sa `createdBy: ''`. Pravila po tom polju
+odlučuju ko sme da pročita tuđi zapis, pa je onaj ko ga je upravo napravio bio
+odbijen. Sačuvano, pa nije tu — što izgleda tačno kao neuspelo čuvanje.
+
 `migrate` se sme pokrenuti više puta: svaki korak proverava da li je već urađen,
 a ništa ne briše — povučene kolekcije ostaju netaknute, a zapisi koji nemaju
 mesto u novom modelu idu u korpu, gde ih čovek pogleda pre nego što nestanu.
 
 ---
 
-## 14. Pravila koja se ne krše
+## 16. Pravila koja se ne krše
 
 1. **Sigurnost je u `firestore.rules`,** nikad u interfejsu.
 2. **Svaka nova kolekcija dobija pravilo i test** pre nego što dobije ekran.
@@ -290,7 +349,7 @@ mesto u novom modelu idu u korpu, gde ih čovek pogleda pre nego što nestanu.
 
 ---
 
-## 15. Šta namerno nije napravljeno
+## 17. Šta namerno nije napravljeno
 
 **AI sloj.** Doći će posebno, iznad ovoga. Zato je sve ovde napravljeno tako da
 se može čitati: jedan snimak podataka, izvedene brojke bez keša, analiza prodaje
@@ -307,4 +366,10 @@ koju niko nije podesio gora je od nikakve; ove gore rade bez podešavanja.
 gde da se dopisuje, a poruka u sistemu koji niko ne drži otvoren je poruka koja
 nije stigla. Ono što mora da stigne ide kroz obaveštenja.
 
-**Jedinstvena ocena učinka.** Vidi sekciju 7.
+**Prava integracija sa StayBrain-om i sistemom rezervacija.** Nema API-ja među
+njima. Vidi sekciju 10: sistem beleži referencu, i ne pretvara se da je to veza.
+
+**Telegram i eksterni izveštaji.** Traže server koji čuva token. Bot token u
+frontend kodu je token koji je javan, pa dok backend ne postoji, ovoga nema.
+
+**Jedinstvena ocena učinka.** Vidi sekciju 8.
