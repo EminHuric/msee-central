@@ -49,7 +49,7 @@ export function blankClient(): Client {
     referral: { ...NO_REFERRAL },
     custom: {},
     clientSince: today(),
-    externalClientId: null,
+    externalRefs: [],
     deletedAt: null,
     deletedBy: null,
     deletedByName: '',

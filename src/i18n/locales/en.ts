@@ -804,6 +804,12 @@ export default {
     statusHint: 'Clients are never deleted — move them to Former instead, and their history stays.',
     contact: 'Contact',
     location: 'Location',
+    externalRefs: 'Other systems',
+    externalRefsHint: 'Where this client exists in the other systems MsEe runs. This is a note so somebody can find them over there — nothing is connected or synchronised.',
+    externalSystem: 'System',
+    externalReference: 'Their id there',
+    externalUrl: 'Link',
+    addExternalRef: 'Add a system',
   },
 
   dossier: {
@@ -2745,6 +2751,13 @@ export default {
     salesAndLeads: 'Sales and leads',
     goals: 'Goals',
     activity: 'Recent activity',
+  },
+
+  externalSystem: {
+    staybrain: 'StayBrain',
+    booking: 'Booking system',
+    website: 'Website',
+    other: 'Something else',
   },
 
 }

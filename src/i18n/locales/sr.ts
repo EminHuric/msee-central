@@ -803,6 +803,12 @@ export default {
     statusHint: 'Klijenti se nikad ne brišu — prebaci ih na Bivši, istorija ostaje.',
     contact: 'Kontakt',
     location: 'Lokacija',
+    externalRefs: 'Drugi sistemi',
+    externalRefsHint: 'Gde ovaj klijent postoji u drugim sistemima koje MsEe vodi. Ovo je beleška da neko može da ga nađe tamo — ništa nije povezano ni sinhronizovano.',
+    externalSystem: 'Sistem',
+    externalReference: 'Njegov id tamo',
+    externalUrl: 'Link',
+    addExternalRef: 'Dodaj sistem',
   },
 
   dossier: {
@@ -2744,6 +2750,13 @@ export default {
     salesAndLeads: 'Prodaja i kontakti',
     goals: 'Ciljevi',
     activity: 'Skorašnja aktivnost',
+  },
+
+  externalSystem: {
+    staybrain: 'StayBrain',
+    booking: 'Sistem rezervacija',
+    website: 'Sajt',
+    other: 'Nešto drugo',
   },
 
 }

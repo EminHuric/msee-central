@@ -30,7 +30,13 @@ import { formatDate, formatRelative } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { CLIENT_STATUSES, type Client, type ClientStatus, type Service } from '@/types/business'
+import {
+  CLIENT_STATUSES,
+  EXTERNAL_SYSTEMS,
+  type Client,
+  type ClientStatus,
+  type Service,
+} from '@/types/business'
 import type { Sale } from '@/types/revenue'
 import type { CustomFieldDef } from '@/types/records'
 import { PERMISSIONS } from '@/types/permissions'
@@ -135,7 +141,18 @@ function startNew(): void {
 }
 
 function startEdit(client: Client): void {
-  draft.value = { ...client, tags: [...(client.tags ?? [])], serviceIds: [...(client.serviceIds ?? [])] }
+  draft.value = {
+    ...client,
+    tags: [...(client.tags ?? [])],
+    serviceIds: [...(client.serviceIds ?? [])],
+    /* Copied, not shared: editing a row must not touch the loaded record
+       until the whole draft is saved. Older clients have no list at all. */
+    externalRefs: (client.externalRefs ?? []).map((r) => ({ ...r })),
+  }
+}
+
+function addExternalRef(): void {
+  draft.value?.externalRefs.push({ system: 'staybrain', reference: '', url: '' })
 }
 
 function toggleService(id: string): void {
@@ -323,6 +340,64 @@ onMounted(load)
             <span class="field-label">{{ t('clients.tags') }}</span>
             <TagInput v-model="draft.tags" :placeholder="t('clients.tagsHint')" />
           </div>
+
+          <!--
+            Where this client exists in the other systems MsEe runs.
+
+            Deliberately worded as a reference somebody writes down, not a
+            connection. Nothing here talks to StayBrain or the booking system,
+            and a green dot implying otherwise would be worse than the field
+            not existing.
+          -->
+          <fieldset class="block">
+            <legend>{{ t('clients.externalRefs') }}</legend>
+            <p class="field-hint">{{ t('clients.externalRefsHint') }}</p>
+
+            <div v-for="(ref, i) in draft.externalRefs" :key="i" class="ref-row">
+              <div class="field">
+                <label class="field-label" :for="`c-ref-sys-${i}`">
+                  {{ t('clients.externalSystem') }}
+                </label>
+                <select :id="`c-ref-sys-${i}`" v-model="ref.system" class="select">
+                  <option v-for="s in EXTERNAL_SYSTEMS" :key="s" :value="s">
+                    {{ t(`externalSystem.${s}`) }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="field-label" :for="`c-ref-id-${i}`">
+                  {{ t('clients.externalReference') }}
+                </label>
+                <input
+                  :id="`c-ref-id-${i}`"
+                  v-model="ref.reference"
+                  class="input"
+                  :maxlength="LIMITS.name"
+                />
+              </div>
+
+              <div class="field">
+                <label class="field-label" :for="`c-ref-url-${i}`">
+                  {{ t('clients.externalUrl') }}
+                </label>
+                <input :id="`c-ref-url-${i}`" v-model="ref.url" class="input" type="url" />
+              </div>
+
+              <button
+                class="btn btn-ghost btn-sm danger"
+                type="button"
+                :aria-label="t('common.remove')"
+                @click="draft.externalRefs.splice(i, 1)"
+              >
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </div>
+
+            <button class="btn btn-secondary btn-sm" type="button" @click="addExternalRef">
+              <AppIcon name="plus" :size="14" /> {{ t('clients.addExternalRef') }}
+            </button>
+          </fieldset>
 
           <div v-if="services.length" class="field">
             <span class="field-label">{{ t('clients.services') }}</span>
@@ -557,6 +632,18 @@ onMounted(load)
 .more { border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
 .more > summary { cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-3); }
 .more > summary:hover { color: var(--text-brand); }
+.ref-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 1.5fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .ref-row { grid-template-columns: 1fr; align-items: stretch; }
+}
+
 .options { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
 
 .name-cell { display: flex; align-items: center; gap: var(--space-3); text-align: left; min-width: 0; }

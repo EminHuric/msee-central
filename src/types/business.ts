@@ -62,6 +62,24 @@ export const NO_REFERRAL: Referral = {
   note: '',
 }
 
+/**
+ * The other systems MsEe runs, that a client may also exist in.
+ *
+ * A list rather than one field because a hotel can be on StayBrain and the
+ * booking system at once, and because the next product should not need a
+ * schema change to be recorded here.
+ */
+export const EXTERNAL_SYSTEMS = ['staybrain', 'booking', 'website', 'other'] as const
+export type ExternalSystem = (typeof EXTERNAL_SYSTEMS)[number]
+
+export interface ExternalRef {
+  system: ExternalSystem
+  /** Their id or account name over there. */
+  reference: string
+  /** A link straight to them, when the system has one. */
+  url: string
+}
+
 export interface Client extends SoftDeletable {
   id: string
   name: string
@@ -103,8 +121,19 @@ export interface Client extends SoftDeletable {
   custom: CustomValues
 
   clientSince: string | null
-  /** Reserved for the StayBrain link. Unused until that integration lands. */
-  externalClientId: string | null
+  /**
+   * Where this client exists in the other systems MsEe runs.
+   *
+   * A reference somebody writes down, not a connection. There is no API
+   * between this and StayBrain or the booking system, and until there is, the
+   * honest thing is a field that lets a person find the client over there —
+   * not a status light that implies something is being synchronised.
+   *
+   * When an integration does land it reads from here: the id is already
+   * recorded against the right client, so the first version of it has nothing
+   * to migrate.
+   */
+  externalRefs: ExternalRef[]
   createdAt: string
   createdBy: string
   updatedAt: string

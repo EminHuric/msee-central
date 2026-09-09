@@ -204,7 +204,7 @@ async function write(ref, data) {
 
   for (const doc of snap.docs) {
     const data = doc.data()
-    if (data.responsibleUid !== undefined && data.custom !== undefined) continue
+    if (data.responsibleUid !== undefined && data.custom !== undefined && data.externalRefs !== undefined) continue
 
     await write(doc.ref, {
       ...SOFT,
@@ -219,6 +219,17 @@ async function write(ref, data) {
       custom:
         data.custom ??
         Object.fromEntries((data.customFields ?? []).map((f) => [f.label ?? 'field', f.value ?? ''])),
+      /*
+       * One reserved id for StayBrain became a list, because a hotel can be in
+       * two of our systems at once. Anything already recorded is carried over
+       * rather than dropped.
+       */
+      externalRefs:
+        data.externalRefs ??
+        (data.externalClientId
+          ? [{ system: 'staybrain', reference: data.externalClientId, url: '' }]
+          : []),
+      externalClientId: FieldValue.delete(),
       updatedAt: now,
     })
     moved += 1
