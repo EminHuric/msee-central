@@ -613,7 +613,18 @@ onBeforeUnmount(() => {
   transform: scale(0.98);
 }
 
-@media (max-width: 640px) {
+/*
+ * On a phone the search stops being a field in the bar and becomes the screen.
+ *
+ * Collapsing it to a 34px icon over `--bg-inset` made it all but invisible
+ * against the top bar — the reported "the search cannot be seen properly" —
+ * and hanging a 360px panel off that icon put half the results off the edge,
+ * the same anchoring mistake the notification panel had.
+ *
+ * Full-screen instead: nothing to anchor, room for grouped results, and the
+ * keyboard has somewhere to go.
+ */
+@media (max-width: 900px) {
   .search-text,
   .search-kbd {
     display: none;
@@ -624,15 +635,38 @@ onBeforeUnmount(() => {
     max-width: none;
   }
 
+  /* Visible on its own terms: a real button, not a tinted rectangle. */
   .search-trigger {
-    width: 34px;
+    width: 36px;
+    height: 36px;
     justify-content: center;
+    background: var(--bg-surface-2);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
   }
 
   .panel {
-    width: min(360px, calc(100vw - var(--space-8)));
-    left: auto;
-    right: 0;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-input {
+    padding-top: max(var(--space-3), env(safe-area-inset-top));
+  }
+
+  .panel-results {
+    flex: 1;
+    max-height: none;
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
   }
 }
 </style>

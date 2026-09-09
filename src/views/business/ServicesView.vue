@@ -167,11 +167,18 @@ async function toggleStatus(service: Service): Promise<void> {
 }
 
 async function confirmDelete(): Promise<void> {
-  if (!pendingDelete.value) return
-  await deleteService(pendingDelete.value)
-  ui.notify('ok', t('recycle.movedToBin'))
-  pendingDelete.value = null
-  await load()
+  try {
+    if (!pendingDelete.value) return
+    await deleteService(pendingDelete.value)
+    ui.notify('ok', t('recycle.movedToBin'))
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingDelete.value = null
+  }
 }
 
 /** A one-line description of how a service is paid for. */

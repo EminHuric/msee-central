@@ -271,9 +271,18 @@ async function toggleMilestone(milestone: Milestone): Promise<void> {
 
 async function confirmDelete(): Promise<void> {
   if (!project.value) return
-  await deleteProject(project.value)
-  ui.notify('ok', t('recycle.movedToBin'))
-  await router.push('/projects')
+
+  try {
+    await deleteProject(project.value)
+    ui.notify('ok', t('recycle.movedToBin'))
+    await router.push('/projects')
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always closes. A refused delete used to leave the confirmation on
+       screen with nothing happening and nothing said. */
+    pendingDelete.value = false
+  }
 }
 
 onMounted(load)

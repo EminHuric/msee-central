@@ -490,7 +490,9 @@
 
 .alert {
   display: flex;
+  align-items: flex-start;
   gap: var(--space-3);
+  color: var(--text-primary);
   padding: var(--space-4);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
@@ -499,29 +501,38 @@
   line-height: var(--leading-relaxed);
 }
 
+/*
+ * The tint carries the meaning; the text stays readable.
+ *
+ * These used to set `color` to the status colour as well, so a whole
+ * paragraph rendered in red on a 12%-red wash — the same hue at two opacities,
+ * which is the definition of low contrast and was reported as unreadable. Now
+ * only the icon and the border are coloured, and the words are the colour
+ * words are everywhere else.
+ */
 .alert-danger {
   background: var(--danger-bg);
   border-color: var(--danger-border);
-  color: var(--danger-500);
 }
+.alert-danger > svg:first-child { color: var(--danger-500); }
 
 .alert-warn {
   background: var(--warn-bg);
   border-color: var(--warn-border);
-  color: var(--warn-500);
 }
+.alert-warn > svg:first-child { color: var(--warn-500); }
 
 .alert-ok {
   background: var(--ok-bg);
   border-color: var(--ok-border);
-  color: var(--ok-500);
 }
+.alert-ok > svg:first-child { color: var(--ok-500); }
 
 .alert-info {
   background: var(--info-bg);
   border-color: var(--info-border);
-  color: var(--info-500);
 }
+.alert-info > svg:first-child { color: var(--info-500); }
 
 /* ---- Page scaffolding ------------------------------------------------ */
 
@@ -539,6 +550,13 @@
   .page {
     padding: var(--space-4);
     gap: var(--space-4);
+  }
+}
+
+/* Room for the bottom navigation, so the last row is not under it. */
+@media (max-width: 900px) {
+  .page {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + var(--space-4));
   }
 }
 

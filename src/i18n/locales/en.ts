@@ -1255,6 +1255,7 @@ export default {
     signOut: 'Sign out',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
+    more: 'More',
   },
 
   theme: {
@@ -2758,6 +2759,10 @@ export default {
     booking: 'Booking system',
     website: 'Website',
     other: 'Something else',
+  },
+
+  quickAdd: {
+    title: 'Add',
   },
 
 }

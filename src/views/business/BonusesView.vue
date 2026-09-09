@@ -369,10 +369,17 @@ async function grant(
 }
 
 async function confirmDeleteProgramme(): Promise<void> {
-  if (!pendingProgramme.value) return
-  await deleteProgramme(pendingProgramme.value)
-  pendingProgramme.value = null
-  await load()
+  try {
+    if (!pendingProgramme.value) return
+    await deleteProgramme(pendingProgramme.value)
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingProgramme.value = null
+  }
 }
 
 /* ---- Incentive work -------------------------------------------------- */
@@ -463,10 +470,17 @@ async function decideWork(approve: boolean): Promise<void> {
 }
 
 async function confirmDeleteWork(): Promise<void> {
-  if (!pendingWork.value) return
-  await deleteWork(pendingWork.value)
-  pendingWork.value = null
-  await load()
+  try {
+    if (!pendingWork.value) return
+    await deleteWork(pendingWork.value)
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingWork.value = null
+  }
 }
 
 /* ---- Awards ---------------------------------------------------------- */

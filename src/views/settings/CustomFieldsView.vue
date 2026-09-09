@@ -141,11 +141,18 @@ async function toggleActive(field: CustomFieldDef): Promise<void> {
 }
 
 async function confirmDelete(): Promise<void> {
-  if (!pendingDelete.value) return
-  await deleteFieldDef(pendingDelete.value.id)
-  ui.notify('ok', t('fields.deleted'))
-  pendingDelete.value = null
-  await load()
+  try {
+    if (!pendingDelete.value) return
+    await deleteFieldDef(pendingDelete.value.id)
+    ui.notify('ok', t('fields.deleted'))
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingDelete.value = null
+  }
 }
 
 onMounted(load)

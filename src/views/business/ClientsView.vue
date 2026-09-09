@@ -14,7 +14,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
@@ -44,6 +44,7 @@ import type { EmployeePublic } from '@/types/domain'
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
@@ -192,11 +193,18 @@ async function commit(): Promise<void> {
 }
 
 async function confirmDelete(): Promise<void> {
-  if (!pendingDelete.value) return
-  await deleteClient(pendingDelete.value)
-  ui.notify('ok', t('recycle.movedToBin'))
-  pendingDelete.value = null
-  await load()
+  try {
+    if (!pendingDelete.value) return
+    await deleteClient(pendingDelete.value)
+    ui.notify('ok', t('recycle.movedToBin'))
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingDelete.value = null
+  }
 }
 
 async function toggleArchive(client: Client): Promise<void> {
@@ -211,7 +219,24 @@ function clearFilters(): void {
   showArchived.value = false
 }
 
-onMounted(load)
+
+/**
+ * Open the editor when arrived at with `?new=…`.
+ *
+ * The quick-add on a phone navigates here rather than carrying its own
+ * copy of this form. The parameter is removed once acted on, so going
+ * back or refreshing does not reopen a form that was just closed.
+ */
+function openFromQuery(): void {
+  if (!route.query.new) return
+  startNew()
+  void router.replace({ query: {} })
+}
+
+onMounted(async () => {
+  await load()
+  openFromQuery()
+})
 </script>
 
 <template>

@@ -6,7 +6,7 @@
  * top layer rather than us reimplementing them badly.
  */
 
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
@@ -26,15 +26,39 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const { t } = useI18n()
 const dialog = ref<HTMLDialogElement | null>(null)
 
-watch(
-  () => props.open,
-  (open) => {
-    const el = dialog.value
-    if (!el) return
-    if (open && !el.open) el.showModal()
-    if (!open && el.open) el.close()
-  },
-)
+/**
+ * Open and close it, and lock the page behind it.
+ *
+ * `showModal()` is what puts the dialog in the browser's top layer, and the
+ * top layer is what makes it centre on the viewport no matter what it is
+ * nested inside — a transform on an ancestor traps `position: fixed`, but not
+ * this. A dialog that only has the `open` attribute set is NOT in the top
+ * layer: it lays out inline, in the middle of whatever container holds it,
+ * which is exactly what "stuck in the middle" looks like. So every path here
+ * goes through `showModal()`.
+ *
+ * The body is locked because the page behind a modal scrolling under the
+ * pointer is disorienting, and on a phone it is how people lose their place.
+ */
+function sync(open: boolean): void {
+  const el = dialog.value
+  if (!el) return
+
+  if (open && !el.open) {
+    el.showModal()
+    document.body.style.overflow = 'hidden'
+  }
+  if (!open && el.open) {
+    el.close()
+    document.body.style.overflow = ''
+  }
+}
+
+watch(() => props.open, sync)
+
+/* Mounted already open is a real case — a parent may render it that way — and
+   the watcher above never fires for it, because nothing changed. */
+onMounted(() => sync(props.open))
 
 /** Escape and the backdrop both count as cancelling. */
 function onClose(): void {
@@ -45,7 +69,11 @@ function onBackdropClick(event: MouseEvent): void {
   if (event.target === dialog.value && !props.busy) emit('cancel')
 }
 
-onBeforeUnmount(() => dialog.value?.close())
+onBeforeUnmount(() => {
+  dialog.value?.close()
+  /* Unmounting while open must not leave the page unable to scroll. */
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -74,14 +102,44 @@ onBeforeUnmount(() => dialog.value?.close())
 </template>
 
 <style scoped>
+/*
+ * Centring is stated rather than inherited from the user agent, which differs
+ * between browsers, and `max-height` with an inner scroll means a long message
+ * on a short screen scrolls inside the dialog rather than off the end of it.
+ */
 .dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(420px, calc(100vw - var(--space-8)));
+  max-height: calc(100dvh - var(--space-8));
   padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   color: var(--text-primary);
   box-shadow: var(--shadow-lg);
+}
+
+/* On a phone it sits against the bottom, where the thumb is. */
+@media (max-width: 640px) {
+  .dialog {
+    inset: auto 0 0 0;
+    margin: 0;
+    width: 100%;
+    max-height: 85dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .dialog-actions {
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+
+  .dialog-actions .btn { flex: 1; }
 }
 
 .dialog::backdrop {
@@ -90,6 +148,8 @@ onBeforeUnmount(() => dialog.value?.close())
 }
 
 .dialog-body {
+  flex: 1;
+  overflow-y: auto;
   padding: var(--space-6);
 }
 

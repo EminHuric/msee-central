@@ -243,10 +243,17 @@ async function commit(): Promise<void> {
 }
 
 async function confirmDelete(): Promise<void> {
-  if (!pendingDelete.value) return
-  await deleteEvent(pendingDelete.value)
-  pendingDelete.value = null
-  await load()
+  try {
+    if (!pendingDelete.value) return
+    await deleteEvent(pendingDelete.value)
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    /* Always clears, so a refused delete cannot leave the
+       confirmation on screen with nothing happening. */
+    pendingDelete.value = null
+  }
 }
 
 function open(item: { link: string | null; id: string; derived: boolean }): void {
