@@ -7,7 +7,16 @@
  * one "Manager" role without inventing a permission set per job title.
  */
 
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from 'firebase/firestore'
 
 import { logAudit } from './audit'
 import { getDb } from '@/lib/firebase'
@@ -59,7 +68,7 @@ export interface RoleInput {
  * caller: the CEO role is created once by the setup script and must not be
  * reproducible from this screen. The security rules refuse it too.
  */
-export async function saveRole(input: RoleInput, isNew: boolean): Promise<void> {
+export async function saveRole(input: RoleInput, isNew: boolean): Promise<Resync> {
   const name = input.name.trim()
   const description = input.description.trim()
 
@@ -88,11 +97,90 @@ export async function saveRole(input: RoleInput, isNew: boolean): Promise<void> 
     { merge: true },
   )
 
+  const resynced = isNew ? { updated: 0, skipped: 0 } : await resyncHolders(input.id)
+
   await logAudit({
     action: isNew ? 'role.created' : 'role.updated',
     targetType: 'role',
     targetId: input.id,
     targetLabel: input.name,
-    metadata: { permissionCount: input.permissions.length, status: input.status },
+    metadata: {
+      permissionCount: input.permissions.length,
+      status: input.status,
+      holdersUpdated: resynced.updated,
+      holdersSkipped: resynced.skipped,
+    },
   })
+
+  return resynced
+}
+
+/**
+ * Push a changed role out to everybody who holds it.
+ *
+ * `userPermissions.permissions` is a flattened union of every role a person
+ * has, and the rules read that rather than the role documents — one field
+ * instead of a document read per role on every single check.
+ *
+ * That flattening is a cache, and nothing was invalidating it. Editing a role
+ * rewrote the role and stopped; anybody already holding it kept the permission
+ * list they were given the day it was assigned. On this database that had
+ * already drifted: an account holding a role carrying 31 permissions had 24.
+ *
+ * So the recomputation happens here, when a role changes — which is rare —
+ * rather than on every permission check, which is constant. Reading the role
+ * documents from inside the rules would be the other way round, and would cost
+ * a lookup per role on every read the application makes.
+ *
+ * Returns how many people were updated and how many could not be, so the
+ * screen can report both rather than implying a clean sweep.
+ */
+export interface Resync {
+  updated: number
+  /**
+   * Holders the rules refused.
+   *
+   * The founder's access is theirs alone: nobody else may write it, not even a
+   * co-owner. So a CTO editing the CEO role updates everybody except the
+   * founder, and that has to be said out loud rather than swallowed — the
+   * alternative is a role that looks fully applied and is not.
+   */
+  skipped: number
+}
+
+export async function resyncHolders(roleId: string): Promise<Resync> {
+  const db = getDb()
+
+  const [roles, holders] = await Promise.all([
+    fetchRoles(),
+    getDocs(query(collection(db, 'userPermissions'), where('roleIds', 'array-contains', roleId))),
+  ])
+
+  const byId = new Map(roles.map((r) => [r.id, r]))
+  const stamp = new Date().toISOString()
+
+  let updated = 0
+  let skipped = 0
+
+  for (const holder of holders.docs) {
+    const roleIds: string[] = holder.data().roleIds ?? []
+    const mine = roleIds.map((id) => byId.get(id)).filter((r): r is Role => !!r)
+
+    const permissions = [...new Set(mine.flatMap((r) => r.permissions))] as Permission[]
+    const grantsAll = mine.some((r) => r.grantsAll)
+
+    try {
+      await setDoc(
+        doc(db, 'userPermissions', holder.id),
+        { uid: holder.id, permissions, isCeo: grantsAll, updatedAt: stamp },
+        { merge: true },
+      )
+      updated += 1
+    } catch {
+      /* Refused by the rules — see the note on `skipped`. */
+      skipped += 1
+    }
+  }
+
+  return { updated, skipped }
 }

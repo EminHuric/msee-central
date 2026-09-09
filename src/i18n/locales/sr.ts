@@ -405,6 +405,8 @@ export default {
     statusActive: 'Aktivna',
     statusInactive: 'Neaktivna',
     statusHint: 'Neaktivna uloga ne može da se dodeli, ali je zadržavaju oni koji je već imaju.',
+    savedApplied: 'Uloga sačuvana i primenjena na {n} osobu | Uloga sačuvana i primenjena na {n} osobe | Uloga sačuvana i primenjena na {n} osoba | Uloga sačuvana i primenjena na {n} osoba',
+    savedSkipped: '{n} nalog nije mogao da se ažurira — pristup osnivača je samo njegov. | {n} naloga nisu mogla da se ažuriraju — pristup osnivača je samo njegov. | {n} naloga nije moglo da se ažurira — pristup osnivača je samo njegov. | {n} naloga nije moglo da se ažurira — pristup osnivača je samo njegov.',
   },
 
   accountType: {

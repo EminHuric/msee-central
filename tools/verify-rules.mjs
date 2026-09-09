@@ -441,6 +441,47 @@ try {
   )
 
   /*
+   * Roles: what a built-in one protects, and what it does not.
+   *
+   * The permission list of a system role used to be frozen, and since every
+   * role in this database is built in, that meant no role's permissions could
+   * ever be saved. What must stay fixed is the role's identity — its key,
+   * whether it is built in, whether it grants everything — and its status.
+   */
+  {
+    const employee = await adminDb.collection('roles').doc('employee').get()
+    const before = employee.data()
+
+    if (before) {
+      await mustAllow("co-owner CAN change a built-in role's permissions", () =>
+        updateDoc(doc(db, 'roles', 'employee'), {
+          permissions: [...(before.permissions ?? []), 'leads.view'],
+          updatedAt: new Date().toISOString(),
+        }),
+      )
+
+      await mustDeny('co-owner CANNOT rename the key of a built-in role', () =>
+        updateDoc(doc(db, 'roles', 'employee'), { key: 'forged' }),
+      )
+
+      await mustDeny('co-owner CANNOT make a role grant everything', () =>
+        updateDoc(doc(db, 'roles', 'employee'), { grantsAll: true }),
+      )
+
+      await mustDeny('co-owner CANNOT deactivate a built-in role', () =>
+        updateDoc(doc(db, 'roles', 'employee'), { status: 'inactive' }),
+      )
+
+      await mustDeny('co-owner CANNOT delete a role', () =>
+        deleteDoc(doc(db, 'roles', 'employee')),
+      )
+
+      /* Put it back exactly as it was, whatever the checks managed to do. */
+      await adminDb.collection('roles').doc('employee').set(before)
+    }
+  }
+
+  /*
    * Deleting is soft. Destroying a record for good is `recycle_bin.purge`,
    * which this account holds — so the interesting proof is the one below:
    * an award may not be created for yourself, whatever else you can do.

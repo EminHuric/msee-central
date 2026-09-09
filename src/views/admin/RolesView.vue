@@ -143,8 +143,17 @@ async function commit(): Promise<void> {
 
   saving.value = true
   try {
-    await saveRole({ ...role, id }, isNew)
-    ui.notify('ok', t('roles.saved'))
+    const { updated, skipped } = await saveRole({ ...role, id }, isNew)
+
+    /*
+     * Say what actually reached people.
+     *
+     * A role is a template; what the rules read is the flattened copy on each
+     * person. "Saved" on its own would leave the CEO to guess whether the
+     * change is in force, and the honest answer is a number.
+     */
+    ui.notify('ok', updated ? t('roles.savedApplied', { n: updated }) : t('roles.saved'))
+    if (skipped) ui.notify('warn', t('roles.savedSkipped', { n: skipped }))
     draft.value = null
     await load()
   } catch {

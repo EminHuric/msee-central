@@ -139,6 +139,53 @@ for (const { from, field, to, when } of LINKS) {
   }
 }
 
+/* ---- Access matches the roles behind it -------------------------------- *
+ *
+ * `userPermissions.permissions` is a flattened union of every role somebody
+ * holds, and the security rules read that rather than the role documents. It
+ * is a cache, and a cache that disagrees with its source is worse than no
+ * cache: somebody is walking around with access their role no longer grants,
+ * or without access it does.
+ *
+ * This is checked here because it is invisible from the source. Both halves
+ * looked correct; only the stored pair disagreed. It had already drifted by
+ * seven permissions on this database before anything noticed.
+ */
+
+{
+  const roles = new Map((await db.collection('roles').get()).docs.map((d) => [d.id, d.data()]))
+  const people = await db.collection('userPermissions').get()
+
+  let drifted = 0
+
+  for (const person of people.docs) {
+    const row = person.data()
+    const held = row.roleIds ?? []
+
+    const expected = new Set(held.flatMap((id) => roles.get(id)?.permissions ?? []))
+    const stored = new Set(row.permissions ?? [])
+
+    const missingHere = [...expected].filter((p) => !stored.has(p))
+    const extraHere = [...stored].filter((p) => !expected.has(p))
+
+    /* An owner's list is not driven by their roles: `isCeo` answers first. */
+    if (row.isCeo === true) continue
+    if (missingHere.length === 0 && extraHere.length === 0) continue
+
+    drifted += 1
+    note(
+      'access drift',
+      `${person.id.slice(0, 10)} holds ${JSON.stringify(held)} — ` +
+        `${missingHere.length} not granted, ${extraHere.length} left over`,
+    )
+  }
+
+  console.log(
+    `  ${'access'.padEnd(16)} ${String(people.size).padStart(4)} account(s)` +
+      (drifted ? `   ${drifted} out of step with their roles` : ''),
+  )
+}
+
 /* ---- Report ------------------------------------------------------------ */
 
 if (problems.length === 0) {

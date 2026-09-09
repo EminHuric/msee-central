@@ -406,6 +406,8 @@ export default {
     statusActive: 'Active',
     statusInactive: 'Inactive',
     statusHint: 'An inactive role cannot be assigned, but people who already hold it keep it.',
+    savedApplied: 'Role saved and applied to {n} person | Role saved and applied to {n} people',
+    savedSkipped: '{n} account was not updated — only the founder may change the founder account. | {n} accounts were not updated — only the founder may change the founder account.',
   },
 
   accountType: {

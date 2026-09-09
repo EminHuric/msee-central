@@ -379,13 +379,39 @@ service cloud.firestore {
         && (request.resource.data.grantsAll == false || isOwner())
         && request.resource.data.isSystem == false;
 
+      /*
+       * What a built-in role protects, and what it does not.
+       *
+       * This used to allow a system role only a change of name and
+       * description — which froze the permission list of every role that
+       * exists, because all of them are built in. The CEO could tick
+       * permissions on the Employee role, press save, and the database refused
+       * it silently. That is the whole of "roles cannot be saved".
+       *
+       * The freeze protected nothing. `can()` and `isOwner()` read the
+       * signed-in user's own access document, never the role, so no edit to a
+       * role's permission list can lock anybody out. What must stay fixed is
+       * the role's identity — its key, whether it is built in, and whether it
+       * grants everything — and `status`, since deactivating the owner role
+       * would take it out of circulation for no good reason.
+       */
       allow update: if can('roles.edit')
         && request.resource.data.key == resource.data.key
         && request.resource.data.isSystem == resource.data.isSystem
-        && (request.resource.data.grantsAll == resource.data.grantsAll || isOwner())
+        /*
+         * What grants everything is the founder's decision alone.
+         *
+         * This said `isOwner()`, which let any co-owner flip `grantsAll` on any
+         * role — including one already handed out. The escalation stopped one
+         * step later, because writing `isCeo: true` onto somebody's access
+         * needs `isFounder()`, but a door that only exists to be walked through
+         * later is not a door worth leaving open. A rule check found this the
+         * first time it was asked the question.
+         */
+        && (request.resource.data.grantsAll == resource.data.grantsAll || isFounder())
         && (
           resource.data.isSystem == false
-          || changedOnly(['name', 'nameSr', 'description', 'descriptionSr', 'updatedAt'])
+          || request.resource.data.status == resource.data.status
         );
 
       /* Roles are deactivated, never deleted — deleting destroys history. */
