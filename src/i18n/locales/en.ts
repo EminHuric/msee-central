@@ -2552,6 +2552,7 @@ export default {
     rules: 'Rules of the programme',
     rulesHint: 'Everybody on the programme reads this. Say what counts and what does not.',
     rulesPlaceholder: 'Only confirmed sales count. Cancelled sales do not. Payment must arrive within the period.',
+    reachedNotGranted: 'Reached, awaiting a decision',
   },
   bonusMetric: {
     sales_count: 'Number of sales',

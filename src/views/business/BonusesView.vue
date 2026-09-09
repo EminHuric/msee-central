@@ -87,6 +87,22 @@ const pendingProgramme = ref<BonusProgramme | null>(null)
 const pendingWork = ref<IncentiveWork | null>(null)
 const statusFilter = ref<AwardStatus | ''>('')
 
+/**
+ * A stop the viewer has clicked on, and what it is worth to them.
+ *
+ * The line has room for a target and a reward; the rules and conditions behind
+ * a level need more space than that, and hiding them would defeat the point of
+ * writing them down.
+ */
+const inspect = ref<{
+  programme: BonusProgramme
+  step: { milestone: BonusMilestone; reached: boolean; awardStatus: AwardStatus | null }
+  current: number
+  uid: string
+} | null>(null)
+
+const inspectUid = computed(() => inspect.value?.uid ?? '')
+
 const today = new Date().toISOString().slice(0, 10)
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.BONUSES_MANAGE))
@@ -344,6 +360,14 @@ async function commitProgramme(): Promise<void> {
  * Deliberately a button rather than something that happens on its own. The
  * count is automatic; handing over money is not.
  */
+/** Grant the level currently open in the detail panel. */
+async function grantInspected(): Promise<void> {
+  const it = inspect.value
+  if (!it) return
+  inspect.value = null
+  await grant(it.programme, it.step.milestone, it.uid)
+}
+
 async function grant(
   programme: BonusProgramme,
   milestone: BonusMilestone,
@@ -552,13 +576,33 @@ function rewardText(milestone: BonusMilestone, currentValue: number): string {
   return milestone.rewardLabel || t(`rewardType.${milestone.type}`)
 }
 
-/** How far along this rung somebody is: 740 of 1,000 is 74%. */
-function rungPercent(
-  progress: { current: number },
+/**
+ * Where a milestone sits along the line, as a percentage of its width.
+ *
+ * Proportional to the target, so the distance between €100 and €500 is four
+ * times the distance between €0 and €100. Evenly spaced stops would be a
+ * picture of the list rather than of the journey, and would make the marker's
+ * position meaningless.
+ *
+ * The last stop is held slightly inside the right edge so its label has room.
+ */
+const TRACK_END = 94
+
+function ceilingOf(progress: { milestones: { milestone: BonusMilestone }[] }): number {
+  const targets = progress.milestones.map((m) => m.milestone.target)
+  return Math.max(1, ...targets)
+}
+
+function positionOf(
+  progress: { milestones: { milestone: BonusMilestone }[] },
   milestone: BonusMilestone,
 ): number {
-  if (milestone.target <= 0) return 100
-  return Math.min(100, (progress.current / milestone.target) * 100)
+  return (milestone.target / ceilingOf(progress)) * TRACK_END
+}
+
+/** How far along the whole line the person has actually travelled. */
+function travelled(progress: { current: number; milestones: { milestone: BonusMilestone }[] }): number {
+  return Math.min(TRACK_END, (progress.current / ceilingOf(progress)) * TRACK_END)
 }
 
 onMounted(load)
@@ -1001,96 +1045,73 @@ onMounted(load)
               prize only once you have passed it cannot motivate anybody
               towards it.
             -->
-            <ol class="ladder">
-              <li
-                v-for="step in row.progress.milestones"
-                :key="step.milestone.id"
-                class="rung"
-                :class="{
-                  'is-reached': step.reached,
-                  'is-next': step.milestone.id === row.progress.nextMilestone?.id,
-                }"
-              >
-                <span class="rung-rail" aria-hidden="true">
-                  <span class="rung-dot">
-                    <AppIcon v-if="step.awardStatus === 'paid'" name="check" :size="12" />
-                    <AppIcon v-else-if="step.reached" name="flag" :size="12" />
-                  </span>
-                </span>
-
-                <div class="rung-card">
-                  <img
-                    v-if="step.milestone.rewardImage"
-                    :src="step.milestone.rewardImage"
-                    :alt="step.milestone.rewardLabel"
-                    class="rung-image"
-                    loading="lazy"
-                  />
-
-                  <div class="rung-body">
-                    <p class="rung-target">
-                      {{ displayCount(programme, step.milestone.target) }}
-                    </p>
-                    <p class="rung-reward">{{ rewardText(step.milestone, row.progress.current) }}</p>
-                    <p v-if="step.milestone.description" class="rung-note tertiary">
-                      {{ step.milestone.description }}
-                    </p>
-                    <p v-if="step.milestone.note" class="rung-note tertiary">
-                      {{ step.milestone.note }}
-                    </p>
-
-                    <!--
-                      Progress, but only on the rung being climbed. Showing a
-                      bar on every level turns the ladder into a wall of bars
-                      and hides the one number that matters today.
-                    -->
-                    <template v-if="step.milestone.id === row.progress.nextMilestone?.id">
-                      <div
-                        class="rung-bar"
-                        role="progressbar"
-                        :aria-valuenow="Math.round(rungPercent(row.progress, step.milestone))"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                      >
-                        <span :style="{ width: `${rungPercent(row.progress, step.milestone)}%` }" />
-                      </div>
-                      <p class="rung-remaining">
-                        {{ displayCount(programme, row.progress.current) }}
-                        /
-                        {{ displayCount(programme, step.milestone.target) }}
-                        ·
-                        {{
-                          t('bonuses.remainingToGo', {
-                            amount: displayCount(programme, row.progress.remaining),
-                          })
-                        }}
-                      </p>
-                    </template>
-                  </div>
-
-                  <div class="rung-side">
-                    <span v-if="step.awardStatus" class="badge" :class="`award-${step.awardStatus}`">
-                      {{ t(`awardStatus.${step.awardStatus}`) }}
-                    </span>
-                    <span v-else-if="!step.reached" class="rung-locked tertiary">
-                      <AppIcon name="lock" :size="12" />
-                      {{ t('bonuses.locked') }}
-                    </span>
-                    <button
-                      v-if="!step.awardStatus && step.reached && canManage && row.uid !== auth.uid"
-                      class="btn btn-secondary btn-sm"
-                      @click="grant(programme, step.milestone, row.uid)"
-                    >
-                      {{ t('bonuses.grant') }}
-                    </button>
-                  </div>
+            <div class="track-wrap">
+              <div class="track" role="group" :aria-label="t('bonuses.milestones')">
+                <!-- The line itself, and how much of it has been travelled. -->
+                <div class="track-line" aria-hidden="true">
+                  <span class="track-done" :style="{ width: `${travelled(row.progress)}%` }" />
                 </div>
-              </li>
-            </ol>
 
-            <p v-if="!row.progress.nextMilestone" class="next">
-              {{ t('bonuses.ladderComplete') }}
+                <!-- Where they stand right now. -->
+                <div
+                  class="track-marker"
+                  :style="{ left: `${travelled(row.progress)}%` }"
+                  :title="displayCount(programme, row.progress.current)"
+                >
+                  <span class="marker-dot" />
+                  <span class="marker-value">
+                    {{ displayCount(programme, row.progress.current) }}
+                  </span>
+                </div>
+
+                <button
+                  v-for="step in row.progress.milestones"
+                  :key="step.milestone.id"
+                  type="button"
+                  class="stop"
+                  :class="{
+                    'is-reached': step.reached,
+                    'is-next': step.milestone.id === row.progress.nextMilestone?.id,
+                  }"
+                  :style="{ left: `${positionOf(row.progress, step.milestone)}%` }"
+                  :aria-label="`${displayCount(programme, step.milestone.target)} — ${rewardText(step.milestone, row.progress.current)}`"
+                  @click="inspect = { programme, step, current: row.progress.current, uid: row.uid }"
+                >
+                  <span class="stop-target">
+                    {{ displayCount(programme, step.milestone.target) }}
+                  </span>
+                  <span class="stop-dot">
+                    <AppIcon v-if="step.awardStatus === 'paid'" name="check" :size="10" />
+                    <AppIcon v-else-if="step.reached" name="flag" :size="10" />
+                    <AppIcon v-else name="lock" :size="9" />
+                  </span>
+                  <span class="stop-reward">
+                    <img
+                      v-if="step.milestone.rewardImage"
+                      :src="step.milestone.rewardImage"
+                      alt=""
+                      class="stop-image"
+                      loading="lazy"
+                    />
+                    <span class="stop-label">
+                      {{ rewardText(step.milestone, row.progress.current) }}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <p v-if="row.progress.nextMilestone" class="next">
+              {{
+                t('bonuses.remainingToGo', {
+                  amount: displayCount(programme, row.progress.remaining),
+                })
+              }}
+              →
+              {{ rewardText(row.progress.nextMilestone, row.progress.current) }}
             </p>
+
+            <p v-else class="next">{{ t('bonuses.ladderComplete') }}</p>
           </article>
         </div>
       </section>
@@ -1419,6 +1440,77 @@ onMounted(load)
       @confirm="confirmDeleteWork"
       @cancel="pendingWork = null"
     />
+
+    <!--
+      A level, opened from the line.
+
+      The line has room for a target and a reward. The rules and conditions
+      behind a level need more than that, and writing them down was the point.
+    -->
+    <div v-if="inspect" class="stop-scrim" @click="inspect = null">
+      <section class="card stop-detail" role="dialog" @click.stop>
+        <div class="card-header">
+          <h2 class="card-title">
+            {{ displayCount(inspect.programme, inspect.step.milestone.target) }}
+          </h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="inspect = null">
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
+
+        <div class="card-body stack">
+          <img
+            v-if="inspect.step.milestone.rewardImage"
+            :src="inspect.step.milestone.rewardImage"
+            alt=""
+            class="detail-image"
+          />
+
+          <p class="detail-reward">
+            {{ rewardText(inspect.step.milestone, inspect.current) }}
+          </p>
+
+          <p v-if="inspect.step.milestone.description" class="muted">
+            {{ inspect.step.milestone.description }}
+          </p>
+
+          <div v-if="inspect.step.milestone.note" class="detail-block">
+            <p class="detail-title">{{ t('bonuses.levelConditions') }}</p>
+            <p class="muted">{{ inspect.step.milestone.note }}</p>
+          </div>
+
+          <div v-if="inspect.programme.rules" class="detail-block">
+            <p class="detail-title">{{ t('bonuses.rules') }}</p>
+            <p class="muted rules-body">{{ inspect.programme.rules }}</p>
+          </div>
+
+          <div class="detail-block">
+            <p class="detail-title">{{ t('table.status') }}</p>
+            <span v-if="inspect.step.awardStatus" class="badge" :class="`as-${inspect.step.awardStatus}`">
+              {{ t(`awardStatus.${inspect.step.awardStatus}`) }}
+            </span>
+            <span v-else-if="inspect.step.reached" class="badge badge-pending">
+              {{ t('bonuses.reachedNotGranted') }}
+            </span>
+            <span v-else class="badge badge-plain">{{ t('bonuses.locked') }}</span>
+          </div>
+        </div>
+
+        <!--
+          Granting lives here rather than on the line: it is a decision about
+          money, and it belongs beside the rules it is being judged against.
+          Never available for yourself — the database refuses that too.
+        -->
+        <div
+          v-if="!inspect.step.awardStatus && inspect.step.reached && canManage && inspectUid !== auth.uid"
+          class="card-footer"
+        >
+          <button class="btn btn-primary" @click="grantInspected">
+            {{ t('bonuses.grant') }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -1512,120 +1604,215 @@ onMounted(load)
   color: var(--text-brand);
 }
 
-/* ---- The reward ladder ------------------------------------------------ *
+/* ---- The reward line --------------------------------------------------- *
  *
- * A vertical timeline: a rail down the left with a marker per level, and the
- * reward beside it. Restrained on purpose — the specification asked for this
- * to read as premium rather than as a game, so the only colour is on the level
- * being climbed and the ones already won. Locked levels are quiet but fully
- * legible, because being able to read them is the entire point.
+ * A horizontal track with the levels along it, positioned by value rather than
+ * evenly, and a marker at the person's actual place. Distance along the line
+ * means something, which is what makes "you are three quarters of the way to
+ * the phone" readable at a glance instead of arithmetic.
+ *
+ * Restrained on purpose. The specification asked for premium rather than a
+ * game, so the only colour is the travelled part of the line, the marker, and
+ * the levels already won.
  */
 
-.ladder {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: var(--space-3);
+.track-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--space-8) 0 var(--space-4);
+  /* Scrolls inside itself; the page never moves sideways. */
+  overscroll-behavior-x: contain;
 }
 
-.rung { display: flex; gap: var(--space-3); align-items: stretch; }
-
-/* The rail is drawn per rung so it stops cleanly at the last one. */
-.rung-rail {
+.track {
   position: relative;
-  flex: 0 0 20px;
-  display: flex; justify-content: center;
+  min-width: 520px;
+  height: 132px;
 }
 
-.rung-rail::before {
-  content: ''; position: absolute;
-  top: 22px; bottom: calc(var(--space-3) * -1);
-  width: 2px; background: var(--border-subtle);
+.track-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 30px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-default);
 }
 
-.rung:last-child .rung-rail::before { display: none; }
+.track-done {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
 
-.rung-dot {
-  position: relative; z-index: 1;
-  display: grid; place-items: center;
-  width: 20px; height: 20px; margin-top: 2px;
-  border-radius: 50%;
-  border: 2px solid var(--border-default);
+/* ---- Where they are now ------------------------------------------------ */
+
+.track-marker {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 2;
+  transition: left var(--dur-slow) var(--ease-out);
+  pointer-events: none;
+}
+
+.marker-value {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-brand);
+  white-space: nowrap;
+}
+
+.marker-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 3px solid var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- The levels -------------------------------------------------------- */
+
+.stop {
+  position: absolute;
+  top: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 108px;
+  text-align: center;
+}
+
+.stop-target {
+  position: absolute;
+  top: -20px;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stop-dot {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: var(--radius-full);
   background: var(--bg-surface);
+  border: 2px solid var(--border-strong);
   color: var(--text-tertiary);
 }
 
-.rung.is-reached .rung-dot {
-  border-color: var(--ok-500);
+.stop.is-reached .stop-dot {
   background: var(--ok-bg);
+  border-color: var(--ok-500);
   color: var(--ok-500);
 }
 
-.rung.is-next .rung-dot { border-color: var(--brand-500); }
-
-.rung-card {
-  flex: 1; min-width: 0;
-  display: flex; gap: var(--space-3); align-items: flex-start;
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
+.stop.is-next .stop-dot {
+  border-color: var(--accent);
+  color: var(--text-brand);
 }
 
-.rung.is-next .rung-card {
-  border-color: var(--brand-500);
+.stop-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  width: 100%;
+}
+
+.stop-image {
+  width: 44px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface-2);
 }
 
-/* A locked level is dimmed, never hidden. */
-.rung:not(.is-reached):not(.is-next) .rung-card { opacity: 0.72; }
+.stop-label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+  /* Two lines, then ellipsis: the full text is in the detail panel. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
-.rung-image {
-  width: 84px; height: 64px; flex-shrink: 0;
+/* A level not yet reached is quiet, never hidden — seeing it is the point. */
+.stop:not(.is-reached):not(.is-next) .stop-reward { opacity: 0.6; }
+
+.stop:hover .stop-label { color: var(--text-brand); }
+
+.next {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-brand);
+}
+
+/* ---- A level, opened ---------------------------------------------------- */
+
+.stop-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.stop-detail {
+  width: min(420px, 100%);
+  max-height: 85dvh;
+  overflow-y: auto;
+}
+
+.detail-image {
+  width: 100%;
+  max-height: 180px;
   object-fit: contain;
   border-radius: var(--radius-md);
   background: var(--bg-surface-2);
 }
 
-.rung-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-
-.rung-target {
-  font-size: var(--text-sm); font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.detail-reward {
+  font-size: var(--text-lg);
+  font-weight: 650;
 }
 
-.rung-reward { font-size: var(--text-sm); color: var(--text-secondary); }
-.rung-note { font-size: var(--text-xs); }
+.detail-block { display: flex; flex-direction: column; gap: var(--space-1); align-items: flex-start; }
 
-.rung-bar {
-  height: 5px; margin-top: var(--space-2);
-  border-radius: 3px; overflow: hidden;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-}
-
-.rung-bar > span {
-  display: block; height: 100%;
-  background: var(--brand-500);
-  transition: width var(--dur-slow) var(--ease-out);
-}
-
-.rung-remaining {
-  margin-top: var(--space-1);
-  font-size: var(--text-xs); font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-brand);
-}
-
-.rung-side {
-  display: flex; flex-direction: column; align-items: flex-end;
-  gap: var(--space-2); flex-shrink: 0;
-}
-
-.rung-locked {
-  display: inline-flex; align-items: center; gap: 4px;
+.detail-title {
   font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
 }
 
-.next { font-size: var(--text-sm); font-weight: 600; color: var(--ok-500); }
+@media (max-width: 640px) {
+  .stop-scrim { align-items: end; padding: 0; }
+  .stop-detail {
+    width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}
 
 .rules {
   padding-top: 0;

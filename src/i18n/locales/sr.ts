@@ -2551,6 +2551,7 @@ export default {
     rules: 'Pravila programa',
     rulesHint: 'Ovo čitaju svi u programu. Napiši šta se računa a šta ne.',
     rulesPlaceholder: 'Računaju se samo potvrđene prodaje. Otkazane se ne računaju. Uplata mora stići unutar perioda.',
+    reachedNotGranted: 'Dostignuto, čeka odluku',
   },
   bonusMetric: {
     sales_count: 'Broj prodaja',
