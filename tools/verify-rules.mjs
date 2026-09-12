@@ -520,6 +520,42 @@ try {
   }
 
   /*
+   * Scope: does "only their own" actually narrow anything?
+   *
+   * This is the check that makes the scope picker more than a label. The
+   * account is given `clients.view` WITHOUT `clients.view_all` and pointed at a
+   * client it does not own. If that read succeeded, "only their own" would be a
+   * note in the interface rather than a rule in the database.
+   */
+  {
+    const full = (await adminDb.collection('userPermissions').doc(ownerUid).get()).data()
+    const someoneElses = (await adminDb.collection('clients').limit(1).get()).docs[0]
+
+    if (someoneElses && full) {
+      await adminDb.collection('userPermissions').doc(ownerUid).set(
+        { isCeo: false, permissions: ['clients.view'] },
+        { merge: true },
+      )
+
+      await mustDeny("scope 'own' refuses a client somebody else owns", () =>
+        getDoc(doc(db, 'clients', someoneElses.id)),
+      )
+
+      /* And widening it to `all` is what lets the same read through. */
+      await adminDb.collection('userPermissions').doc(ownerUid).set(
+        { isCeo: false, permissions: ['clients.view', 'clients.view_all'] },
+        { merge: true },
+      )
+
+      await mustAllow("scope 'all' allows the same client", () =>
+        getDoc(doc(db, 'clients', someoneElses.id)),
+      )
+
+      await adminDb.collection('userPermissions').doc(ownerUid).set(full)
+    }
+  }
+
+  /*
    * The earnings ledger.
    *
    * The balance is the sum of these entries, so writing one is writing money.

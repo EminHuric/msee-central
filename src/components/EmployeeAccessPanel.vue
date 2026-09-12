@@ -32,8 +32,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
   NO_OVERRIDES,
+  ENFORCEABLE_SCOPES,
   SCOPED_MODULES,
-  SCOPES,
+  viewAllPermission,
   effectivePermissions,
   permissionTree,
   resetToRole,
@@ -131,15 +132,29 @@ function flip(permission: Permission): void {
   )
 }
 
+/**
+ * Set whose records somebody sees, and make it actually take effect.
+ *
+ * The scope is stored, and it also grants or revokes the `*.view_all`
+ * permission — which is what the security rules read. Storing the preference
+ * without moving the permission would leave a picker that looks like a setting
+ * and behaves like a note.
+ */
 function setScope(module: ScopedModule, scope: Scope): void {
-  overrides.value = {
+  const permission = viewAllPermission(module) as Permission
+
+  overrides.value = toggle(permission, scope === 'all', rolePermissions.value, {
     ...overrides.value,
     scopes: { ...overrides.value.scopes, [module]: scope },
-  }
+  })
 }
 
+/**
+ * The scope in force, read from the permission rather than from the stored
+ * preference — because the permission is what the database obeys.
+ */
 function scopeOf(module: ScopedModule): Scope {
-  return overrides.value.scopes[module] ?? 'own'
+  return effectiveSet.value.has(viewAllPermission(module) as Permission) ? 'all' : 'own'
 }
 
 function setGroup(permissions: Permission[], on: boolean): void {
@@ -320,7 +335,14 @@ onMounted(load)
                 :disabled="!canManage"
                 @change="setScope(group.module as ScopedModule, ($event.target as HTMLSelectElement).value as Scope)"
               >
-                <option v-for="s in SCOPES" :key="s" :value="s">{{ t(`scope.${s}`) }}</option>
+                <!--
+                  Only the scopes the database can actually enforce. See the
+                  note on ENFORCEABLE_SCOPES for why team and department are
+                  deliberately absent rather than offered and ignored.
+                -->
+                <option v-for="s in ENFORCEABLE_SCOPES" :key="s" :value="s">
+                  {{ t(`scope.${s}`) }}
+                </option>
               </select>
               <p class="field-hint">{{ t(`scopeHint.${scopeOf(group.module as ScopedModule)}`) }}</p>
             </div>

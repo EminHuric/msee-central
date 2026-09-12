@@ -52,6 +52,36 @@ import type { Permission } from './permissions'
 export const SCOPES = ['own', 'team', 'department', 'all'] as const
 export type Scope = (typeof SCOPES)[number]
 
+/**
+ * The scopes the DATABASE can currently enforce, which is not all of them.
+ *
+ * 'own' and 'all' work today, because the rules already express them: a
+ * record is yours if you own, were assigned, or created it, and '*.view_all'
+ * is what widens that to everything. Setting a scope here grants or removes
+ * that permission, so the choice has teeth.
+ *
+ * 'team' and 'department' do not, and are deliberately not offered. To
+ * narrow a read to a department the rules would have to know which department
+ * the VIEWER is in and which the RECORD belongs to — the first is cheap, the
+ * second means a department stamped on every record at creation and backfilled
+ * onto every existing one.
+ *
+ * Until that exists they stay out of the editor. A scope picker offering a
+ * setting the database ignores is worse than one with two honest options: it
+ * reads as a permission and behaves as a decoration.
+ */
+export const ENFORCEABLE_SCOPES: readonly Scope[] = ['own', 'all']
+
+/**
+ * The permission that a scope grants or removes.
+ *
+ * This is what connects the scope picker to something real: choosing 'all'
+ * for clients grants 'clients.view_all', and choosing 'own' revokes it.
+ */
+export function viewAllPermission(module: ScopedModule): string {
+  return module + '.view_all'
+}
+
 /** How wide each scope is, so a comparison is a number rather than a switch. */
 const WIDTH: Record<Scope, number> = { own: 0, team: 1, department: 2, all: 3 }
 
