@@ -18,7 +18,6 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { applyEarning, fetchIntake, ignoreRow, matchRows } from '@/api/intake'
@@ -29,13 +28,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BASE_CURRENCY, formatMoney } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
-import { tradingFor, type IntakeRow } from '@/types/intake'
+import type { IntakeRow } from '@/types/intake'
 import type { Client } from '@/types/business'
 import type { EmployeePublic } from '@/types/domain'
 
 const auth = useAuthStore()
 const ui = useUiStore()
-const router = useRouter()
 const { t, locale } = useI18n()
 
 const loading = ref(true)
@@ -49,26 +47,6 @@ const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
 
 const canApply = computed(() => auth.hasPermission(PERMISSIONS.WALLET_ADJUST))
 const canEdit = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_EDIT))
-
-/** One line per client that has any reported trading, busiest first. */
-const trading = computed(() =>
-  clients.value
-    .map((client) => ({ client, figures: tradingFor(client.id, rows.value) }))
-    .filter((row) => row.figures.days > 0)
-    .sort((a, b) => b.figures.turnoverBaseMinor - a.figures.turnoverBaseMinor),
-)
-
-const totals = computed(() =>
-  trading.value.reduce(
-    (sum, row) => ({
-      turnover: sum.turnover + row.figures.turnoverBaseMinor,
-      commission: sum.commission + row.figures.commissionBaseMinor,
-      reservations: sum.reservations + row.figures.reservations,
-      nights: sum.nights + row.figures.nights,
-    }),
-    { turnover: 0, commission: 0, reservations: 0, nights: 0 },
-  ),
-)
 
 /** Arrived, and belongs to nobody we know. A question, not an error. */
 const unmatched = computed(() =>
@@ -201,71 +179,6 @@ onMounted(load)
     </div>
 
     <template v-else>
-      <div class="cards">
-        <article class="card figure">
-          <span class="figure-label">{{ t('trading.turnover') }}</span>
-          <span class="figure-value">{{ money(totals.turnover) }}</span>
-        </article>
-        <article class="card figure">
-          <span class="figure-label">{{ t('trading.ourShare') }}</span>
-          <span class="figure-value brand">{{ money(totals.commission) }}</span>
-        </article>
-        <article class="card figure">
-          <span class="figure-label">{{ t('trading.reservations') }}</span>
-          <span class="figure-value">{{ totals.reservations }}</span>
-        </article>
-        <article class="card figure">
-          <span class="figure-label">{{ t('trading.nights') }}</span>
-          <span class="figure-value">{{ totals.nights }}</span>
-        </article>
-      </div>
-
-      <!-- Per client -->
-      <section class="card">
-        <div class="card-header">
-          <h2 class="card-title">{{ t('trading.byClient') }}</h2>
-        </div>
-
-        <div class="table-wrap">
-          <table class="table table-cards">
-            <thead>
-              <tr>
-                <th>{{ t('clients.title') }}</th>
-                <th class="num">{{ t('trading.turnover') }}</th>
-                <th class="num hide-sm">{{ t('trading.ourShare') }}</th>
-                <th class="num hide-sm">{{ t('trading.reservations') }}</th>
-                <th class="num hide-sm">{{ t('trading.nights') }}</th>
-                <th class="hide-sm">{{ t('trading.through') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in trading" :key="row.client.id">
-                <td>
-                  <button type="button" class="link-quiet" @click="router.push(`/clients/${row.client.id}`)">
-                    {{ row.client.name }}
-                  </button>
-                </td>
-                <td class="num strong" :data-label="t('trading.turnover')">
-                  {{ money(row.figures.turnoverBaseMinor) }}
-                </td>
-                <td class="num hide-sm brand" :data-label="t('trading.ourShare')">
-                  {{ money(row.figures.commissionBaseMinor) }}
-                </td>
-                <td class="num hide-sm" :data-label="t('trading.reservations')">
-                  {{ row.figures.reservations }}
-                </td>
-                <td class="num hide-sm" :data-label="t('trading.nights')">
-                  {{ row.figures.nights }}
-                </td>
-                <td class="hide-sm muted nowrap" :data-label="t('trading.through')">
-                  {{ row.figures.through ? formatDate(row.figures.through) : '—' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- Earnings waiting to reach a ledger -->
       <section v-if="pendingEarnings.length" class="card">
         <div class="card-header">

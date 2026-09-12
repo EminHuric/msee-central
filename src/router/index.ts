@@ -173,16 +173,6 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.CALENDAR_VIEW, titleKey: 'calendar.title' },
       },
       {
-        /*
-         * What the other systems report. Gated on finance.view because it is
-         * money — and the rules gate the collection the same way.
-         */
-        path: 'trading',
-        name: 'trading',
-        component: () => import('@/views/TradingView.vue'),
-        meta: { permission: PERMISSIONS.FINANCE_VIEW, titleKey: 'trading.title' },
-      },
-      {
         path: 'analytics',
         name: 'analytics',
         component: () => import('@/views/AnalyticsView.vue'),
@@ -232,6 +222,13 @@ const routes: RouteRecordRaw[] = [
             name: 'settings-roles',
             component: () => import('@/views/admin/RolesView.vue'),
             meta: { permission: PERMISSIONS.ROLES_VIEW, titleKey: 'nav.roles' },
+          },
+          {
+            /* Rows another system sent that still need a person to look. */
+            path: 'intake',
+            name: 'settings-intake',
+            component: () => import('@/views/TradingView.vue'),
+            meta: { permission: PERMISSIONS.FINANCE_VIEW, titleKey: 'trading.title' },
           },
           {
             path: 'fields',

@@ -947,6 +947,20 @@ service cloud.firestore {
     }
 
     /* ------------------------------------------------------------------ *
+     * attribution — how much of a client's trade we brought them
+     *
+     * Money figures about the company's own performance, so guarded by the
+     * finance permissions. Scoped like everything else: somebody who may only
+     * see their own clients sees the attribution for those and no others.
+     * ------------------------------------------------------------------ */
+
+    match /attribution/{recordId} {
+      allow read: if isInternal() && can('finance.view');
+      allow create, update: if isInternal() && can('finance.create');
+      allow delete: if canPurge();
+    }
+
+    /* ------------------------------------------------------------------ *
      * intake — what another system sends in
      *
      * THE DIRECTION IS THE POINT. MsEe Central cannot reach out to the RMS from

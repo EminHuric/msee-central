@@ -73,6 +73,17 @@ const groups = computed<Group[]>(() =>
       titleKey: 'settingsHub.dataGroup',
       sections: [
         {
+          /*
+           * The review queue for what other systems send in. Administration,
+           * not a daily destination — the figures themselves live on the
+           * client they are about.
+           */
+          to: '/settings/intake',
+          labelKey: 'trading.title',
+          icon: 'layers',
+          permission: PERMISSIONS.FINANCE_VIEW,
+        },
+        {
           to: '/settings/fields',
           labelKey: 'fields.title',
           icon: 'edit',

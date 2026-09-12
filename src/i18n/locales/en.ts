@@ -2934,4 +2934,42 @@ export default {
     unmatchedHint: 'Record the reference on the client — Clients, edit, Other systems — then match again.',
   },
 
+  attribution: {
+    title: 'Turnover and our share',
+    subtitle: 'What they took, what we brought them, and what our share of that is.',
+    addMonth: 'Record a month',
+    theirTurnover: 'Their turnover',
+    theirTurnoverHint: 'Everything they took, every channel.',
+    weBrought: 'We brought them',
+    weBroughtHint: 'Only the part that came from our work. Not their whole turnover.',
+    ofTheirTrade: '{n}% of their trade',
+    ourShare: 'Our share',
+    ourShareHint: 'Our commission on what we brought.',
+    share: 'Share',
+    period: 'Month',
+    basis: 'How it was arrived at',
+    note: 'How it was worked out',
+    notePlaceholder: 'From the direct-booking channel report',
+    noteHint: 'Write down where the figure came from. In a year this is the only way to check it.',
+    rmsReports: 'The RMS reports {turnover} · {reservations} reservations · {nights} nights',
+    through: 'through {date}',
+    notLinked: 'This client is not linked to the RMS. Add the reference under Other systems and the reported figures appear here.',
+    empty: 'Nothing recorded yet',
+    emptyHint: 'Record a month and the three figures appear above it.',
+    saved: 'Saved.',
+    moreThanTotal: 'We cannot have brought them more than they took.',
+  },
+
+  attributionBasis: {
+    reported: 'Reported',
+    measured: 'Measured',
+    estimated: 'Estimated',
+  },
+
+  attributionBasisHint: {
+    reported: 'Counted from bookings the RMS could attribute to us.',
+    measured: 'Counted by hand from channel reports or campaign data.',
+    estimated: 'A considered estimate. Useful, and labelled as an estimate.',
+  },
+
 }

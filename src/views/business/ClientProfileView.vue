@@ -372,6 +372,13 @@ watch(clientId, load)
 
       <!-- Finance ------------------------------------------------------ -->
       <template v-else-if="tab === 'finance'">
+        <!--
+          What we brought this client, and what our share of it is. On the
+          client because that is what the figures are about: nobody wants a
+          list of everybody's turnover, they want to open one hotel.
+        -->
+        <ClientTradingPanel v-if="canMoney && client" :client="client" />
+
         <div v-if="!canMoney" class="card">
           <div class="empty">
             <span class="empty-icon"><AppIcon name="lock" :size="20" /></span>

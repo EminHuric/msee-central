@@ -53,6 +53,7 @@ export type CollectionName =
   | 'incentiveWork'
   | 'walletEntries'
   | 'intake'
+  | 'attribution'
   | 'calendarEvents'
   | 'notes'
   | 'activity'

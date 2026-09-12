@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import {
   ACCOUNT_TYPES,
   ACTIVITY_KINDS,
+  ATTRIBUTION_BASES,
   AFFILIATE_TYPES,
   ANNOUNCEMENT_AUDIENCES,
   AUDIT_ACTIONS,
@@ -193,6 +194,8 @@ const DYNAMIC_KEYS = {
   affiliateType: AFFILIATE_TYPES,
   announceAudience: ANNOUNCEMENT_AUDIENCES,
   auditAction: AUDIT_ACTIONS,
+  attributionBasis: ATTRIBUTION_BASES,
+  attributionBasisHint: ATTRIBUTION_BASES,
   awardSource: AWARD_SOURCES,
   awardStatus: AWARD_STATUSES,
   bonusAudience: BONUS_AUDIENCES,

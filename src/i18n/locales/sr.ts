@@ -2933,4 +2933,42 @@ export default {
     unmatchedHint: 'Upiši referencu kod klijenta — Klijenti, uredi, Drugi sistemi — pa ponovo poveži.',
   },
 
+  attribution: {
+    title: 'Promet i naš deo',
+    subtitle: 'Šta su uzeli, koliko smo im mi doneli, i koji je tu naš deo.',
+    addMonth: 'Upiši mesec',
+    theirTurnover: 'Njihov promet',
+    theirTurnoverHint: 'Sve što su uzeli, svi kanali.',
+    weBrought: 'Mi im doneli',
+    weBroughtHint: 'Samo deo koji je došao od našeg rada. Ne njihov ceo promet.',
+    ofTheirTrade: '{n}% njihovog prometa',
+    ourShare: 'Naš deo',
+    ourShareHint: 'Naša provizija na ono što smo doneli.',
+    share: 'Deo',
+    period: 'Mesec',
+    basis: 'Kako je dobijeno',
+    note: 'Kako je izračunato',
+    notePlaceholder: 'Iz izveštaja kanala direktnih rezervacija',
+    noteHint: 'Zapiši odakle cifra. Za godinu dana je to jedini način da se proveri.',
+    rmsReports: 'RMS javlja {turnover} · {reservations} rezervacija · {nights} noćenja',
+    through: 'do {date}',
+    notLinked: 'Ovaj klijent nije povezan sa RMS-om. Dodaj referencu pod Drugi sistemi i javljene cifre se pojave ovde.',
+    empty: 'Još ništa nije upisano',
+    emptyHint: 'Upiši mesec i tri cifre se pojave iznad.',
+    saved: 'Sačuvano.',
+    moreThanTotal: 'Ne možemo im doneti više nego što su uzeli.',
+  },
+
+  attributionBasis: {
+    reported: 'Javljeno',
+    measured: 'Izmereno',
+    estimated: 'Procenjeno',
+  },
+
+  attributionBasisHint: {
+    reported: 'Sabrano iz rezervacija koje je RMS mogao da pripiše nama.',
+    measured: 'Sabrano ručno iz izveštaja kanala ili podataka kampanje.',
+    estimated: 'Promišljena procena. Korisna, i označena kao procena.',
+  },
+
 }

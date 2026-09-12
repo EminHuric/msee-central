@@ -155,6 +155,7 @@ let integrationUid = null
  */
 const TEST_COLLECTIONS = [
   'intake',
+  'attribution',
   'walletEntries',
   'dashboardLayouts',
   'leads',

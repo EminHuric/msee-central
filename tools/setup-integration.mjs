@@ -129,8 +129,13 @@ console.log(`
       date: '2026-09-12',
       externalClientRef: '<your client id>',
       externalClientName: 'Hotel ABC',
+      // What the client took, every channel. This is what the RMS knows.
       turnover:   { minor: 420000, currency: 'EUR', rate: 117, baseMinor: 49140000, rateDate: '2026-09-12' },
-      commission: { minor: 42000,  currency: 'EUR', rate: 117, baseMinor: 4914000,  rateDate: '2026-09-12' },
+      // The part WE brought them, if the RMS can tell. null when it cannot —
+      // MsEe Central records that itself, on the client.
+      attributed: null,
+      // Our commission on that part. null for the same reason.
+      ourShare:   null,
       reservations: 14,
       nights: 31,
       externalEmployeeRef: '', externalEmployeeName: '',
@@ -150,10 +155,17 @@ console.log(`
       externalEmployeeName: 'Sadeta Sadikovic',
       earning: { minor: 5000, currency: 'EUR', rate: 117, baseMinor: 585000, rateDate: '2026-09-12' },
       externalClientRef: '', externalClientName: '',
-      clientId: null, employeeUid: null, turnover: null, commission: null,
+      clientId: null, employeeUid: null, turnover: null, attributed: null, ourShare: null,
       reservations: 0, nights: 0,
       note: '', receivedAt: '<now>', appliedAt: null, appliedBy: null, walletEntryId: null
     }
+
+  THREE FIGURES, NOT TWO. 'turnover' is everything the client took, through
+  every channel — that is theirs. 'attributed' is the part MsEe brought them,
+  which the RMS usually cannot tell and should send as null; it is recorded in
+  MsEe Central on the client instead. 'ourShare' is our commission on that
+  part. Collapsing the first two would credit us with bookings that would have
+  happened anyway.
 
   HOW A ROW FINDS ITS CLIENT. By the reference you already recorded on that
   client in MsEe Central — Clients, edit, "Other systems", system "RMS". A row

@@ -18,8 +18,8 @@
  *
  * Two things, both daily figures rather than individual bookings:
  *
- *   a client's turnover and reservations, so the company can see what it is
- *   producing for each client at any moment;
+ *   a client's total turnover and reservations — every booking they took,
+ *   through every channel, which is what the RMS actually knows;
  *
  *   an amount earned by one of our people, so it reaches their ledger without
  *   anybody copying a number across by hand.
@@ -100,10 +100,30 @@ export interface IntakeRow {
 
   /* ---- The figures ------------------------------------------------- */
 
-  /** What the client took. */
+  /**
+   * What the client took in total, through every channel.
+   *
+   * The RMS knows this because it sees every reservation. It is NOT what we
+   * brought them — see `attributed` — and treating it as our achievement would
+   * credit us with the bookings that would have happened anyway.
+   */
   turnover: Money | null
-  /** What we earned from it. */
-  commission: Money | null
+
+  /**
+   * The part of that turnover we brought them.
+   *
+   * Nullable because the RMS usually does not know it: it records reservations,
+   * not which of them came from our marketing or our direct-booking work. When
+   * it can tell, it sends it here; when it cannot, the figure is recorded in
+   * MsEe Central instead — see `Attribution`.
+   *
+   * This is the number the whole exercise exists for. "Their turnover went up"
+   * is their news; "we brought them this much of it" is ours.
+   */
+  attributed: Money | null
+
+  /** Our share of what we brought. Commission, not turnover. */
+  ourShare: Money | null
   /** What one of our people earned. */
   earning: Money | null
   reservations: number
@@ -128,13 +148,29 @@ export interface IntakeRow {
  */
 export interface ClientTrading {
   clientId: string
+  /** Everything they took, through every channel. */
   turnoverBaseMinor: number
-  commissionBaseMinor: number
+  /** The part we brought them. */
+  attributedBaseMinor: number
+  /** Our commission on that part. */
+  ourShareBaseMinor: number
   reservations: number
   nights: number
   days: number
   /** The most recent day the sender has reported. */
   through: string
+}
+
+/**
+ * What proportion of a client's trade we are responsible for.
+ *
+ * Returns null rather than zero when there is nothing to divide: a client with
+ * no reported turnover has no share, and showing 0% would read as "we brought
+ * them nothing" rather than "nothing has been reported yet".
+ */
+export function sharePercent(trading: ClientTrading): number | null {
+  if (trading.turnoverBaseMinor <= 0) return null
+  return Math.round((trading.attributedBaseMinor / trading.turnoverBaseMinor) * 100)
 }
 
 export function tradingFor(clientId: string, rows: IntakeRow[]): ClientTrading {
@@ -143,7 +179,8 @@ export function tradingFor(clientId: string, rows: IntakeRow[]): ClientTrading {
   return {
     clientId,
     turnoverBaseMinor: mine.reduce((n, r) => n + (r.turnover?.baseMinor ?? 0), 0),
-    commissionBaseMinor: mine.reduce((n, r) => n + (r.commission?.baseMinor ?? 0), 0),
+    attributedBaseMinor: mine.reduce((n, r) => n + (r.attributed?.baseMinor ?? 0), 0),
+    ourShareBaseMinor: mine.reduce((n, r) => n + (r.ourShare?.baseMinor ?? 0), 0),
     reservations: mine.reduce((n, r) => n + (r.reservations ?? 0), 0),
     nights: mine.reduce((n, r) => n + (r.nights ?? 0), 0),
     days: mine.length,
