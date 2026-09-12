@@ -156,6 +156,7 @@ let integrationUid = null
 const TEST_COLLECTIONS = [
   'intake',
   'reservations',
+  'staybrainListings',
   'attribution',
   'walletEntries',
   'dashboardLayouts',
@@ -717,11 +718,34 @@ try {
     }),
   )
 
-  await mustDeny('co-owner CANNOT claim the RMS has taken a reservation', () =>
+  /*
+   * `taken` is a claim about another system, and it must carry the thing that
+   * system gives back. MsEe Central now writes the booking into the RMS itself,
+   * so it CAN say `taken` — but only with the RMS document id it got in reply. A
+   * bare claim is refused.
+   */
+  await mustDeny('co-owner CANNOT mark a reservation taken with no RMS booking id', () =>
     updateDoc(doc(db, 'reservations', ownerResv), {
       syncState: 'taken',
-      rmsReservationId: 'hand-written',
+      rmsBookingId: '',
       takenAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('co-owner CAN mark one taken when the RMS gave back an id', () =>
+    updateDoc(doc(db, 'reservations', ownerResv), {
+      syncState: 'taken',
+      rmsBookingId: `msee-${stamp}`,
+      rmsReservationId: `RSV-2026-${stamp % 1000000}`,
+      takenAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('co-owner CAN put one back in the queue', () =>
+    updateDoc(doc(db, 'reservations', ownerResv), {
+      syncState: 'pending',
+      updatedAt: new Date().toISOString(),
     }),
   )
 
@@ -730,6 +754,63 @@ try {
       syncState: 'local_only',
       updatedAt: new Date().toISOString(),
     }),
+  )
+
+  /* --- StayBrain listings ------------------------------------------- */
+
+  /*
+   * A listing is not somebody's personal record, so it is readable by anybody
+   * with staybrain.view rather than scoped to its creator. What it must not be is
+   * editable by somebody without staybrain.manage — the earning terms are money.
+   */
+  const listingId = `rules-listing-${stamp}`
+
+  await mustAllow('co-owner CAN create a StayBrain listing', () =>
+    setDoc(doc(db, 'staybrainListings', listingId), {
+      id: listingId,
+      clientId: 'rules-client',
+      clientName: 'Rules Hotel',
+      rmsWorkspaceId: 'rules-workspace',
+      rmsAccountEmail: 'rules@example.com',
+      name: 'Rules Property',
+      note: '',
+      earning: {
+        model: 'fixed_per_reservation',
+        amount: { minor: 5000, currency: 'EUR', rate: 1, baseMinor: 5000, rateDate: '2026-09-12' },
+        percent: 0,
+      },
+      currency: 'EUR',
+      rate: 1,
+      active: true,
+      deletedAt: null,
+      deletedBy: null,
+      deletedByName: '',
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('co-owner CAN change what a listing earns', () =>
+    updateDoc(doc(db, 'staybrainListings', listingId), {
+      earning: {
+        model: 'fixed_per_reservation',
+        amount: { minor: 7500, currency: 'EUR', rate: 1, baseMinor: 7500, rateDate: '2026-09-12' },
+        percent: 0,
+      },
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  /*
+   * Destroying one needs `recycle_bin.purge`, which this account holds because it
+   * holds everything — so this passes, and it is the same gate every other
+   * collection uses. What the rule does NOT allow is a delete on the strength of
+   * `staybrain.manage` alone; proving that needs an account without purge, and
+   * the drift check in `npm run data:check` is what watches for one acquiring it.
+   */
+  await mustAllow('co-owner CAN purge a listing, holding recycle_bin.purge', () =>
+    deleteDoc(doc(db, 'staybrainListings', listingId)),
   )
 
   await mustDeny('co-owner CANNOT appoint another owner', () =>
@@ -1062,60 +1143,60 @@ try {
     }),
   )
 
-  /* --- reservations: the RMS collects, and can do nothing else ------- */
+  /* --- reservations: the collect path is gone ------------------------ */
 
   /*
-   * Two pending reservations, written with the Admin SDK.
+   * This used to be a dozen checks proving the RMS could collect `pending`
+   * reservations and mark them taken. That mechanism has been removed, and these
+   * checks exist to prove it is really gone rather than merely unused.
    *
-   * Written that way because the rules refuse to let the integration account
-   * create one, which is itself one of the claims below. The rows have to
-   * exist before the collector can be tested against them.
+   * WHY IT WAS REMOVED, because it matters more than it looks: MsEe Central now
+   * writes the booking into the RMS itself and gets the confirmation back in the
+   * same call. If anything were still collecting `pending` rows as well, one
+   * guest would be booked twice at the property — once by us pushing and once by
+   * the collector. One direction only.
    */
-  const takeable = `rules-resv-take-${stamp}`
-  const refusable = `rules-resv-fail-${stamp}`
+  const strandedResv = `rules-resv-${stamp}`
 
-  for (const id of [takeable, refusable]) {
-    await adminDb.collection('reservations').doc(id).set({
-      id,
-      clientId: 'rules-client',
-      clientName: 'Rules Hotel',
-      guestName: 'Rules Guest',
-      guestContact: '',
-      checkIn: '2026-10-01',
-      checkOut: '2026-10-04',
-      nights: 3,
-      guests: 2,
-      value: { minor: 45000, currency: 'EUR', rate: 1, baseMinor: 45000, rateDate: '2026-10-01' },
-      source: 'rules-check',
-      status: 'confirmed',
-      note: '',
-      syncState: 'pending',
-      rmsReservationId: '',
-      takenAt: null,
-      syncError: '',
-      ownerUid: 'rules-owner',
-      ownerName: 'Rules Owner',
-      deletedAt: null,
-      deletedBy: null,
-      deletedByName: '',
-      createdAt: new Date().toISOString(),
-      createdBy: 'system:verify-rules',
-      updatedAt: new Date().toISOString(),
-    })
-  }
+  await adminDb.collection('reservations').doc(strandedResv).set({
+    id: strandedResv,
+    clientId: 'rules-client',
+    clientName: 'Rules Hotel',
+    guestName: 'Rules Guest',
+    checkIn: '2026-10-01',
+    checkOut: '2026-10-04',
+    nights: 3,
+    guests: 2,
+    value: { minor: 45000, currency: 'EUR', rate: 1, baseMinor: 45000, rateDate: '2026-10-01' },
+    status: 'confirmed',
+    syncState: 'pending',
+    rmsReservationId: '',
+    rmsBookingId: '',
+    takenAt: null,
+    syncError: '',
+    listingId: '',
+    rmsWorkspaceId: '',
+    apartmentId: '',
+    apartmentName: '',
+    earning: { minor: 0, currency: 'EUR', rate: 1, baseMinor: 0, rateDate: '2026-10-01' },
+    ownerUid: 'rules-owner',
+    ownerName: 'Rules Owner',
+    deletedAt: null,
+    createdAt: new Date().toISOString(),
+    createdBy: 'system:verify-rules',
+    updatedAt: new Date().toISOString(),
+  })
 
-  await mustAllow('the RMS CAN read a reservation waiting to be collected', () =>
-    getDoc(doc(db, 'reservations', takeable)),
+  await mustDeny('the RMS CANNOT read a reservation waiting to go out', () =>
+    getDoc(doc(db, 'reservations', strandedResv)),
   )
 
-  await mustDeny('the RMS CANNOT change what the guest pays', () =>
-    updateDoc(doc(db, 'reservations', takeable), {
-      value: { minor: 1, currency: 'EUR', rate: 1, baseMinor: 1, rateDate: '2026-10-01' },
+  await mustDeny('the RMS CANNOT mark a reservation taken any more', () =>
+    updateDoc(doc(db, 'reservations', strandedResv), {
+      syncState: 'taken',
+      rmsBookingId: `forged-${stamp}`,
+      takenAt: new Date().toISOString(),
     }),
-  )
-
-  await mustDeny('the RMS CANNOT change the guest or the dates', () =>
-    updateDoc(doc(db, 'reservations', takeable), { guestName: 'Somebody Else', nights: 99 }),
   )
 
   await mustDeny('the RMS CANNOT enter a reservation of its own', () =>
@@ -1127,61 +1208,8 @@ try {
     }),
   )
 
-  await mustDeny('the RMS CANNOT delete a reservation', () =>
-    deleteDoc(doc(db, 'reservations', refusable)),
-  )
-
-  /* A booking it claims to hold without naming its own id is unreconcilable. */
-  await mustDeny('the RMS CANNOT mark one taken without giving back its id', () =>
-    updateDoc(doc(db, 'reservations', takeable), {
-      syncState: 'taken',
-      rmsReservationId: '',
-      takenAt: new Date().toISOString(),
-    }),
-  )
-
-  await mustDeny('the RMS CANNOT decide a booking lives only here', () =>
-    updateDoc(doc(db, 'reservations', takeable), { syncState: 'local_only' }),
-  )
-
-  await mustAllow('the RMS CAN refuse one, with a reason somebody can act on', () =>
-    updateDoc(doc(db, 'reservations', refusable), {
-      syncState: 'failed',
-      syncError: 'Dates clash with an existing booking',
-      updatedAt: new Date().toISOString(),
-    }),
-  )
-
-  await mustAllow('the RMS CAN take one and give back its own id', () =>
-    updateDoc(doc(db, 'reservations', takeable), {
-      syncState: 'taken',
-      rmsReservationId: `RMS-${stamp}`,
-      takenAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
-  )
-
-  /*
-   * And now it cannot see it any more.
-   *
-   * Not a nicety: the read rule is what forces the collector to query for
-   * pending rows, which is the same thing as it not being able to walk the
-   * whole history of what we brought. Once a row is taken it is ours again.
-   */
-  await mustDeny('the RMS CANNOT read a reservation it has already taken', () =>
-    getDoc(doc(db, 'reservations', takeable)),
-  )
-
-  await mustDeny('the RMS CANNOT read one it refused', () =>
-    getDoc(doc(db, 'reservations', refusable)),
-  )
-
-  await mustDeny('the RMS CANNOT take a row back off a human', () =>
-    updateDoc(doc(db, 'reservations', refusable), {
-      syncState: 'taken',
-      rmsReservationId: `RMS-late-${stamp}`,
-      takenAt: new Date().toISOString(),
-    }),
+  await mustDeny('the RMS CANNOT read the StayBrain listings', () =>
+    getDoc(doc(db, 'staybrainListings', 'any-listing')),
   )
 
 } finally {

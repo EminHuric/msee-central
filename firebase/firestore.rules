@@ -1014,75 +1014,96 @@ service cloud.firestore {
 
 
     /* ------------------------------------------------------------------ *
-     * reservations — the bookings we brought, and the one place the RMS
-     * reaches in to collect them
+     * reservations — the bookings we brought
      *
-     * Two callers, and they are allowed opposite things.
+     * WHAT CHANGED, AND WHY IT MATTERS MORE THAN IT LOOKS.
      *
-     * STAFF own the booking. They enter it, correct it, and delete it under
-     * the usual scope: without `view_all` you see the ones you brought.
+     * These rules used to let the RMS reach in and collect `pending` rows. That
+     * was written when the RMS was a black box: we could not write to it, so it
+     * had to come to us. Reading it showed otherwise — it is a Firestore project
+     * we can sign in to — so MsEe Central now creates the booking there itself
+     * and gets the confirmation back in the same call.
      *
-     * THE RMS owns only the collection of it. It may read what has not been
-     * taken yet and say what happened to it. Three limits make that safe:
+     * BOTH MECHANISMS AT ONCE WOULD DOUBLE-BOOK GUESTS. A row marked `pending`
+     * would be pushed by us and also collected by anything still polling, and the
+     * property would end up with two bookings for one guest. So the collect path
+     * is gone rather than left switched off: an integration account can no longer
+     * read this collection at all.
      *
-     *   it reads `pending` rows ONLY, which means its query must say so —
-     *   a booking it has already taken is invisible to it, and so is every
-     *   row a human here is still fixing;
-     *
-     *   it may change nothing but the four sync fields, so the guest, the
-     *   dates and the money are beyond its reach even though it is the
-     *   system those figures are being sent to;
-     *
-     *   it cannot create a reservation here at all. Turnover comes in
-     *   through `intake`; this collection is what WE brought, and a row the
-     *   RMS invented would be a booking we did not bring.
-     *
-     * And the mirror of that: staff may not write `taken`. That state is an
-     * assertion that another system now holds the booking, and the only
-     * caller who can tell the truth about it is that system. A human who
-     * knows the RMS will never hold a booking says `local_only` instead,
-     * which is an honest statement about this system rather than a guess
-     * about the other one.
+     * `taken` now means "the RMS confirmed it", and staff may write it — but only
+     * carrying the evidence. Setting it requires a non-empty `rmsBookingId`,
+     * which only comes back from a successful write to the RMS. A claim without
+     * the id it would have produced is refused, which is the same principle as
+     * before in a world where we are the ones who talk to the RMS.
      * ------------------------------------------------------------------ */
 
     match /reservations/{reservationId} {
-      allow read: if canRead('reservations')
-        || (isIntegration() && resource.data.syncState == 'pending');
+      allow read: if canRead('reservations');
 
       allow create: if isInternal() && can('reservations.create')
         && request.resource.data.createdBy == me()
-        /* A new booking has not been collected, whatever the form sent. */
+        /* A new booking has not reached the RMS yet, whatever the form sent. */
         && request.resource.data.syncState == 'pending';
 
-      allow update: if
-        (
-          isInternal()
-          && (
-            (isBinChange() && (can('reservations.delete') || can('recycle_bin.restore')))
-            || (
-              can('reservations.edit')
-              /* Nobody here may claim the RMS has taken it. */
-              && (
-                request.resource.data.syncState == resource.data.syncState
-                || request.resource.data.syncState in ['pending', 'local_only']
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('reservations.delete') || can('recycle_bin.restore')))
+          || (
+            can('reservations.edit')
+            && (
+              /* Not touching the sync state at all. */
+              request.resource.data.syncState == resource.data.syncState
+              /* Queued again, or declared as living only here. */
+              || request.resource.data.syncState in ['pending', 'local_only', 'failed']
+              /* Confirmed — and only with the id the RMS gave back. */
+              || (
+                request.resource.data.syncState == 'taken'
+                && request.resource.data.rmsBookingId is string
+                && request.resource.data.rmsBookingId.size() > 0
               )
             )
           )
-        )
-        || (
-          /* The RMS, reporting what it did with a row it collected. */
-          isIntegration()
-          && resource.data.syncState == 'pending'
-          && changedOnly(['syncState', 'rmsReservationId', 'takenAt', 'syncError', 'updatedAt'])
-          && (
-            (
-              request.resource.data.syncState == 'taken'
-              /* A taken booking without the RMS's own id cannot be reconciled. */
-              && request.resource.data.rmsReservationId is string
-              && request.resource.data.rmsReservationId.size() > 0
-            )
-            || request.resource.data.syncState == 'failed'
-          )
+        );
+
+      allow delete: if canPurge();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * staybrainListings — which properties we sell for, and on what terms
+     *
+     * A listing holds no guest and no booking: a link to an RMS account plus
+     * what one booking earns us. Everything about the property itself is read
+     * live from the RMS and stored nowhere.
+     *
+     * The terms are money, so changing them is `staybrain.manage` while seeing
+     * the property is `staybrain.view` — somebody can sell bookings all day
+     * without being able to rewrite what the company earns on them. What a
+     * listing earns is visible separately again, under `staybrain.view_revenue`,
+     * which the interface honours; note that THIS rule cannot split a document,
+     * so the earning terms do travel with the listing. That is a deliberate,
+     * stated limit, not an oversight: a figure that must be invisible belongs in
+     * a subcollection, and the place that actually matters — every employee's own
+     * earnings — already is one.
+     * ------------------------------------------------------------------ */
+
+    match /staybrainListings/{listingId} {
+      /*
+       * Not scoped to the reader, unlike a client or a lead.
+       *
+       * A property the company sells for is not somebody's personal record, and
+       * `canRead` would have hidden every listing from whoever did not create it.
+       * Which bookings a person sees is still scoped — that lives on
+       * `reservations` and its own view_all.
+       */
+      allow read: if isInternal() && can('staybrain.view');
+
+      allow create: if isInternal() && can('staybrain.manage')
+        && request.resource.data.createdBy == me();
+
+      allow update: if isInternal()
+        && (
+          (isBinChange() && (can('staybrain.manage') || can('recycle_bin.restore')))
+          || can('staybrain.manage')
         );
 
       allow delete: if canPurge();

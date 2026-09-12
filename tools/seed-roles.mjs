@@ -100,6 +100,14 @@ const ROLES = {
       'sales.view',
       'sales.create',
       'sales.edit',
+      /*
+       * Selling stays, without being shown the commission.
+       *
+       * `staybrain.view_revenue` is deliberately absent: a salesperson needs the
+       * calendar and the booking form, not what the company makes on each one.
+       */
+      'staybrain.view',
+      'staybrain.create_reservation',
     ],
   },
 
@@ -147,6 +155,9 @@ const ROLES = {
       'performance.view_all',
       'reservations.view_all',
       'reservations.delete',
+      'staybrain.view',
+      'staybrain.create_reservation',
+      'staybrain.view_revenue',
     ],
   },
 }

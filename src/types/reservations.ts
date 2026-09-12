@@ -95,11 +95,44 @@ export interface Reservation {
   /* ---- The RMS side ------------------------------------------------- */
 
   syncState: SyncState
-  /** The RMS's own id, once it has taken it. Lets the two be reconciled. */
+  /** The RMS's own reference, e.g. RSV-2026-481023. For a human to quote. */
   rmsReservationId: string
+  /**
+   * The RMS's document id for this booking.
+   *
+   * Separate from the reference above because only this one can be used to go
+   * back and change the booking. The reference is for people; this is the link.
+   */
+  rmsBookingId: string
   takenAt: string | null
   /** Why the RMS refused it, when it did. */
   syncError: string
+
+  /* ---- StayBrain ---------------------------------------------------- */
+
+  /**
+   * The listing this booking was sold through, when it was.
+   *
+   * Empty for a booking recorded against a client with no StayBrain property —
+   * which stays possible on purpose, because not every client we bring guests to
+   * is on the RMS.
+   */
+  listingId: string
+  /** The RMS account the booking lives in. Kept so the link survives a rename. */
+  rmsWorkspaceId: string
+  apartmentId: string
+  apartmentName: string
+
+  /**
+   * What this booking earns us, frozen when it was made.
+   *
+   * Stored rather than derived, and that is the one place in this system where
+   * freezing beats recomputing: the earning follows from an agreement, and an
+   * agreement can be renegotiated. Recomputing from today's terms would quietly
+   * rewrite what we earned last season every time a rate changed. This is the
+   * same reason a Money carries the exchange rate of its own date.
+   */
+  earning: Money
 
   /** Who entered it. Performance and earnings both read this. */
   ownerUid: string | null
@@ -133,8 +166,14 @@ export function blankReservation(clientId = '', clientName = ''): Reservation {
     note: '',
     syncState: 'pending',
     rmsReservationId: '',
+    rmsBookingId: '',
     takenAt: null,
     syncError: '',
+    listingId: '',
+    rmsWorkspaceId: '',
+    apartmentId: '',
+    apartmentName: '',
+    earning: { minor: 0, currency: 'EUR', rate: 1, baseMinor: 0, rateDate: today },
     ownerUid: null,
     ownerName: '',
     deletedAt: null,
@@ -159,6 +198,14 @@ export interface BroughtTotals {
   broughtBaseMinor: number
   /** Our share of it, at the client's rate. */
   ourShareBaseMinor: number
+  /**
+   * What we earn on the StayBrain bookings among them.
+   *
+   * Kept apart from `ourShareBaseMinor` because the two are different deals: a
+   * percentage of a client's attributed trade, and a fixed amount per booking we
+   * place in their calendar. Adding them would be adding a rate to a fee.
+   */
+  earnedBaseMinor: number
   reservations: number
   nights: number
   /** Entered and not yet collected by the RMS. */
@@ -188,6 +235,7 @@ export function broughtFor(
   return {
     broughtBaseMinor: brought,
     ourShareBaseMinor: Math.round((brought * sharePercent) / 100),
+    earnedBaseMinor: earning.reduce((n, r) => n + (r.earning?.baseMinor ?? 0), 0),
     reservations: rows.length,
     nights: earning.reduce((n, r) => n + r.nights, 0),
     pending: rows.filter((r) => r.syncState === 'pending').length,

@@ -74,3 +74,5 @@ export { SCOPES } from '../src/types/access.ts'
 export { ATTRIBUTION_BASES } from '../src/types/attribution.ts'
 
 export { RESERVATION_STATUSES, SYNC_STATES } from '../src/types/reservations.ts'
+
+export { EARNING_MODELS } from '../src/types/staybrain.ts'

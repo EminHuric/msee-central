@@ -76,6 +76,18 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.CLIENTS_VIEW, titleKey: 'clients.title' },
       },
       {
+        path: 'staybrain',
+        name: 'staybrain',
+        component: () => import('@/views/business/StayBrainView.vue'),
+        meta: { permission: PERMISSIONS.STAYBRAIN_VIEW, titleKey: 'staybrain.title' },
+      },
+      {
+        path: 'staybrain/:id',
+        name: 'staybrain-property',
+        component: () => import('@/views/business/StayBrainPropertyView.vue'),
+        meta: { permission: PERMISSIONS.STAYBRAIN_VIEW, titleKey: 'staybrain.title' },
+      },
+      {
         path: 'leads',
         name: 'leads',
         component: () => import('@/views/business/LeadsView.vue'),

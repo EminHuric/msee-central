@@ -571,6 +571,8 @@ export default {
     'wallet.status_changed': 'Earnings entry changed',
     'reservation.created': 'Reservation entered',
     'reservation.updated': 'Reservation changed',
+    'listing.created': 'StayBrain property added',
+    'listing.updated': 'StayBrain terms changed',
     'account.type_changed': 'Kind of account changed',
   },
 
@@ -603,6 +605,7 @@ export default {
   },
 
   modules: {
+    staybrain: 'StayBrain',
     bonuses: 'Bonuses',
     workspace: 'My Workspace',
     leads: 'Leads',
@@ -1318,6 +1321,7 @@ export default {
   },
 
   permissionGroup: {
+    staybrain: 'StayBrain',
     affiliates: 'Affiliate programme',
     goals: 'Goals & performance',
     tools: 'Calendar, messages & analytics',
@@ -1340,6 +1344,28 @@ export default {
   },
 
   permission: {
+    staybrain: {
+      view: {
+        label: 'See StayBrain properties',
+        description:
+          'Open the properties we sell stays for, and see what is free.',
+      },
+      create_reservation: {
+        label: 'Book a stay',
+        description:
+          'Place a booking in a property’s own system. It is stamped as ours, which is what makes it count as a sale.',
+      },
+      view_revenue: {
+        label: 'See what StayBrain earns us',
+        description:
+          'Our commission on the bookings we bring. Separate from seeing the properties, so somebody can sell without being shown the margin.',
+      },
+      manage: {
+        label: 'Add properties and agree terms',
+        description:
+          'Link a property to its account and set what one booking earns us. This is the money decision.',
+      },
+    },
     reservations: {
       view: {
         label: 'See reservations',
@@ -2764,6 +2790,7 @@ export default {
     emptyHint: 'Anything deleted turns up here first.',
     noMatch: 'Nothing matches',
     kinds: {
+      staybrainListings: 'StayBrain property',
       reservations: 'Reservation',
       clients: 'Client',
       leads: 'Lead',
@@ -2806,6 +2833,7 @@ export default {
   },
 
   widget: {
+    staybrain: 'StayBrain',
     customise: 'Customise',
     hint: 'Choose what appears on your dashboard, and in what order. You can only add what you are allowed to see.',
     reset: 'Back to default',
@@ -2995,6 +3023,145 @@ export default {
     saved: 'Saved.',
     countedFrom: 'Counted from {n} booking(s) recorded for this month.',
     moreThanTotal: 'We cannot have brought them more than they took.',
+  },
+
+  staybrain: {
+    unknownProperty: 'Unknown property',
+    noneSoldYet: 'No stays sold through StayBrain yet.',
+    revenueByProperty: 'Revenue by property',
+    turnoverByProperty: 'Turnover by property',
+    byMonth: 'By month of arrival',
+    title: 'StayBrain',
+    subtitle: 'The properties we sell stays for. Every figure here is ours alone.',
+    addListing: 'Add a property',
+    editListing: 'Terms and link',
+    terms: 'Terms',
+
+    ourReservations: 'MsEe reservations',
+    ourTurnover: 'MsEe turnover',
+    ourTurnoverHint: 'What the guests we brought pay. The owner keeps this.',
+    ourRevenue: 'MsEe revenue',
+    ourRevenueHint: 'What we earn on those bookings. Ours.',
+    nightsSold: '{n} night(s) sold',
+    unconfirmed: 'Not in the RMS',
+    unconfirmedHint: 'Entered here but never confirmed by the RMS. These count for nothing.',
+
+    empty: 'No properties yet',
+    emptyHint: 'Add a property, link it to its RMS account, and agree what a booking earns us.',
+    retired: 'No longer selling',
+    notLinked: 'Not linked to an RMS account — availability and bookings will not work.',
+    listingGone: 'That property is not here any more',
+    backToList: 'Back to StayBrain',
+
+    client: 'Client',
+    pickClient: 'Choose a client…',
+    clientHint: 'Whose property this is. Revenue is invoiced to them.',
+    listingName: 'Name',
+    rmsAccount: 'RMS account',
+    pickAccount: 'Choose the account…',
+    rmsAccountHint: 'The account in the RMS whose units and bookings this shows.',
+    unitCount: '{n} unit(s)',
+    connectFirst: 'Connect to the RMS first to choose the account.',
+    noAgencyAccess: 'This account has not allowed agency bookings yet. Reading works; creating a booking will be refused until it is switched on in the RMS.',
+    agencyAccessOn: 'This account allows agency bookings.',
+
+    earning: 'What a booking earns us',
+    earningModel: 'How it is worked out',
+    perReservation: 'Per reservation',
+    perReservationHint: '{amount} for every booking we bring. Ten bookings is ten times that.',
+    percent: 'Percent of the booking',
+    rate: 'Rate to the base currency',
+    rateHint: 'Leave at 1 to keep amounts exactly as entered.',
+    note: 'Note',
+    active: 'Still selling this property',
+
+    needClient: 'Choose which client the property belongs to.',
+    needName: 'Give the property a name.',
+    needAmount: 'Say what one booking earns us.',
+    listingSaved: 'Property saved.',
+
+    availability: 'Availability',
+    availabilityHint: 'Read from the RMS now. Every booking counts, ours and the owner’s.',
+    refresh: 'Read again',
+    checkIn: 'Check-in',
+    checkOut: 'Check-out',
+    guests: 'Guests',
+    nights: 'Nights',
+    nightsCount: '{n} night(s)',
+    unitsLabel: 'Units',
+    fromRms: 'From the RMS',
+    connectForAvailability: 'Connect to the RMS to see what is free.',
+    noUnits: 'This account has no units',
+    noUnitsHint: 'Add them in the RMS — this is a view of their data, not a second place to keep it.',
+    freeOf: '{free} of {all} free for those dates',
+    sleeps: 'sleeps {n}',
+    perNight: 'a night',
+    free: 'Free',
+    taken: 'Taken',
+    tooSmall: 'Sleeps only {n}',
+    anotherGuest: 'another guest',
+    oursTag: 'ours',
+    book: 'Book',
+
+    bookingIn: 'Booking {unit}',
+    guestName: 'Guest',
+    contact: 'Phone',
+    origin: 'Town or country',
+    originHint: 'Where the guest is from. The RMS shows this beside their name.',
+    total: 'What the guest pays',
+    totalHint: 'The whole booking, in the property’s currency.',
+    theyGet: 'Owner: {amount}',
+    weGet: 'We earn: {amount}',
+    weGetShort: 'ours {amount}',
+    confirmBooking: 'Book it in the RMS',
+    confirmHint: 'The booking is created in the RMS first. Nothing is counted as a sale unless the RMS accepts it.',
+
+    needGuest: 'A booking needs a guest name.',
+    needNights: 'Check-out must be after check-in.',
+    booked: 'Booked in the RMS as {reference}.',
+    alreadyThere: 'That booking was already in the RMS as {reference}. Nothing was duplicated.',
+    clash: '{guest} is already in that unit from {from} to {to}.',
+
+    ourBookings: 'Bookings we brought',
+    noneYet: 'Nothing sold here yet',
+    noneYetHint: 'Pick dates above, find a free unit, and book it.',
+    checkRms: 'Ask the RMS whether it has this booking',
+    repaired: 'The RMS had it. The booking is linked and counts now.',
+    notInRms: 'The RMS does not have it. Nothing was counted — book it again.',
+    cancel: 'Cancel this booking',
+    cancelTitle: 'Cancel this booking?',
+    cancelMessage: 'The booking for {guest} is cancelled in the RMS too, and its nights are freed.',
+    cancelled: 'Cancelled here and in the RMS.',
+  },
+
+  earningModel: {
+    fixed_per_reservation: 'A fixed amount per reservation',
+    percent_of_value: 'A percentage of the booking',
+  },
+
+  earningModelHint: {
+    fixed_per_reservation: 'The same amount for every booking we bring, whatever the guest pays.',
+    percent_of_value: 'A share of what the guest pays. Use only where that is what was agreed.',
+  },
+
+  rms: {
+    live: 'Connected to the RMS',
+    liveHint: 'Signed in as {email}. Availability and new bookings are live.',
+    notConnected: 'Not connected to the RMS',
+    notConnectedHint: 'Our own figures still work. Availability and new bookings need a connection.',
+    connect: 'Connect',
+    disconnect: 'Disconnect',
+    connected: 'Connected to the RMS.',
+    disconnected: 'Disconnected from the RMS.',
+    email: 'RMS email',
+    emailPlaceholder: 'The agency account, not your own',
+    password: 'Password',
+    needBoth: 'Both the email and the password are needed.',
+    wrongCredentials: 'The RMS did not accept that email and password.',
+    tooMany: 'Too many attempts. The RMS has paused sign-ins for a while.',
+    offline: 'Could not reach the RMS. Check the connection.',
+    signInFailed: 'Could not sign in to the RMS.',
+    whatItCanDo: 'This signs in to the RMS as the agency account. It can read the accounts and create or cancel bookings marked as ours — nothing else. The password is not stored here.',
   },
 
   reservations: {

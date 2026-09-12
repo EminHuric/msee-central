@@ -6,18 +6,15 @@
  * RMS reaching in has none of that problem — it already has a server, the key
  * lives there, and it writes here as itself.
  *
- * WHAT THIS ACCOUNT CAN DO. Two things, both narrow:
+ * WHAT THIS ACCOUNT CAN DO. One thing: write rows into `intake` — the turnover
+ * the RMS reports. It reads nothing at all, writes nowhere else, and holds no
+ * permissions. If its password leaks, what leaks is the ability to send us
+ * numbers — not the ability to read the company.
  *
- *   write rows into `intake` — the turnover the RMS reports;
- *   collect reservations — read the ones marked `pending`, and say whether each
- *   was taken or refused.
- *
- * Nothing else. It cannot read a client, a sale, an employee or a wallet; it
- * cannot read a reservation it has already taken; and on a reservation it may
- * write only the four fields that describe the sync. If its password leaks,
- * what leaks is the ability to send us numbers and collect the bookings waiting
- * to be collected — not the ability to read the company. That is the entire
- * point of giving it its own account rather than reusing somebody's.
+ * NOTE THE OTHER DIRECTION IS NOT THIS ACCOUNT. Bookings go from MsEe Central
+ * into the RMS, written by an agency account that lives in the RMS and is
+ * configured there. Nothing in this file is involved in that, and nothing in the
+ * RMS needs this account's password to receive a booking.
  *
  *   npm run setup:integration
  *   npm run setup:integration -- --reset   (new password for the existing one)
@@ -120,75 +117,29 @@ if (reset || password) {
 }
 
 console.log(`
-  ---- what the RMS collects ----
+  ---- what changed, and why there is no "collect" step any more ----
 
-  This is the other half, and it is new. Bookings MsEe brings are entered in
-  MsEe Central and the RMS comes and takes them. Nothing is pushed to you: a
-  push would need your credentials in a browser, and a browser keeps no secrets.
+  This account used to also hand out reservations for the RMS to collect. That
+  is gone, and it is worth knowing why before looking for it.
 
-  ONE QUERY, AND IT IS THE ONLY THING THIS ACCOUNT CAN READ:
+  It was written when the RMS was a black box to us: we could not write into it,
+  so it had to come and take what we had. Reading the RMS showed otherwise — it
+  is a Firestore project with accounts and rules — so MsEe Central now creates
+  the booking there itself, as an agency account, and gets the confirmation back
+  in the same call. That is strictly better: a booking is either in the property's
+  calendar or it is not, and MsEe Central never claims a sale the RMS did not
+  accept.
 
-    collection 'reservations', where syncState == 'pending'
+  RUNNING BOTH WOULD DOUBLE-BOOK GUESTS. If anything still polled MsEe Central
+  for reservations to create, each booking would be made twice — once by us
+  pushing, once by the poller. So the read was removed from the rules rather than
+  left switched off, and a test proves this account can no longer see that
+  collection at all.
 
-  The rules allow exactly that. A row you have already taken becomes invisible
-  to you the moment you mark it, and so does one a person here is still fixing.
-  That is deliberate: this account can collect what is waiting and can never
-  walk the history of what we brought.
-
-  A row looks like this:
-
-    {
-      id: 'aBc123…',                   // OUR id. Keep it — see below.
-      clientId: 'hotel-abc-x7k2',
-      clientName: 'Hotel ABC',
-      guestName: 'Marko Petrovic',
-      guestContact: '+382 67 123 456',
-      checkIn: '2026-10-01',
-      checkOut: '2026-10-04',
-      nights: 3,                       // Agreed nights, which may not be the
-      guests: 2,                       //   gap between the two dates.
-      value: { minor: 45000, currency: 'EUR', rate: 117, baseMinor: 5265000,
-               rateDate: '2026-10-01' },
-      source: 'Instagram campaign',    // Free text. Where we brought them from.
-      status: 'confirmed',
-      note: '',
-      syncState: 'pending', rmsReservationId: '', takenAt: null, syncError: '',
-      ownerUid: '…', ownerName: 'Sadeta Sadikovic'
-    }
-
-  WHEN YOU HAVE CREATED IT, update the same document with four fields:
-
-    { syncState: 'taken', rmsReservationId: '<your booking id>',
-      takenAt: '<ISO timestamp>', updatedAt: '<ISO timestamp>' }
-
-  'rmsReservationId' is required and must not be empty — the rules refuse a
-  'taken' without one, because a booking you claim to hold that cannot be
-  matched to anything on your side is worse than one still waiting.
-
-  WHEN YOU CANNOT, say so instead:
-
-    { syncState: 'failed', syncError: 'Dates clash with an existing booking',
-      updatedAt: '<ISO timestamp>' }
-
-  Write one line a person can act on. Somebody here sees it on the client, fixes
-  the booking, and asks again — deliberately by hand, because a retry on a timer
-  either loops for ever or succeeds after a human fixed it without them knowing
-  which. Nothing retries itself.
-
-  THOSE ARE THE ONLY FIELDS YOU MAY WRITE. The guest, the dates, the value and
-  the status are ours; the rules refuse any change to them even from this
-  account. You also cannot create a reservation here, and cannot delete one.
-
-  DEDUPE BY OUR DOCUMENT ID — this is the one thing that can go wrong.
-
-  Taking a booking and marking it taken are two operations, and a crash between
-  them leaves the row 'pending'. You will be handed it again, because from our
-  side it was never collected. So store our 'id' against the booking you create
-  and treat it as the idempotency key: if you already hold that id, mark the row
-  taken with the id you already have and create nothing. A duplicate booking at
-  the property is a real guest turned away, which is far worse than a retry.
+  So this account has ONE job now: sending turnover in.
 
   ---- what the RMS sends ----
+
 
   Sign in with the email and password above, then write one document per row to
   the 'intake' collection. Use the RMS's own id as the DOCUMENT ID, so sending

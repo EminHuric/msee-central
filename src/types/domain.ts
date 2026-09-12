@@ -370,6 +370,8 @@ export const AUDIT_ACTIONS = [
   'account.type_changed',
   'reservation.created',
   'reservation.updated',
+  'listing.created',
+  'listing.updated',
   'role.created',
   'role.updated',
   'role.deactivated',

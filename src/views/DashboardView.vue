@@ -26,6 +26,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import BusinessOverview, { type MetricInput } from '@/components/BusinessOverview.vue'
 import PeriodPicker from '@/components/PeriodPicker.vue'
 import RankChart from '@/components/ui/RankChart.vue'
+import StayBrainWidget from '@/components/StayBrainWidget.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchRecentActivity } from '@/api/records'
@@ -731,6 +732,9 @@ onMounted(load)
             </div>
           </section>
         </div>
+
+        <!-- StayBrain -------------------------------------------------- -->
+        <StayBrainWidget v-if="shows('staybrain')" />
 
         <!-- Goals + activity ------------------------------------------- -->
         <div class="pair">

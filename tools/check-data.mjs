@@ -61,6 +61,7 @@ const EXPECTED = [
   { name: 'commissions' },
   { name: 'notes' },
   { name: 'reservations', soft: true, owner: 'ownerUid' },
+  { name: 'staybrainListings', soft: true },
   { name: 'attribution' },
 ]
 
@@ -74,6 +75,8 @@ const LINKS = [
   { from: 'leads', field: 'clientId', to: 'clients' },
   { from: 'bonusAwards', field: 'sourceId', to: 'bonusPrograms', when: 'programme' },
   { from: 'reservations', field: 'clientId', to: 'clients' },
+  { from: 'staybrainListings', field: 'clientId', to: 'clients' },
+  { from: 'reservations', field: 'listingId', to: 'staybrainListings' },
   { from: 'attribution', field: 'clientId', to: 'clients' },
 ]
 

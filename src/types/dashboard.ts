@@ -57,6 +57,14 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'byService', labelKey: 'widget.byService', permission: PERMISSIONS.FINANCE_VIEW },
   { id: 'bySource', labelKey: 'widget.bySource', permission: PERMISSIONS.FINANCE_VIEW },
 
+  /* ---- StayBrain ----------------------------------------------------- */
+  {
+    id: 'staybrain',
+    labelKey: 'widget.staybrain',
+    permission: PERMISSIONS.STAYBRAIN_VIEW,
+    wide: true,
+  },
+
   /* ---- The business -------------------------------------------------- */
   { id: 'work', labelKey: 'widget.work', permission: null, wide: true },
   { id: 'salesAndLeads', labelKey: 'widget.salesAndLeads', permission: PERMISSIONS.SALES_VIEW },

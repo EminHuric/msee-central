@@ -53,6 +53,21 @@ export const PERMISSIONS = {
   SALES_DELETE: 'sales.delete',
   SALES_EXPORT: 'sales.export',
 
+  // --- StayBrain --------------------------------------------------------
+  /*
+   * Selling stays for properties that live in somebody else's RMS.
+   *
+   * Four permissions because four different jobs touch this: seeing the
+   * properties, placing a booking in one, seeing what the company earns on them,
+   * and agreeing the terms. The third and fourth are the money ones, and they
+   * are the reason this is not one `staybrain.access`: somebody can sell stays
+   * all day without being shown the commission on them.
+   */
+  STAYBRAIN_VIEW: 'staybrain.view',
+  STAYBRAIN_CREATE_RESERVATION: 'staybrain.create_reservation',
+  STAYBRAIN_VIEW_REVENUE: 'staybrain.view_revenue',
+  STAYBRAIN_MANAGE: 'staybrain.manage',
+
   // --- Reservations -----------------------------------------------------
   /*
    * Bookings we brought a client, and therefore our own contribution.
@@ -259,6 +274,15 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.SALES_EDIT,
       PERMISSIONS.SALES_DELETE,
       PERMISSIONS.SALES_EXPORT,
+    ],
+  },
+  {
+    key: 'staybrain',
+    permissions: [
+      PERMISSIONS.STAYBRAIN_VIEW,
+      PERMISSIONS.STAYBRAIN_CREATE_RESERVATION,
+      PERMISSIONS.STAYBRAIN_VIEW_REVENUE,
+      PERMISSIONS.STAYBRAIN_MANAGE,
     ],
   },
   {

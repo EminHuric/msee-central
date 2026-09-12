@@ -55,6 +55,7 @@ export type CollectionName =
   | 'intake'
   | 'attribution'
   | 'reservations'
+  | 'staybrainListings'
   | 'calendarEvents'
   | 'notes'
   | 'activity'
@@ -234,6 +235,25 @@ export async function write<T extends Stamped>(
   )
 
   return id
+}
+
+/**
+ * Change named fields on a record that already exists.
+ *
+ * Separate from `write` because `write` has to decide whether a record is new,
+ * and it decides by looking for `createdAt`. A partial object has no
+ * `createdAt`, so `write` would conclude this is a creation and stamp the
+ * record as created now — moving its birthday every time a field changed.
+ *
+ * Nothing here invents a document: a patch to an id that does not exist would
+ * create a record with only these fields, so callers pass an id they have read.
+ */
+export async function patch(
+  name: CollectionName,
+  id: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  await setDoc(doc(getDb(), name, id), { ...fields, updatedAt: now() }, { merge: true })
 }
 
 /**

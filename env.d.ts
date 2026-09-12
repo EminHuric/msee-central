@@ -28,6 +28,24 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string
   readonly VITE_FIREBASE_APP_ID: string
 
+  /**
+   * The RMS project StayBrain reads and books into.
+   *
+   * Optional: src/lib/rms.ts carries the real project's config as a default,
+   * because these are public values and a connection that needs six variables
+   * set before it will try is a connection that looks broken. Set them to point
+   * StayBrain at a different project.
+   *
+   * The agency account's password is not among them and never will be — that is
+   * typed once into the StayBrain screen and held by Firebase Auth.
+   */
+  readonly VITE_RMS_API_KEY?: string
+  readonly VITE_RMS_AUTH_DOMAIN?: string
+  readonly VITE_RMS_PROJECT_ID?: string
+  readonly VITE_RMS_STORAGE_BUCKET?: string
+  readonly VITE_RMS_MESSAGING_SENDER_ID?: string
+  readonly VITE_RMS_APP_ID?: string
+
   /** When 'true', connect to the local Firebase emulator suite instead of production. */
   readonly VITE_USE_FIREBASE_EMULATOR?: string
 }

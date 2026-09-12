@@ -570,6 +570,8 @@ export default {
     'wallet.status_changed': 'Stavka zarade izmenjena',
     'reservation.created': 'Rezervacija uneta',
     'reservation.updated': 'Rezervacija izmenjena',
+    'listing.created': 'StayBrain smeštaj dodat',
+    'listing.updated': 'StayBrain uslovi izmenjeni',
     'account.type_changed': 'Vrsta naloga promenjena',
   },
 
@@ -602,6 +604,7 @@ export default {
   },
 
   modules: {
+    staybrain: 'StayBrain',
     bonuses: 'Bonusi',
     workspace: 'Moj prostor',
     leads: 'Potencijalni klijenti',
@@ -1317,6 +1320,7 @@ export default {
   },
 
   permissionGroup: {
+    staybrain: 'StayBrain',
     affiliates: 'Partnerski program',
     goals: 'Ciljevi i učinak',
     tools: 'Kalendar, poruke i analitika',
@@ -1339,6 +1343,28 @@ export default {
   },
 
   permission: {
+    staybrain: {
+      view: {
+        label: 'Vidi StayBrain smeštaje',
+        description:
+          'Otvori smeštaje za koje prodajemo i vidi šta je slobodno.',
+      },
+      create_reservation: {
+        label: 'Rezerviši smeštaj',
+        description:
+          'Upiši rezervaciju u sistem samog smeštaja. Označena je kao naša, i zato se računa kao prodaja.',
+      },
+      view_revenue: {
+        label: 'Vidi koliko nam StayBrain donosi',
+        description:
+          'Naša provizija na rezervacije koje donesemo. Odvojeno od gledanja smeštaja, da neko može da prodaje bez uvida u maržu.',
+      },
+      manage: {
+        label: 'Dodaj smeštaje i dogovori uslove',
+        description:
+          'Poveži smeštaj sa njegovim računom i postavi koliko nam donosi jedna rezervacija. Ovo je odluka o novcu.',
+      },
+    },
     reservations: {
       view: {
         label: 'Vidi rezervacije',
@@ -2763,6 +2789,7 @@ export default {
     emptyHint: 'Sve obrisano prvo dolazi ovde.',
     noMatch: 'Nema poklapanja',
     kinds: {
+      staybrainListings: 'StayBrain smeštaj',
       reservations: 'Rezervacija',
       clients: 'Klijent',
       leads: 'Kontakt',
@@ -2805,6 +2832,7 @@ export default {
   },
 
   widget: {
+    staybrain: 'StayBrain',
     customise: 'Prilagodi',
     hint: 'Izaberi šta se pojavljuje na tvojoj tabli i kojim redom. Možeš dodati samo ono što smeš da vidiš.',
     reset: 'Vrati na podrazumevano',
@@ -2994,6 +3022,145 @@ export default {
     saved: 'Sačuvano.',
     countedFrom: 'Izračunato iz {n} rezervacija zabeleženih za ovaj mesec.',
     moreThanTotal: 'Ne možemo im doneti više nego što su uzeli.',
+  },
+
+  staybrain: {
+    unknownProperty: 'Nepoznat smeštaj',
+    noneSoldYet: 'Još nije prodato nijedno noćenje kroz StayBrain.',
+    revenueByProperty: 'Prihod po smeštaju',
+    turnoverByProperty: 'Promet po smeštaju',
+    byMonth: 'Po mesecu prijave',
+    title: 'StayBrain',
+    subtitle: 'Smeštaji za koje prodajemo. Svaka cifra ovde je samo naša.',
+    addListing: 'Dodaj smeštaj',
+    editListing: 'Uslovi i veza',
+    terms: 'Uslovi',
+
+    ourReservations: 'MsEe rezervacije',
+    ourTurnover: 'MsEe promet',
+    ourTurnoverHint: 'Koliko plaćaju gosti koje smo doveli. To ostaje vlasniku.',
+    ourRevenue: 'MsEe prihod',
+    ourRevenueHint: 'Koliko mi zaradimo na tim rezervacijama. To je naše.',
+    nightsSold: 'prodato {n} noćenja',
+    unconfirmed: 'Nije u RMS-u',
+    unconfirmedHint: 'Uneto ovde, a RMS nikad nije potvrdio. Ovo se ne računa nigde.',
+
+    empty: 'Još nema smeštaja',
+    emptyHint: 'Dodaj smeštaj, poveži ga sa RMS računom i dogovori koliko nam donosi jedna rezervacija.',
+    retired: 'Više ne prodajemo',
+    notLinked: 'Nije povezano sa RMS računom — dostupnost i rezervacije neće raditi.',
+    listingGone: 'Taj smeštaj više nije ovde',
+    backToList: 'Nazad na StayBrain',
+
+    client: 'Klijent',
+    pickClient: 'Izaberi klijenta…',
+    clientHint: 'Čiji je smeštaj. Njemu se fakturiše prihod.',
+    listingName: 'Naziv',
+    rmsAccount: 'RMS račun',
+    pickAccount: 'Izaberi račun…',
+    rmsAccountHint: 'Račun u RMS-u čije jedinice i rezervacije se ovde prikazuju.',
+    unitCount: '{n} jedinica',
+    connectFirst: 'Prvo se poveži na RMS da bi izabrao račun.',
+    noAgencyAccess: 'Ovaj račun još nije dozvolio agencijske rezervacije. Čitanje radi; kreiranje rezervacije će biti odbijeno dok se to ne uključi u RMS-u.',
+    agencyAccessOn: 'Ovaj račun dozvoljava agencijske rezervacije.',
+
+    earning: 'Koliko nam donosi jedna rezervacija',
+    earningModel: 'Kako se računa',
+    perReservation: 'Po rezervaciji',
+    perReservationHint: '{amount} za svaku rezervaciju koju donesemo. Deset rezervacija je deset puta toliko.',
+    percent: 'Procenat od rezervacije',
+    rate: 'Kurs prema osnovnoj valuti',
+    rateHint: 'Ostavi 1 da iznosi ostanu tačno kako su uneti.',
+    note: 'Napomena',
+    active: 'Još prodajemo ovaj smeštaj',
+
+    needClient: 'Izaberi čiji je smeštaj.',
+    needName: 'Daj smeštaju naziv.',
+    needAmount: 'Upiši koliko nam donosi jedna rezervacija.',
+    listingSaved: 'Smeštaj sačuvan.',
+
+    availability: 'Dostupnost',
+    availabilityHint: 'Čita se iz RMS-a sada. Računa se svaka rezervacija, i naša i vlasnikova.',
+    refresh: 'Pročitaj ponovo',
+    checkIn: 'Prijava',
+    checkOut: 'Odjava',
+    guests: 'Gostiju',
+    nights: 'Noćenja',
+    nightsCount: '{n} noćenja',
+    unitsLabel: 'Jedinica',
+    fromRms: 'Iz RMS-a',
+    connectForAvailability: 'Poveži se na RMS da vidiš šta je slobodno.',
+    noUnits: 'Ovaj račun nema jedinice',
+    noUnitsHint: 'Dodaj ih u RMS-u — ovo je prikaz njihovih podataka, ne drugo mesto gde se vode.',
+    freeOf: 'slobodno {free} od {all} za te datume',
+    sleeps: 'za {n} osoba',
+    perNight: 'po noći',
+    free: 'Slobodno',
+    taken: 'Zauzeto',
+    tooSmall: 'Samo za {n} osoba',
+    anotherGuest: 'drugi gost',
+    oursTag: 'naše',
+    book: 'Rezerviši',
+
+    bookingIn: 'Rezervacija — {unit}',
+    guestName: 'Gost',
+    contact: 'Telefon',
+    origin: 'Grad ili država',
+    originHint: 'Odakle je gost. RMS to prikazuje pored imena.',
+    total: 'Koliko gost plaća',
+    totalHint: 'Cela rezervacija, u valuti smeštaja.',
+    theyGet: 'Vlasnik: {amount}',
+    weGet: 'Mi zarađujemo: {amount}',
+    weGetShort: 'naše {amount}',
+    confirmBooking: 'Rezerviši u RMS-u',
+    confirmHint: 'Rezervacija se prvo kreira u RMS-u. Ništa se ne računa kao prodaja ako RMS ne prihvati.',
+
+    needGuest: 'Rezervacija mora imati ime gosta.',
+    needNights: 'Odjava mora biti posle prijave.',
+    booked: 'Rezervisano u RMS-u pod {reference}.',
+    alreadyThere: 'Ta rezervacija je već bila u RMS-u pod {reference}. Nije napravljen duplikat.',
+    clash: '{guest} je već u toj jedinici od {from} do {to}.',
+
+    ourBookings: 'Rezervacije koje smo doneli',
+    noneYet: 'Ovde još nije ništa prodato',
+    noneYetHint: 'Izaberi datume gore, nađi slobodnu jedinicu i rezerviši.',
+    checkRms: 'Pitaj RMS da li ima ovu rezervaciju',
+    repaired: 'RMS je ima. Rezervacija je povezana i sada se računa.',
+    notInRms: 'RMS je nema. Ništa nije računato — rezerviši ponovo.',
+    cancel: 'Otkaži ovu rezervaciju',
+    cancelTitle: 'Otkazati ovu rezervaciju?',
+    cancelMessage: 'Rezervacija za {guest} se otkazuje i u RMS-u, a njena noćenja se oslobađaju.',
+    cancelled: 'Otkazano i ovde i u RMS-u.',
+  },
+
+  earningModel: {
+    fixed_per_reservation: 'Fiksan iznos po rezervaciji',
+    percent_of_value: 'Procenat od rezervacije',
+  },
+
+  earningModelHint: {
+    fixed_per_reservation: 'Isti iznos za svaku rezervaciju koju donesemo, bez obzira koliko gost plaća.',
+    percent_of_value: 'Deo onoga što gost plaća. Koristi samo ako je tako dogovoreno.',
+  },
+
+  rms: {
+    live: 'Povezano sa RMS-om',
+    liveHint: 'Prijavljen kao {email}. Dostupnost i nove rezervacije rade.',
+    notConnected: 'Nije povezano sa RMS-om',
+    notConnectedHint: 'Naše cifre i dalje rade. Dostupnost i nove rezervacije zahtevaju vezu.',
+    connect: 'Poveži',
+    disconnect: 'Odjavi',
+    connected: 'Povezano sa RMS-om.',
+    disconnected: 'Odjavljeno sa RMS-a.',
+    email: 'RMS mejl',
+    emailPlaceholder: 'Agencijski račun, ne tvoj lični',
+    password: 'Lozinka',
+    needBoth: 'Potrebni su i mejl i lozinka.',
+    wrongCredentials: 'RMS nije prihvatio taj mejl i lozinku.',
+    tooMany: 'Previše pokušaja. RMS je privremeno zaustavio prijave.',
+    offline: 'RMS nije dostupan. Proveri vezu.',
+    signInFailed: 'Prijava na RMS nije uspela.',
+    whatItCanDo: 'Ovo se prijavljuje na RMS kao agencijski račun. Može da čita račune i da kreira ili otkazuje rezervacije označene kao naše — ništa drugo. Lozinka se ne čuva ovde.',
   },
 
   reservations: {

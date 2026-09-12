@@ -43,7 +43,15 @@ export const fetchReservationsFor = async (clientId: string): Promise<Reservatio
  */
 export async function saveReservation(input: Reservation): Promise<string> {
   const me = actor()
-  const isNew = !input.id
+  /*
+   * `createdAt`, not the id — the same signal `write()` uses.
+   *
+   * StayBrain picks the id itself before writing, because the id is what makes
+   * the write to the RMS idempotent. Judging newness by the id would have called
+   * every StayBrain booking an update: the wrong audit line, and `syncState`
+   * taken from the input instead of being forced to `pending`.
+   */
+  const isNew = !input.id || !input.createdAt
 
   const id = await write('reservations', {
     ...input,
