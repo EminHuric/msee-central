@@ -29,13 +29,13 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
-import RmsConnectionPanel from '@/components/RmsConnectionPanel.vue'
+import RmsPropertyLogin from '@/components/RmsPropertyLogin.vue'
 import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
 import { fetchApartments, fetchBookings } from '@/api/rms'
 import { fetchReservationsForListing, importMarkedBookings, totalsOf } from '@/api/staybrain'
 import { readOne } from '@/api/store'
 import { formatDate } from '@/i18n'
-import { rmsReady, rmsSession } from '@/lib/rms'
+import { rmsConnectAs, rmsReady, rmsSession } from '@/lib/rms'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BASE_CURRENCY, formatMoney } from '@/types/money'
@@ -60,7 +60,19 @@ const apartments = ref<RmsApartment[]>([])
 const rmsBookings = ref<RmsBooking[]>([])
 const ours = ref<Reservation[]>([])
 
-const connected = computed(() => rmsSession.value !== null)
+/**
+ * Connected AS THE ACCOUNT THIS PROPERTY NEEDS, which is not the same as
+ * connected at all: the previous session may belong to another client.
+ */
+const connected = computed(
+  () =>
+    rmsSession.value !== null &&
+    (listing.value?.rmsAccountEmail ?? '').trim().toLowerCase() ===
+      rmsSession.value.email.trim().toLowerCase(),
+)
+
+const connecting = ref(false)
+const loginProblem = ref('')
 const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW_REVENUE))
 
 const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -92,11 +104,46 @@ async function load(): Promise<void> {
     listing.value = row
     ours.value = await fetchReservationsForListing(row.id)
 
-    if (connected.value && row.rmsWorkspaceId) await loadFromRms()
+    /*
+     * Connect as this property's own account, with the password this browser
+     * remembers. Nothing is asked of anybody when there is one — which is the
+     * point of remembering it.
+     */
+    if (row.rmsWorkspaceId && row.rmsAccountEmail) await connect()
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * Become this property's account, then read it.
+ *
+ * `password` is passed only the first time on a device. After that it comes from
+ * what was remembered, so opening a property is one click and no typing.
+ */
+async function connect(password?: string): Promise<void> {
+  const row = listing.value
+  if (!row?.rmsAccountEmail || connecting.value) return
+
+  connecting.value = true
+  loginProblem.value = ''
+  try {
+    const result = await rmsConnectAs(row.rmsAccountEmail, password)
+
+    if (result.state === 'ready') {
+      await loadFromRms()
+      return
+    }
+
+    if (result.state === 'failed') {
+      /* The code verbatim: a refused login has a reason and hiding it wastes
+       * somebody's afternoon on a password that was never the problem. */
+      loginProblem.value = t('rms.propertyRefused', { code: result.code })
+    }
+  } finally {
+    connecting.value = false
   }
 }
 
@@ -192,13 +239,23 @@ onMounted(load)
           <h1 class="page-title">{{ listing.name }}</h1>
           <p class="page-subtitle">{{ listing.clientName }}</p>
         </div>
-        <button class="btn btn-secondary" :disabled="rmsLoading || !connected" @click="loadFromRms">
+        <button
+          class="btn btn-secondary"
+          :disabled="rmsLoading || connecting || !listing.rmsAccountEmail"
+          @click="connect()"
+        >
           <AppIcon name="history" :size="15" />
           {{ t('staybrain.refresh') }}
         </button>
       </header>
 
-      <RmsConnectionPanel @changed="load" />
+      <RmsPropertyLogin
+        :email="listing.rmsAccountEmail"
+        :problem="loginProblem"
+        :busy="connecting || rmsLoading"
+        @connect="connect"
+        @forget="load"
+      />
 
       <!-- What we brought. Ours only, counted from our own records. -->
       <section class="card summary">

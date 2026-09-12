@@ -19,15 +19,14 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { fetchClients } from '@/api/clients'
-import { fetchRmsAccounts } from '@/api/rms'
 import { saveListing } from '@/api/staybrain'
 import { moneyOf } from '@/api/sales'
-import { rmsSession } from '@/lib/rms'
+import { rmsConnectAs } from '@/lib/rms'
+import { remembersRmsLogin } from '@/lib/rmsAccounts'
 import { LIMITS } from '@/lib/validation'
 import { useUiStore } from '@/stores/ui'
 import { CURRENCIES, fromMinor, type CurrencyCode } from '@/types/money'
 import { EARNING_MODELS, blankListing, type StayBrainListing } from '@/types/staybrain'
-import type { RmsAccount } from '@/types/staybrain'
 import type { Client } from '@/types/business'
 
 const props = defineProps<{ open: boolean; listing: StayBrainListing | null }>()
@@ -41,16 +40,30 @@ const amount = ref(0)
 const saving = ref(false)
 
 const clients = ref<Client[]>([])
-const accounts = ref<RmsAccount[]>([])
-const loadingAccounts = ref(false)
-const accountsError = ref('')
 
 /*
- * From the shared ref, so signing in while this dialog is closed is noticed when
- * it opens. As a `computed` over `rmsUser()` this was frozen at whatever the
- * session was the first time the dialog rendered.
+ * The property's own login.
+ *
+ * WHY THIS REPLACED A LIST OF ACCOUNTS. Picking from a dropdown meant reading
+ * every account on the reservation platform, which only an administrator there
+ * can do. Signing in as the property's own account needs no such privilege and
+ * answers the question better: the account's user id IS its workspace id over
+ * there, so a successful sign-in tells us exactly which data this listing points
+ * at — no typing an id, and no way to link a property to the wrong client's
+ * calendar.
+ *
+ * The password is used and then remembered by the browser. It is never part of
+ * the listing that gets saved.
  */
-const connected = computed(() => rmsSession.value !== null)
+const rmsEmail = ref('')
+const rmsPassword = ref('')
+const checking = ref(false)
+const linkProblem = ref('')
+
+const linked = computed(() => Boolean(draft.value.rmsWorkspaceId))
+const alreadyRemembered = computed(
+  () => Boolean(draft.value.rmsAccountEmail) && remembersRmsLogin(draft.value.rmsAccountEmail),
+)
 
 watch(
   () => props.open,
@@ -60,27 +73,59 @@ watch(
     draft.value = props.listing ? { ...props.listing } : blankListing()
     amount.value = fromMinor(draft.value.earning.amount.minor, draft.value.currency)
 
+    rmsEmail.value = draft.value.rmsAccountEmail
+    rmsPassword.value = ''
+    linkProblem.value = ''
+
     clients.value = await fetchClients().catch(() => [])
-    if (connected.value) await loadAccounts()
   },
 )
 
-/* Connecting while the dialog is open should fill the picker, not need a reopen. */
-watch(connected, (live) => {
-  if (live && props.open && !accounts.value.length) void loadAccounts()
-})
+/**
+ * Sign in as the property's account, and take its id from the session.
+ *
+ * This is the whole of linking. Nothing is saved until the sign-in works, so a
+ * listing can never end up pointing at an account that does not exist or a
+ * password nobody has.
+ */
+async function linkAccount(): Promise<void> {
+  if (checking.value) return
 
-async function loadAccounts(): Promise<void> {
-  loadingAccounts.value = true
-  accountsError.value = ''
-  try {
-    accounts.value = await fetchRmsAccounts()
-  } catch (error) {
-    accounts.value = []
-    accountsError.value = (error as Error).message
-  } finally {
-    loadingAccounts.value = false
+  const email = rmsEmail.value.trim()
+  if (!email || !rmsPassword.value) {
+    linkProblem.value = t('rms.needBoth')
+    return
   }
+
+  checking.value = true
+  linkProblem.value = ''
+  try {
+    const result = await rmsConnectAs(email, rmsPassword.value)
+
+    if (result.state === 'ready') {
+      /* The account's own id is its workspace id over there. */
+      draft.value.rmsWorkspaceId = result.session.uid
+      draft.value.rmsAccountEmail = result.session.email || email
+      rmsPassword.value = ''
+      return
+    }
+
+    linkProblem.value =
+      result.state === 'failed'
+        ? t('rms.propertyRefused', { code: result.code })
+        : t('rms.needBoth')
+  } finally {
+    checking.value = false
+  }
+}
+
+/** Unlink, so a property can be pointed at a different account. */
+function unlink(): void {
+  draft.value.rmsWorkspaceId = ''
+  draft.value.rmsAccountEmail = ''
+  rmsEmail.value = ''
+  rmsPassword.value = ''
+  linkProblem.value = ''
 }
 
 /** Picking a client fills in the name we store beside the id. */
@@ -90,12 +135,6 @@ function onClient(id: string): void {
   draft.value.clientName = client?.name ?? ''
   /* And suggests a listing name, only while the field is still empty. */
   if (!draft.value.name && client) draft.value.name = client.name
-}
-
-function onAccount(id: string): void {
-  draft.value.rmsWorkspaceId = id
-  const account = accounts.value.find((a) => a.id === id)
-  draft.value.rmsAccountEmail = account?.email ?? ''
 }
 
 function onCurrency(currency: CurrencyCode): void {
@@ -172,32 +211,68 @@ async function commit(): Promise<void> {
         </div>
       </div>
 
-      <!-- The RMS account ------------------------------------------------- -->
+      <!-- The property's reservation-system login ------------------------- -->
       <div class="field">
-        <label class="field-label" for="sb-account">{{ t('staybrain.rmsAccount') }}</label>
+        <span class="field-label">{{ t('staybrain.rmsAccount') }}</span>
 
-        <p v-if="!connected" class="field-hint warn">
-          <AppIcon name="alert" :size="13" />
-          {{ t('staybrain.connectFirst') }}
-        </p>
+        <!--
+          Linked: say which account, and whether this browser can open it on its
+          own. An account linked but not remembered is not broken — it asks for the
+          password once on the property screen.
+        -->
+        <div v-if="linked" class="linked">
+          <AppIcon name="check" :size="14" />
+          <span class="linked-email">{{ draft.rmsAccountEmail }}</span>
+          <span class="tertiary small">
+            {{ alreadyRemembered ? t('staybrain.passwordRemembered') : t('staybrain.passwordNeeded') }}
+          </span>
+          <button type="button" class="btn btn-ghost btn-sm" @click="unlink">
+            {{ t('staybrain.changeAccount') }}
+          </button>
+        </div>
 
         <template v-else>
-          <select
-            id="sb-account"
-            class="select"
-            :disabled="loadingAccounts"
-            :value="draft.rmsWorkspaceId"
-            @change="onAccount(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">{{ t('staybrain.pickAccount') }}</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">
-              {{ a.username || a.email }} — {{ t('staybrain.unitCount', { n: a.apartmentCount }) }}
-            </option>
-          </select>
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="sb-rms-email">{{ t('rms.email') }}</label>
+              <input
+                id="sb-rms-email"
+                v-model="rmsEmail"
+                class="input"
+                type="email"
+                autocomplete="off"
+                :placeholder="t('staybrain.rmsEmailPlaceholder')"
+              />
+            </div>
+            <div class="field">
+              <label class="field-label" for="sb-rms-password">{{ t('rms.password') }}</label>
+              <input
+                id="sb-rms-password"
+                v-model="rmsPassword"
+                class="input"
+                type="password"
+                autocomplete="off"
+              />
+            </div>
+          </div>
 
-          <p v-if="accountsError" class="field-hint warn">{{ accountsError }}</p>
+          <div class="row">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="checking"
+              @click="linkAccount"
+            >
+              <span v-if="checking" class="spinner" />
+              {{ t('staybrain.linkAccount') }}
+            </button>
+          </div>
 
-          <p v-else class="field-hint">{{ t('staybrain.rmsAccountHint') }}</p>
+          <p v-if="linkProblem" class="field-hint warn">
+            <AppIcon name="alert" :size="13" />
+            {{ linkProblem }}
+          </p>
+          <p v-else class="field-hint">{{ t('staybrain.linkHint') }}</p>
         </template>
       </div>
 
@@ -361,6 +436,22 @@ async function commit(): Promise<void> {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
+}
+
+.linked {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.linked-email {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.small {
+  font-size: var(--text-xs);
 }
 
 .field-hint.warn {

@@ -21,10 +21,10 @@
  * counts them.
  */
 
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 
 import { rmsDb, rmsUser } from '@/lib/rms'
-import type { RmsAccount, RmsApartment, RmsBooking } from '@/types/staybrain'
+import type { RmsApartment, RmsBooking } from '@/types/staybrain'
 
 /* ------------------------------------------------------------------ *
  * Failures, named
@@ -85,57 +85,14 @@ function requireSession(): { uid: string; email: string } {
  * Reading
  * ------------------------------------------------------------------ */
 
-/**
- * Every account on the RMS platform.
+/*
+ * There is deliberately no "list every account" function here.
  *
- * Read once, when a property is linked to the account it belongs to. This is the
- * same list the RMS's own admin screen shows, read with the same permission — so
- * it needs nothing switched on anywhere.
+ * Listing them needs administrator rights on the reservation platform, and a
+ * property is linked by signing in as its own account instead — which needs no
+ * such rights and proves the link at the same time. Code that only works under a
+ * privilege this design avoids is worse than no code.
  */
-export async function fetchRmsAccounts(): Promise<RmsAccount[]> {
-  requireSession()
-  try {
-    const snap = await getDocs(collection(rmsDb(), 'users'))
-    return snap.docs
-      .map((d) => {
-        const data = d.data()
-        return {
-          id: d.id,
-          username: String(data.username ?? ''),
-          email: String(data.email ?? ''),
-          role: String(data.role ?? 'user'),
-          disabled: data.disabled === true,
-          apartmentCount: Number(data.apartmentCount ?? 0),
-          bookingCount: Number(data.bookingCount ?? 0),
-          agencyAccess: data.agencyAccess === true,
-        }
-      })
-      .sort((a, b) => (a.username || a.email).localeCompare(b.username || b.email))
-  } catch (error) {
-    throw wrap(error)
-  }
-}
-
-export async function fetchRmsAccount(workspaceId: string): Promise<RmsAccount | null> {
-  requireSession()
-  try {
-    const snap = await getDoc(doc(rmsDb(), 'users', workspaceId))
-    if (!snap.exists()) return null
-    const data = snap.data()
-    return {
-      id: snap.id,
-      username: String(data.username ?? ''),
-      email: String(data.email ?? ''),
-      role: String(data.role ?? 'user'),
-      disabled: data.disabled === true,
-      apartmentCount: Number(data.apartmentCount ?? 0),
-      bookingCount: Number(data.bookingCount ?? 0),
-      agencyAccess: data.agencyAccess === true,
-    }
-  } catch (error) {
-    throw wrap(error)
-  }
-}
 
 export async function fetchApartments(workspaceId: string): Promise<RmsApartment[]> {
   requireSession()

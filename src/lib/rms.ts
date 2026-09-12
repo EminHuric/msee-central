@@ -33,6 +33,8 @@
 
 import { readonly, ref } from 'vue'
 
+import { forgetRmsLogin, rememberRmsLogin, rmsLoginFor } from './rmsAccounts'
+
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   browserLocalPersistence,
@@ -197,6 +199,60 @@ export async function rmsSignIn(email: string, password: string): Promise<RmsSes
     return signedIn as RmsSession
   } catch (error) {
     throw new RmsAuthError((error as { code?: string }).code ?? 'unknown')
+  }
+}
+
+/**
+ * Make sure the session is the one this property needs.
+ *
+ * FIREBASE AUTH HOLDS ONE SESSION PER APP, so reading two properties owned by two
+ * accounts means being each of them in turn. That is the whole of this function:
+ * if the wrong account is signed in, sign in as the right one.
+ *
+ * Returns what happened, because the three outcomes need three different things
+ * from the screen: carry on, ask for a password, or say what went wrong.
+ */
+export type RmsConnectResult =
+  | { state: 'ready'; session: RmsSession }
+  | { state: 'needs-password'; email: string }
+  | { state: 'failed'; email: string; code: string }
+
+export async function rmsConnectAs(
+  email: string,
+  password?: string,
+): Promise<RmsConnectResult> {
+  const wanted = email.trim().toLowerCase()
+  if (!wanted) return { state: 'failed', email, code: 'no-account' }
+
+  await watchSession()
+
+  /* Already the right account: nothing to do, and no needless round trip. */
+  const current = session.value
+  if (current && current.email.trim().toLowerCase() === wanted) {
+    return { state: 'ready', session: current }
+  }
+
+  const secret = password ?? rmsLoginFor(wanted)
+  if (!secret) return { state: 'needs-password', email: wanted }
+
+  try {
+    const signedIn = await rmsSignIn(wanted, secret)
+    /* Only remember a password that has actually worked. */
+    rememberRmsLogin(wanted, secret)
+    return { state: 'ready', session: signedIn }
+  } catch (error) {
+    const code = error instanceof RmsAuthError ? error.code : 'unknown'
+
+    /*
+     * A remembered password that no longer works is dropped.
+     *
+     * Kept, it would be retried on every visit and the property would look
+     * permanently broken; dropped, the next visit asks for it, which is the
+     * thing that actually fixes it.
+     */
+    if (!password) forgetRmsLogin(wanted)
+
+    return { state: 'failed', email: wanted, code }
   }
 }
 

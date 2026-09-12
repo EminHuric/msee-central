@@ -12,10 +12,9 @@
  * summed from MsEe Central's own reservations, and the RMS is not even read on
  * this screen. The two cannot converge by accident.
  *
- * THE CONNECTION IS SHOWN, NOT HIDDEN. If the RMS session has lapsed the page
- * still works — listings and our own figures are stored here — and says plainly
- * that availability and new bookings need signing in again. A screen that
- * silently degrades into half-truths is worse than one that says what is missing.
+ * NOTHING HERE TOUCHES THE RESERVATION SYSTEM. These figures come from our own
+ * records, so this page is correct with nothing connected. Each property holds its
+ * own login and signs in when it is opened — see RmsPropertyLogin.
  */
 
 import { computed, onMounted, ref } from 'vue'
@@ -23,7 +22,6 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-import RmsConnectionPanel from '@/components/RmsConnectionPanel.vue'
 import StayBrainListingDialog from '@/components/StayBrainListingDialog.vue'
 import {
   deleteListing,
@@ -31,7 +29,6 @@ import {
   fetchStayBrainReservations,
   totalsByListing,
 } from '@/api/staybrain'
-import { rmsReady } from '@/lib/rms'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BASE_CURRENCY, formatMoney } from '@/types/money'
@@ -120,17 +117,13 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     /*
-     * `rmsReady()` is awaited without its answer being used.
+     * No reservation system is read here.
      *
-     * It is here so the page does not render its "not connected" state while
-     * Firebase is still reading the session back from the browser. The answer
-     * itself comes from the shared ref, which that same call populates.
+     * Every figure on this page is counted from MsEe Central's own reservations,
+     * so the page works whether or not anything is connected — and each property
+     * signs in to its own account when it is opened.
      */
-    const [rows, sold] = await Promise.all([
-      fetchListings(),
-      fetchStayBrainReservations(),
-      rmsReady(),
-    ])
+    const [rows, sold] = await Promise.all([fetchListings(), fetchStayBrainReservations()])
     listings.value = rows
     reservations.value = sold
   } catch {
@@ -173,15 +166,6 @@ onMounted(load)
         {{ t('staybrain.addListing') }}
       </button>
     </header>
-
-    <!--
-      The RMS session, stated at the top.
-
-      Availability and new bookings are the things that need it; the figures
-      below do not. Saying which is which is the difference between a page
-      somebody trusts and one they have to guess about.
-    -->
-    <RmsConnectionPanel @changed="load" />
 
     <div v-if="loading" class="grid">
       <div v-for="n in 3" :key="n" class="skeleton" style="height: 150px" />
