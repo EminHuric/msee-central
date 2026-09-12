@@ -44,7 +44,6 @@ const { t, locale } = useI18n()
 const loading = ref(true)
 const listings = ref<StayBrainListing[]>([])
 const reservations = ref<Reservation[]>([])
-const connected = ref(false)
 
 const editing = ref<StayBrainListing | null>(null)
 
@@ -82,14 +81,20 @@ const retired = computed(() => listings.value.filter((l) => !l.active))
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [rows, sold, session] = await Promise.all([
+    /*
+     * `rmsReady()` is awaited without its answer being used.
+     *
+     * It is here so the page does not render its "not connected" state while
+     * Firebase is still reading the session back from the browser. The answer
+     * itself comes from the shared ref, which that same call populates.
+     */
+    const [rows, sold] = await Promise.all([
       fetchListings(),
       fetchStayBrainReservations(),
       rmsReady(),
     ])
     listings.value = rows
     reservations.value = sold
-    connected.value = session !== null
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
   } finally {
@@ -138,7 +143,7 @@ onMounted(load)
       below do not. Saying which is which is the difference between a page
       somebody trusts and one they have to guess about.
     -->
-    <RmsConnectionPanel :connected="connected" @changed="load" />
+    <RmsConnectionPanel @changed="load" />
 
     <div v-if="loading" class="grid">
       <div v-for="n in 3" :key="n" class="skeleton" style="height: 150px" />

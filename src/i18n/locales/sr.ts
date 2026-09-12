@@ -3024,7 +3024,25 @@ export default {
     moreThanTotal: 'Ne možemo im doneti više nego što su uzeli.',
   },
 
+  paymentState: {
+    paid: 'Plaćeno',
+    deposit_paid: 'Depozit plaćen',
+    partial: 'Delimično plaćeno',
+    unpaid: 'Neplaćeno',
+  },
+  stayCalendar: {
+    title: 'Kalendar',
+    unit: 'Jedinica',
+    ours: 'naše ({n})',
+    theirs: 'objekta ({n})',
+    oursLabel: 'doneo MsEe',
+    theirsLabel: 'rezervacija objekta',
+    earlier: 'Ranije',
+    later: 'Kasnije',
+    now: 'Danas',
+  },
   staybrain: {
+    picked: 'Preuzeto {n} rezervacija označenih kao naše u RMS-u.',
     unknownProperty: 'Nepoznat smeštaj',
     noneSoldYet: 'Još nije prodato nijedno noćenje kroz StayBrain.',
     revenueByProperty: 'Prihod po smeštaju',

@@ -39,6 +39,18 @@
   --info-bg: rgb(77 147 240 / 12%);
   --info-border: rgb(77 147 240 / 30%);
 
+  /* ---- StayBrain calendar ------------------------------------------ *
+   *
+   * Two colours with one job: orange (the brand) is a booking we brought, this
+   * blue is the property's own. It is its own token rather than `--info-500`
+   * because it is not information-blue — it is "somebody else's", and the day
+   * the info colour changes this must not move with it.
+   *
+   * Deliberately not the per-apartment colours the RMS stores: a colour already
+   * telling apartments apart cannot also tell provenance apart.
+   */
+  --unit-theirs: #4a7fb5;
+
   --neutral-500: #8b8b94;
   --neutral-bg: rgb(139 139 148 / 12%);
   --neutral-border: rgb(139 139 148 / 28%);
@@ -218,6 +230,8 @@
   --accent-soft-border: rgb(255 138 30 / 34%);
 
   --ok-500: #12945c;
+  /* Darker against white, so white text on the bar stays readable. */
+  --unit-theirs: #3a6c9e;
   --warn-500: #b07a06;
   --danger-500: #d13840;
   --info-500: #2f6fd0;

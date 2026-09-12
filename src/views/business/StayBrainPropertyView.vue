@@ -28,17 +28,19 @@ import { useRoute } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RmsConnectionPanel from '@/components/RmsConnectionPanel.vue'
+import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
 import { RmsConflict, fetchApartments, fetchBookings } from '@/api/rms'
 import {
   cancelReservation,
   createReservation,
   fetchReservationsForListing,
+  importMarkedBookings,
   repairReservation,
   totalsOf,
 } from '@/api/staybrain'
 import { readOne } from '@/api/store'
 import { formatDate } from '@/i18n'
-import { rmsReady } from '@/lib/rms'
+import { rmsReady, rmsSession } from '@/lib/rms'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -66,7 +68,13 @@ const loading = ref(true)
 const notFound = ref(false)
 const rmsLoading = ref(false)
 const rmsError = ref('')
-const connected = ref(false)
+/*
+ * The live session, not a copy of it.
+ *
+ * This used to be a ref set inside `load()`, which meant the screen only learned
+ * about a connection when something reloaded the page's data.
+ */
+const connected = computed(() => rmsSession.value !== null)
 
 const listing = ref<StayBrainListing | null>(null)
 const apartments = ref<RmsApartment[]>([])
@@ -145,7 +153,8 @@ async function load(): Promise<void> {
   loading.value = true
   notFound.value = false
   try {
-    const [row, session] = await Promise.all([
+    /* rmsReady() is awaited so the session is restored before anything is drawn. */
+    const [row] = await Promise.all([
       readOne<StayBrainListing>('staybrainListings', listingId.value),
       rmsReady(),
     ])
@@ -156,7 +165,6 @@ async function load(): Promise<void> {
     }
 
     listing.value = row
-    connected.value = session !== null
     ours.value = await fetchReservationsForListing(row.id)
 
     if (connected.value && row.rmsWorkspaceId) await loadFromRms()
@@ -186,6 +194,26 @@ async function loadFromRms(): Promise<void> {
     ])
     apartments.value = units
     rmsBookings.value = bookings
+
+    /*
+     * Pick up whatever was marked "through MsEe" in the RMS.
+     *
+     * THIS IS THE WHOLE OF THE SECOND WORKFLOW. The property is run from the RMS,
+     * so the honest place to say a guest came through us is there, on the booking,
+     * with one tick. Opening this screen is when that tick becomes a reservation
+     * here with its commission worked out.
+     *
+     * Idempotent, so it runs on every load and does nothing when there is nothing
+     * new — and it writes nothing at all when no booking has changed, which is why
+     * it is safe to have in a function a refresh button calls.
+     */
+    const picked = await importMarkedBookings(row, bookings, ours.value)
+    if (picked.added > 0) {
+      ui.notify('ok', t('staybrain.picked', { n: picked.added }))
+    }
+    if (picked.added > 0 || picked.updated > 0) {
+      ours.value = await fetchReservationsForListing(row.id)
+    }
   } catch (error) {
     apartments.value = []
     rmsBookings.value = []
@@ -193,6 +221,38 @@ async function loadFromRms(): Promise<void> {
   } finally {
     rmsLoading.value = false
   }
+}
+
+/**
+ * What the property has collected on one of our bookings.
+ *
+ * Read from the RMS, never stored here, and deliberately READ-ONLY: deposits and
+ * payments are the owner's ledger against their own guest, and the agency has no
+ * business writing into it. Shown because "booked" and "paid" are different
+ * facts, and somebody chasing money should not have to open a second system to
+ * learn which.
+ */
+function paymentOf(row: Reservation): { status: string; paid: number; total: number } | null {
+  if (!row.rmsBookingId) return null
+  const booking = rmsBookings.value.find((b) => b.id === row.rmsBookingId)
+  if (!booking) return null
+  return { status: booking.paymentStatus, paid: booking.totalPaid, total: booking.totalPrice }
+}
+
+/** Clicking a free night in the calendar starts a booking on that date. */
+function pickFromCalendar(unit: RmsApartment, date: string): void {
+  if (!canCreate.value) return
+
+  const taken = rmsBookings.value.some(
+    (b) => b.apartmentId === unit.id && b.status !== 'cancelled' && b.checkIn <= date && b.checkOut > date,
+  )
+  /* A taken night is not an invitation. The bar already says who is in it. */
+  if (taken) return
+
+  checkIn.value = date
+  /* One night by default — the length is the next thing somebody chooses. */
+  checkOut.value = new Date(Date.parse(date) + 86_400_000).toISOString().slice(0, 10)
+  startBooking(unit)
 }
 
 /* ---- making the booking ---------------------------------------------- */
@@ -338,7 +398,7 @@ onMounted(load)
         </div>
       </header>
 
-      <RmsConnectionPanel :connected="connected" @changed="load" />
+      <RmsConnectionPanel @changed="load" />
 
       <!-- What we sold here. Ours only, counted from our own records. -->
       <section class="card summary">
@@ -363,6 +423,23 @@ onMounted(load)
           <span class="figure-hint">{{ t('staybrain.fromRms') }}</span>
         </div>
       </section>
+
+      <!--
+        The calendar, as the property has it.
+
+        Above the list because it is the question people actually arrive with —
+        what is free, and how much of what is taken did we bring. The list below
+        answers the narrower version of it for one chosen stay.
+      -->
+      <StayBrainCalendar
+        v-if="connected && apartments.length"
+        :apartments="apartments"
+        :bookings="rmsBookings"
+        :currency="listing.currency"
+        :from-date="checkIn"
+        :to-date="checkOut"
+        @pick="pickFromCalendar"
+      />
 
       <!-- Availability ------------------------------------------------- -->
       <section class="card">
@@ -576,6 +653,15 @@ onMounted(load)
               <span class="pill" :class="row.status === 'cancelled' ? 'taken' : 'free'">
                 {{ t(`reservationStatus.${row.status}`) }}
               </span>
+              <!-- The owner's money, from the owner's system. Not editable here. -->
+              <span v-if="paymentOf(row)" class="paid" :class="`paid-${paymentOf(row)?.status}`">
+                {{ t(`paymentState.${paymentOf(row)?.status}`) }}
+                <span class="tertiary">
+                  {{ listingMoney(Math.round((paymentOf(row)?.paid ?? 0) * 100)) }}
+                  /
+                  {{ listingMoney(Math.round((paymentOf(row)?.total ?? 0) * 100)) }}
+                </span>
+              </span>
               <span class="sync" :class="`sync-${row.syncState}`">
                 {{ t(`syncState.${row.syncState}`) }}
               </span>
@@ -775,6 +861,18 @@ onMounted(load)
 
 .sync-taken {
   color: var(--ok-500);
+}
+
+.paid {
+  font-size: var(--text-xs);
+}
+
+.paid-paid {
+  color: var(--ok-500);
+}
+
+.paid-unpaid {
+  color: var(--warn-500);
 }
 
 .sync-failed,

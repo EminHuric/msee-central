@@ -235,6 +235,20 @@ export interface RmsAccount {
   agencyAccess: boolean
 }
 
+/**
+ * The RMS's payment states, as its own `calcPaymentStatus` produces them.
+ *
+ * Mirrored here only so the labels can be checked: this system never writes one.
+ * The owner's ledger against their own guest is theirs.
+ *
+ * Named RMS_ because `PAYMENT_STATES` already exists in `revenue.ts` and means
+ * something else — paid / pending / overdue, about an invoice of ours. Two
+ * different vocabularies under one name is how a screen ends up showing
+ * "overdue" for a guest who has paid a deposit.
+ */
+export const RMS_PAYMENT_STATES = ['paid', 'deposit_paid', 'partial', 'unpaid'] as const
+export type RmsPaymentState = (typeof RMS_PAYMENT_STATES)[number]
+
 /** The stamp that makes a booking ours, checked by the RMS's own rules. */
 export const MSEE_SOURCE = 'MSEE'
 export const MSEE_VIA = 'MSEE_CENTRAL'

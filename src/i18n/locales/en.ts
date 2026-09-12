@@ -3025,7 +3025,25 @@ export default {
     moreThanTotal: 'We cannot have brought them more than they took.',
   },
 
+  paymentState: {
+    paid: 'Paid',
+    deposit_paid: 'Deposit paid',
+    partial: 'Part paid',
+    unpaid: 'Unpaid',
+  },
+  stayCalendar: {
+    title: 'Calendar',
+    unit: 'Unit',
+    ours: 'ours ({n})',
+    theirs: 'the property’s ({n})',
+    oursLabel: 'brought by MsEe',
+    theirsLabel: 'the property’s own',
+    earlier: 'Earlier',
+    later: 'Later',
+    now: 'Today',
+  },
   staybrain: {
+    picked: 'Picked up {n} booking(s) marked as ours in the RMS.',
     unknownProperty: 'Unknown property',
     noneSoldYet: 'No stays sold through StayBrain yet.',
     revenueByProperty: 'Revenue by property',

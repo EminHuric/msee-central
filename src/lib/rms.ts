@@ -31,6 +31,8 @@
  * details, a guest, or a booking an owner made.
  */
 
+import { readonly, ref } from 'vue'
+
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   browserLocalPersistence,
@@ -109,26 +111,66 @@ export interface RmsSession {
   email: string
 }
 
-export function rmsUser(): RmsSession | null {
-  const user = rmsAuth().currentUser
+/**
+ * The live session, as a ref.
+ *
+ * A REF AND NOT A FUNCTION, AND THIS WAS A REAL BUG. Three components asked
+ * `computed(() => rmsUser() !== null)`, which reads `auth.currentUser` — a plain
+ * property with no reactive dependency. Vue therefore computed it once, cached
+ * it, and never looked again: somebody signed in, the panel went green, and the
+ * next screen still said "connect to the RMS first" for ever.
+ *
+ * One listener writes this ref, so everything that reads it updates together —
+ * including after a token refresh, a sign-out in another tab, or an account
+ * being disabled over there.
+ */
+const session = ref<RmsSession | null>(null)
+
+/** Read-only to everyone else: only the auth listener below may set it. */
+export const rmsSession = readonly(session)
+
+let watching = false
+let firstAnswer: Promise<RmsSession | null> | null = null
+
+function toSession(user: User | null): RmsSession | null {
   return user ? { uid: user.uid, email: user.email ?? '' } : null
 }
 
 /**
- * Wait until Firebase has restored whatever session the browser was holding.
+ * Start watching, once, and remember the promise of the first answer.
  *
- * `currentUser` is null for the first moment after a page load even when a
- * session exists, so anything that reads it immediately concludes "not
- * connected" and shows a login form to somebody who is already signed in.
+ * `currentUser` is null for a moment after a page load even when a session
+ * exists, because Firebase has to read it back from the browser's storage first.
+ * Anything that checks immediately concludes "not connected" and shows a login
+ * form to somebody who is already signed in — so callers await this instead.
  */
-export function rmsReady(): Promise<RmsSession | null> {
-  return new Promise((resolve) => {
-    const stop = onAuthStateChanged(rmsAuth(), (user: User | null) => {
-      stop()
-      resolve(user ? { uid: user.uid, email: user.email ?? '' } : null)
+function watchSession(): Promise<RmsSession | null> {
+  if (firstAnswer) return firstAnswer
+
+  firstAnswer = new Promise((resolve) => {
+    let settled = false
+
+    onAuthStateChanged(rmsAuth(), (user: User | null) => {
+      session.value = toSession(user)
+      if (!settled) {
+        settled = true
+        resolve(session.value)
+      }
     })
   })
+
+  watching = true
+  return firstAnswer
 }
+
+/** What the session is right now. Prefer `rmsSession` in a component. */
+export function rmsUser(): RmsSession | null {
+  if (!watching) void watchSession()
+  return session.value
+}
+
+/** Resolves once Firebase has restored whatever session the browser held. */
+export const rmsReady = (): Promise<RmsSession | null> => watchSession()
 
 export class RmsAuthError extends Error {
   constructor(public readonly code: string) {
@@ -138,12 +180,27 @@ export class RmsAuthError extends Error {
 }
 
 export async function rmsSignIn(email: string, password: string): Promise<RmsSession> {
+  /* Started first, so the listener is in place before the sign-in lands. */
+  void watchSession()
+
   try {
     const credential = await signInWithEmailAndPassword(rmsAuth(), email.trim(), password)
-    return { uid: credential.user.uid, email: credential.user.email ?? '' }
+    const signedIn = toSession(credential.user)
+    /*
+     * Set here as well as by the listener.
+     *
+     * The listener will fire, but not necessarily before this function returns,
+     * and a caller that re-reads the session immediately afterwards would see the
+     * old value. Writing it twice with the same value costs nothing.
+     */
+    session.value = signedIn
+    return signedIn as RmsSession
   } catch (error) {
     throw new RmsAuthError((error as { code?: string }).code ?? 'unknown')
   }
 }
 
-export const rmsSignOut = (): Promise<void> => signOut(rmsAuth())
+export async function rmsSignOut(): Promise<void> {
+  await signOut(rmsAuth())
+  session.value = null
+}

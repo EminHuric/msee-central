@@ -22,7 +22,7 @@ import { fetchClients } from '@/api/clients'
 import { fetchRmsAccounts } from '@/api/rms'
 import { saveListing } from '@/api/staybrain'
 import { moneyOf } from '@/api/sales'
-import { rmsUser } from '@/lib/rms'
+import { rmsSession } from '@/lib/rms'
 import { LIMITS } from '@/lib/validation'
 import { useUiStore } from '@/stores/ui'
 import { CURRENCIES, fromMinor, type CurrencyCode } from '@/types/money'
@@ -45,7 +45,12 @@ const accounts = ref<RmsAccount[]>([])
 const loadingAccounts = ref(false)
 const accountsError = ref('')
 
-const connected = computed(() => rmsUser() !== null)
+/*
+ * From the shared ref, so signing in while this dialog is closed is noticed when
+ * it opens. As a `computed` over `rmsUser()` this was frozen at whatever the
+ * session was the first time the dialog rendered.
+ */
+const connected = computed(() => rmsSession.value !== null)
 
 /** The account picked, so its unit count and consent can be shown. */
 const chosen = computed(() =>
@@ -64,6 +69,11 @@ watch(
     if (connected.value) await loadAccounts()
   },
 )
+
+/* Connecting while the dialog is open should fill the picker, not need a reopen. */
+watch(connected, (live) => {
+  if (live && props.open && !accounts.value.length) void loadAccounts()
+})
 
 async function loadAccounts(): Promise<void> {
   loadingAccounts.value = true

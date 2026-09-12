@@ -25,10 +25,9 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { RmsAuthError, rmsSignIn, rmsSignOut, rmsUser } from '@/lib/rms'
+import { RmsAuthError, rmsSession, rmsSignIn, rmsSignOut } from '@/lib/rms'
 import { useUiStore } from '@/stores/ui'
 
-const props = defineProps<{ connected: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const ui = useUiStore()
@@ -39,7 +38,14 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 
-const session = computed(() => rmsUser())
+/*
+ * Read straight from the shared ref rather than through a prop.
+ *
+ * The prop was the parent's copy, refreshed only when the parent reloaded — so a
+ * successful sign-in left this panel showing "not connected" until something
+ * else happened. One source, reactive, no copies.
+ */
+const connected = computed(() => rmsSession.value !== null)
 
 /**
  * Turn Firebase's code into a sentence that says what to do.
@@ -93,23 +99,23 @@ async function disconnect(): Promise<void> {
 </script>
 
 <template>
-  <section class="rms" :class="{ live: props.connected }">
+  <section class="rms" :class="{ live: connected }">
     <div class="rms-state">
-      <AppIcon :name="props.connected ? 'check' : 'alert'" :size="15" />
+      <AppIcon :name="connected ? 'check' : 'alert'" :size="15" />
       <div>
         <p class="rms-title">
-          {{ props.connected ? t('rms.live') : t('rms.notConnected') }}
+          {{ connected ? t('rms.live') : t('rms.notConnected') }}
         </p>
         <p class="rms-hint">
-          {{ props.connected
-            ? t('rms.liveHint', { email: session?.email ?? '' })
+          {{ connected
+            ? t('rms.liveHint', { email: rmsSession?.email ?? '' })
             : t('rms.notConnectedHint') }}
         </p>
       </div>
     </div>
 
     <div class="rms-actions">
-      <button v-if="props.connected" class="btn btn-ghost btn-sm" :disabled="busy" @click="disconnect">
+      <button v-if="connected" class="btn btn-ghost btn-sm" :disabled="busy" @click="disconnect">
         {{ t('rms.disconnect') }}
       </button>
       <button v-else-if="!open" class="btn btn-secondary btn-sm" @click="open = true">
@@ -117,7 +123,7 @@ async function disconnect(): Promise<void> {
       </button>
     </div>
 
-    <form v-if="open && !props.connected" class="rms-form" @submit.prevent="connect">
+    <form v-if="open && !connected" class="rms-form" @submit.prevent="connect">
       <div class="field">
         <label class="field-label" for="rms-email">{{ t('rms.email') }}</label>
         <input
