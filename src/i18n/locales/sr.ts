@@ -3042,6 +3042,7 @@ export default {
     now: 'Danas',
   },
   staybrain: {
+    openProperties: 'Smeštaji i rezervacije',
     picked: 'Preuzeto {n} rezervacija označenih kao naše u RMS-u.',
     unknownProperty: 'Nepoznat smeštaj',
     noneSoldYet: 'Još nije prodato nijedno noćenje kroz StayBrain.',
@@ -3083,10 +3084,10 @@ export default {
     noAgencyAccess: 'Ovaj račun još nije dozvolio agencijske rezervacije. Čitanje radi; kreiranje rezervacije će biti odbijeno dok se to ne uključi u RMS-u.',
     agencyAccessOn: 'Ovaj račun dozvoljava agencijske rezervacije.',
 
-    earning: 'Koliko nam donosi jedna rezervacija',
+    earning: 'Podrazumevana zarada, kad u RMS-u nije upisana',
     earningModel: 'Kako se računa',
     perReservation: 'Po rezervaciji',
-    perReservationHint: '{amount} za svaku rezervaciju koju donesemo. Deset rezervacija je deset puta toliko.',
+    perReservationHint: 'Koristi se samo kad rezervacija nema svoju proviziju. Iznos upisan na rezervaciji u RMS-u uvek ima prednost.',
     percent: 'Procenat od rezervacije',
     rate: 'Kurs prema osnovnoj valuti',
     rateHint: 'Ostavi 1 da iznosi ostanu tačno kako su uneti.',

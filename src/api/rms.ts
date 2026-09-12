@@ -250,6 +250,10 @@ export async function fetchBookings(workspaceId: string): Promise<RmsBooking[]> 
           createdByAgency: data.createdByAgency ? String(data.createdByAgency) : undefined,
           mseeReservationId: data.mseeReservationId ? String(data.mseeReservationId) : undefined,
           mseeUserName: data.mseeUserName ? String(data.mseeUserName) : undefined,
+          mseeCommissionPercent:
+            data.mseeCommissionPercent != null ? Number(data.mseeCommissionPercent) : undefined,
+          mseeCommissionAmount:
+            data.mseeCommissionAmount != null ? Number(data.mseeCommissionAmount) : undefined,
         }
       })
       .sort((a, b) => b.checkIn.localeCompare(a.checkIn))
@@ -296,6 +300,15 @@ export interface NewRmsBooking {
   notes: string
   /** Who here is making the booking, for the RMS to show. */
   mseeUserName: string
+  /**
+   * Our commission on it, in the property's currency.
+   *
+   * Sent so the RMS shows the same figure we are counting. Without it the owner
+   * would see a booking marked as ours with no number beside it, and the one
+   * place the deal is visible to both sides would be empty.
+   */
+  commissionAmount: number
+  commissionPercent: number
 }
 
 export interface RmsBookingResult {
@@ -418,6 +431,8 @@ export async function createRmsBooking(input: NewRmsBooking): Promise<RmsBooking
         createdByAgency: session.uid,
         mseeReservationId: input.mseeReservationId,
         mseeUserName: input.mseeUserName,
+        mseeCommissionAmount: input.commissionAmount,
+        mseeCommissionPercent: input.commissionPercent,
       })
 
       tx.update(apartmentRef, { bookedNights: [...taken, ...nights].sort() })

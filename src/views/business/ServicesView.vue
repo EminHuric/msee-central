@@ -78,6 +78,21 @@ const draftAdvance = ref(0)
 const pendingDelete = ref<Service | null>(null)
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.SERVICES_MANAGE))
+const canStayBrain = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW))
+
+/**
+ * Is this the accommodation service?
+ *
+ * By name, which is a deliberate trade rather than an oversight. The alternative
+ * is a flag on the service, which means a migration, a field in the form, and a
+ * thing for somebody to set correctly — for a question with one answer in this
+ * company. Matched loosely so "StayBrain", "staybrain" and "Stay Brain" all
+ * count; rename the service to something else and the button follows the name,
+ * which is the behaviour somebody renaming it would expect.
+ */
+function isStayBrain(service: Service): boolean {
+  return service.name.toLowerCase().replace(/[^a-z]/g, '') === 'staybrain'
+}
 const canSeeMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
 
 const serviceFields = computed(() => fieldsFor(fieldDefs.value, 'service'))
@@ -502,6 +517,24 @@ onMounted(load)
           </div>
         </dl>
 
+        <!--
+          The accommodation service opens its own properties.
+
+          StayBrain is not a section of its own any more: selling stays IS this
+          service, so the way in is the service it belongs to. Everything behind
+          this button — the properties, the link to each one's reservation system,
+          the bookings we brought and what they earned — is that service being
+          delivered.
+        -->
+        <RouterLink
+          v-if="isStayBrain(service) && canStayBrain"
+          :to="'/staybrain'"
+          class="btn btn-secondary btn-sm staybrain-link"
+        >
+          <AppIcon name="building" :size="14" />
+          {{ t('staybrain.openProperties') }}
+        </RouterLink>
+
         <div v-if="canManage" class="service-foot">
           <button class="btn btn-ghost btn-sm" @click="toggleStatus(service)">
             {{ service.status === 'active' ? t('services.deactivate') : t('services.activate') }}
@@ -562,6 +595,11 @@ onMounted(load)
 .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin: var(--space-2) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
 .stats dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); margin-bottom: 2px; }
 .stats dd { margin: 0; font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.staybrain-link {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+}
 
 .service-foot { display: flex; align-items: center; gap: var(--space-1); margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
 .spacer { flex: 1; }

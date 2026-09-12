@@ -3043,6 +3043,7 @@ export default {
     now: 'Today',
   },
   staybrain: {
+    openProperties: 'Properties & bookings',
     picked: 'Picked up {n} booking(s) marked as ours in the RMS.',
     unknownProperty: 'Unknown property',
     noneSoldYet: 'No stays sold through StayBrain yet.',
@@ -3084,10 +3085,10 @@ export default {
     noAgencyAccess: 'This account has not allowed agency bookings yet. Reading works; creating a booking will be refused until it is switched on in the RMS.',
     agencyAccessOn: 'This account allows agency bookings.',
 
-    earning: 'What a booking earns us',
+    earning: 'Default earning, when none is typed in the RMS',
     earningModel: 'How it is worked out',
     perReservation: 'Per reservation',
-    perReservationHint: '{amount} for every booking we bring. Ten bookings is ten times that.',
+    perReservationHint: 'Used only when a booking carries no commission of its own. The figure typed on the booking in the RMS always wins.',
     percent: 'Percent of the booking',
     rate: 'Rate to the base currency',
     rateHint: 'Leave at 1 to keep amounts exactly as entered.',

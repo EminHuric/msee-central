@@ -79,13 +79,6 @@ const sections = computed<NavSection[]>(() => {
           internalOnly: true,
         },
         {
-          to: '/staybrain',
-          labelKey: 'modules.staybrain',
-          icon: 'contract',
-          permission: PERMISSIONS.STAYBRAIN_VIEW,
-          internalOnly: true,
-        },
-        {
           to: '/leads',
           labelKey: 'modules.leads',
           icon: 'target',

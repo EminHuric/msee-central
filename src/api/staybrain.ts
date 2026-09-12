@@ -26,11 +26,12 @@ import {
 import { blankTransaction, saveTransaction } from './finance'
 import { moneyOf } from './sales'
 import { remove } from './records'
-import { BASE_CURRENCY, type Money } from '@/types/money'
+import { BASE_CURRENCY, fromMinor, type Money } from '@/types/money'
 import {
   EMPTY_TOTALS,
   MSEE_SOURCE,
   earningFor,
+  earningOf,
   type ListingTotals,
   type RmsBooking,
   type StayBrainListing,
@@ -248,6 +249,10 @@ export async function createReservation(input: NewReservation): Promise<Reservat
       depositAmount: 0,
       notes: input.note,
       mseeUserName: me.name,
+      /* The same figure both systems will report. */
+      commissionAmount: fromMinor(earning.minor, listing.currency),
+      commissionPercent:
+        listing.earning.model === 'percent_of_value' ? listing.earning.percent : 0,
     })
   } catch (error) {
     /*
@@ -443,7 +448,8 @@ export async function importMarkedBookings(
       rmsWorkspaceId: listing.rmsWorkspaceId,
       apartmentId: booking.apartmentId,
       apartmentName: '',
-      earning: earningFor(listing.earning, value),
+      /* What was agreed on the booking, or the listing's standing terms. */
+      earning: earningOf(listing.earning, value, booking.mseeCommissionAmount),
       ownerUid: null,
       ownerName: '',
       deletedAt: null,

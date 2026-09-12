@@ -73,6 +73,33 @@ export interface EarningTerms {
  * The single place the question is answered, so a figure on a card, a figure in
  * the ledger and a figure on the dashboard cannot disagree.
  */
+/**
+ * Our earning on one booking, in the currency the booking was priced in.
+ *
+ * `agreed` is an amount somebody typed against this booking in the RMS. When
+ * there is one it wins outright: a figure a person decided for this stay beats a
+ * rule that was written for stays in general, and overruling it would be telling
+ * them they did not mean it.
+ */
+export function earningOf(
+  terms: EarningTerms,
+  value: Money,
+  agreed: number | null | undefined,
+): Money {
+  if (agreed !== null && agreed !== undefined && agreed > 0) {
+    const minor = Math.round(agreed * 100)
+    return {
+      minor,
+      currency: value.currency,
+      rate: value.rate,
+      baseMinor: Math.round(minor * value.rate),
+      rateDate: value.rateDate,
+    }
+  }
+
+  return earningFor(terms, value)
+}
+
 export function earningFor(terms: EarningTerms, value: Money): Money {
   if (terms.model === 'percent_of_value') {
     const minor = Math.round((value.minor * terms.percent) / 100)
@@ -220,6 +247,18 @@ export interface RmsBooking {
   createdByAgency?: string
   mseeReservationId?: string
   mseeUserName?: string
+
+  /**
+   * Our commission, decided on the booking itself.
+   *
+   * Entered by hand in the RMS when the booking is marked as ours, because that
+   * is where and when the deal is actually struck — a winter week and a peak
+   * August week are not the same percentage. When these are present they are the
+   * answer, and the listing's standing terms are only the fallback for a booking
+   * nobody priced.
+   */
+  mseeCommissionPercent?: number
+  mseeCommissionAmount?: number
 }
 
 /** An RMS account, from its `users` collection. */
