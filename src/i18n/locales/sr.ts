@@ -3042,6 +3042,9 @@ export default {
     now: 'Danas',
   },
   staybrain: {
+    theirBookings: 'Rezervacije objekta',
+    theirBookingsHint: 'Vlasnik ih je uzeo direktno. Nije naša prodaja.',
+    bookInRms: 'Rezervacije se unose i menjaju u RMS-u. Tamo kucni "Booked through MsEe" i upiši procenat — ovde se pojavi samo.',
     openProperties: 'Smeštaji i rezervacije',
     picked: 'Preuzeto {n} rezervacija označenih kao naše u RMS-u.',
     unknownProperty: 'Nepoznat smeštaj',
@@ -3109,7 +3112,7 @@ export default {
     nightsCount: '{n} noćenja',
     unitsLabel: 'Jedinica',
     fromRms: 'Iz RMS-a',
-    connectForAvailability: 'Poveži se na RMS da vidiš šta je slobodno.',
+    connectForAvailability: 'Poveži se na RMS da vidiš kalendar i preuzmeš rezervacije označene kao naše.',
     noUnits: 'Ovaj račun nema jedinice',
     noUnitsHint: 'Dodaj ih u RMS-u — ovo je prikaz njihovih podataka, ne drugo mesto gde se vode.',
     freeOf: 'slobodno {free} od {all} za te datume',

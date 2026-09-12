@@ -52,11 +52,6 @@ const accountsError = ref('')
  */
 const connected = computed(() => rmsSession.value !== null)
 
-/** The account picked, so its unit count and consent can be shown. */
-const chosen = computed(() =>
-  accounts.value.find((a) => a.id === draft.value.rmsWorkspaceId) ?? null,
-)
-
 watch(
   () => props.open,
   async (open) => {
@@ -202,34 +197,6 @@ async function commit(): Promise<void> {
 
           <p v-if="accountsError" class="field-hint warn">{{ accountsError }}</p>
 
-          <!--
-            The empty case, which is the first one anybody meets.
-
-            The list only holds accounts that have switched agency access on in
-            the RMS, so an empty picker is not a fault — it means nobody has
-            invited us yet, and that is a thing to go and do rather than a thing
-            to debug.
-          -->
-          <p v-else-if="!loadingAccounts && !accounts.length" class="field-hint warn">
-            <AppIcon name="alert" :size="13" />
-            {{ t('staybrain.noAccountsYet') }}
-          </p>
-
-          <!--
-            Whether the account has let us write into it.
-
-            Shown here because this is where somebody would otherwise find out
-            the hard way: the listing saves, the units appear, and the first
-            booking is refused. The switch lives in the RMS, on that account.
-          -->
-          <p v-else-if="chosen && !chosen.agencyAccess" class="field-hint warn">
-            <AppIcon name="alert" :size="13" />
-            {{ t('staybrain.noAgencyAccess') }}
-          </p>
-          <p v-else-if="chosen" class="field-hint ok">
-            <AppIcon name="check" :size="13" />
-            {{ t('staybrain.agencyAccessOn') }}
-          </p>
           <p v-else class="field-hint">{{ t('staybrain.rmsAccountHint') }}</p>
         </template>
       </div>

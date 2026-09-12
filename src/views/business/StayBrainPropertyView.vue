@@ -1,60 +1,46 @@
 <script setup lang="ts">
 /**
- * One property: its units as the RMS has them, and the bookings we brought.
+ * One property: its units and calendar as the RMS has them, and what we brought.
  *
- * TWO SOURCES ON ONE PAGE, AND THEY NEVER MIX.
+ * THIS SCREEN READS AND NEVER WRITES TO THE RMS. Bookings are taken in the RMS,
+ * because that is where the phone is answered, and marked there as ours with one
+ * tick and a percentage. Everything here is the other end of that: the same
+ * calendar, and the guests we brought with what each one earned us.
  *
- *   From the RMS, read fresh every time: the units, and every booking against
- *   them whoever took it. This is availability, and it has to be all of them —
- *   a booking the owner took on the phone blocks a unit exactly as firmly as
- *   one of ours.
+ * WHY READ-ONLY IS THE BETTER DESIGN AND NOT A LIMITATION. Booking from here
+ * would mean the RMS granting an outside account permission to write into other
+ * people's calendars — a rules change to deploy, flags to switch on, and a second
+ * place a booking can come from, which is a second place a guest can be
+ * double-booked. Reading needs none of that and works against the RMS exactly as
+ * it already stands. One place takes bookings; one place counts them.
  *
- *   From MsEe Central: the bookings WE brought, with what each earns us. These
- *   are the only ones that count as sales, and they are counted from our own
- *   database, never from the RMS's list.
+ * TWO SOURCES ON ONE SCREEN, AND THEY NEVER MIX.
  *
- * So the page can say "this unit is taken" about somebody else's booking and
- * still report that we sold six — which is the whole point of the integration.
+ *   From the RMS, read fresh every time: the units and every booking against
+ *   them, whoever brought it. That is the calendar, and it has to be all of them.
  *
- * NOTHING IS CACHED. Every visit re-reads the RMS. A remembered calendar would
- * be right until the owner took a booking, and then it would be confidently
- * wrong, which is how a guest gets double-booked.
+ *   From MsEe Central: the bookings the RMS marked as ours, with the commission
+ *   that was agreed on each. These are the only ones that count as sales, and
+ *   they are counted from our own records.
  */
 
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
-import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RmsConnectionPanel from '@/components/RmsConnectionPanel.vue'
 import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
-import { RmsConflict, fetchApartments, fetchBookings } from '@/api/rms'
-import {
-  cancelReservation,
-  createReservation,
-  fetchReservationsForListing,
-  importMarkedBookings,
-  repairReservation,
-  totalsOf,
-} from '@/api/staybrain'
+import { fetchApartments, fetchBookings } from '@/api/rms'
+import { fetchReservationsForListing, importMarkedBookings, totalsOf } from '@/api/staybrain'
 import { readOne } from '@/api/store'
 import { formatDate } from '@/i18n'
 import { rmsReady, rmsSession } from '@/lib/rms'
-import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { BASE_CURRENCY, formatMoney } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
-import {
-  availabilityFor,
-  earningFor,
-  isOurs,
-  nightsBetween,
-  type RmsApartment,
-  type RmsBooking,
-  type StayBrainListing,
-} from '@/types/staybrain'
+import type { RmsApartment, RmsBooking, StayBrainListing } from '@/types/staybrain'
 import type { Reservation } from '@/types/reservations'
 
 const route = useRoute()
@@ -68,20 +54,13 @@ const loading = ref(true)
 const notFound = ref(false)
 const rmsLoading = ref(false)
 const rmsError = ref('')
-/*
- * The live session, not a copy of it.
- *
- * This used to be a ref set inside `load()`, which meant the screen only learned
- * about a connection when something reloaded the page's data.
- */
-const connected = computed(() => rmsSession.value !== null)
 
 const listing = ref<StayBrainListing | null>(null)
 const apartments = ref<RmsApartment[]>([])
 const rmsBookings = ref<RmsBooking[]>([])
 const ours = ref<Reservation[]>([])
 
-const canCreate = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_CREATE_RESERVATION))
+const connected = computed(() => rmsSession.value !== null)
 const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW_REVENUE))
 
 const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -90,64 +69,10 @@ const listingMoney = (minor: number) =>
 
 const totals = computed(() => totalsOf(ours.value))
 
-/* ---- the stay being planned ------------------------------------------- */
-
-const today = new Date().toISOString().slice(0, 10)
-const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
-
-const checkIn = ref(today)
-const checkOut = ref(tomorrow)
-const guests = ref(2)
-
-const nights = computed(() => nightsBetween(checkIn.value, checkOut.value).length)
-
-const availability = computed(() =>
-  availabilityFor(apartments.value, rmsBookings.value, checkIn.value, checkOut.value, guests.value),
+/** The property's own bookings — not ours, and never counted as sales. */
+const theirs = computed(
+  () => rmsBookings.value.filter((b) => b.source !== 'MSEE' && b.status !== 'cancelled').length,
 )
-
-const freeCount = computed(() => availability.value.filter((u) => u.free).length)
-
-/* ---- the booking form ------------------------------------------------- */
-
-const formOpen = ref(false)
-const chosenUnit = ref<RmsApartment | null>(null)
-const guestName = ref('')
-const guestContact = ref('')
-const guestOrigin = ref('')
-const note = ref('')
-const total = ref(0)
-const saving = ref(false)
-
-/** What the guest pays, suggested from the unit's nightly rate. */
-watch([chosenUnit, nights], () => {
-  if (!chosenUnit.value) return
-  total.value = Number((chosenUnit.value.pricePerNight * nights.value).toFixed(2))
-})
-
-/** What we would earn on it, at this listing's terms. */
-const earningPreview = computed(() => {
-  if (!listing.value) return 0
-  const value = {
-    minor: Math.round(total.value * 100),
-    currency: listing.value.currency,
-    rate: listing.value.rate,
-    baseMinor: Math.round(total.value * 100 * listing.value.rate),
-    rateDate: checkIn.value,
-  }
-  return earningFor(listing.value.earning, value).minor
-})
-
-function startBooking(unit: RmsApartment): void {
-  chosenUnit.value = unit
-  total.value = Number((unit.pricePerNight * nights.value).toFixed(2))
-  guestName.value = ''
-  guestContact.value = ''
-  guestOrigin.value = ''
-  note.value = ''
-  formOpen.value = true
-}
-
-/* ---- loading ---------------------------------------------------------- */
 
 async function load(): Promise<void> {
   loading.value = true
@@ -176,10 +101,10 @@ async function load(): Promise<void> {
 }
 
 /**
- * The RMS half, on its own so it can be refreshed without reloading the page.
+ * The RMS half, separately so it can be re-read without reloading the page.
  *
- * Separated because availability goes stale in seconds and somebody about to
- * book wants to be sure — the refresh button is not decoration.
+ * A booking can be taken or marked as ours at any moment, so the refresh button
+ * is not decoration.
  */
 async function loadFromRms(): Promise<void> {
   const row = listing.value
@@ -196,21 +121,15 @@ async function loadFromRms(): Promise<void> {
     rmsBookings.value = bookings
 
     /*
-     * Pick up whatever was marked "through MsEe" in the RMS.
+     * Pick up whatever was marked "through MsEe" over there.
      *
-     * THIS IS THE WHOLE OF THE SECOND WORKFLOW. The property is run from the RMS,
-     * so the honest place to say a guest came through us is there, on the booking,
-     * with one tick. Opening this screen is when that tick becomes a reservation
-     * here with its commission worked out.
-     *
-     * Idempotent, so it runs on every load and does nothing when there is nothing
-     * new — and it writes nothing at all when no booking has changed, which is why
-     * it is safe to have in a function a refresh button calls.
+     * THIS IS THE WHOLE MECHANISM. One tick on the booking in the RMS, and opening
+     * this screen turns it into a reservation here with the commission that was
+     * typed beside it. Idempotent, so it runs on every load, does nothing when
+     * there is nothing new, and writes nothing at all when nothing has changed.
      */
     const picked = await importMarkedBookings(row, bookings, ours.value)
-    if (picked.added > 0) {
-      ui.notify('ok', t('staybrain.picked', { n: picked.added }))
-    }
+    if (picked.added > 0) ui.notify('ok', t('staybrain.picked', { n: picked.added }))
     if (picked.added > 0 || picked.updated > 0) {
       ours.value = await fetchReservationsForListing(row.id)
     }
@@ -226,11 +145,9 @@ async function loadFromRms(): Promise<void> {
 /**
  * What the property has collected on one of our bookings.
  *
- * Read from the RMS, never stored here, and deliberately READ-ONLY: deposits and
- * payments are the owner's ledger against their own guest, and the agency has no
- * business writing into it. Shown because "booked" and "paid" are different
- * facts, and somebody chasing money should not have to open a second system to
- * learn which.
+ * Read from the RMS and never stored here. Deposits and payments are the owner's
+ * ledger against their own guest; "booked" and "paid" are different facts, and
+ * chasing one should not mean opening a second system to learn the other.
  */
 function paymentOf(row: Reservation): { status: string; paid: number; total: number } | null {
   if (!row.rmsBookingId) return null
@@ -239,131 +156,10 @@ function paymentOf(row: Reservation): { status: string; paid: number; total: num
   return { status: booking.paymentStatus, paid: booking.totalPaid, total: booking.totalPrice }
 }
 
-/** Clicking a free night in the calendar starts a booking on that date. */
-function pickFromCalendar(unit: RmsApartment, date: string): void {
-  if (!canCreate.value) return
-
-  const taken = rmsBookings.value.some(
-    (b) => b.apartmentId === unit.id && b.status !== 'cancelled' && b.checkIn <= date && b.checkOut > date,
-  )
-  /* A taken night is not an invitation. The bar already says who is in it. */
-  if (taken) return
-
-  checkIn.value = date
-  /* One night by default — the length is the next thing somebody chooses. */
-  checkOut.value = new Date(Date.parse(date) + 86_400_000).toISOString().slice(0, 10)
-  startBooking(unit)
-}
-
-/* ---- making the booking ---------------------------------------------- */
-
-async function commit(): Promise<void> {
-  const row = listing.value
-  const unit = chosenUnit.value
-  if (!row || !unit || saving.value) return
-
-  if (!guestName.value.trim()) {
-    ui.notify('danger', t('staybrain.needGuest'))
-    return
-  }
-  if (nights.value < 1) {
-    ui.notify('danger', t('staybrain.needNights'))
-    return
-  }
-
-  saving.value = true
-  try {
-    const outcome = await createReservation({
-      listing: row,
-      apartmentId: unit.id,
-      apartmentName: unit.name,
-      pricePerNight: unit.pricePerNight,
-      total: total.value,
-      guestName: guestName.value.trim(),
-      guestContact: guestContact.value.trim(),
-      guestOrigin: guestOrigin.value.trim(),
-      checkIn: checkIn.value,
-      checkOut: checkOut.value,
-      nights: nights.value,
-      guests: guests.value,
-      note: note.value.trim(),
-    })
-
-    ui.notify(
-      'ok',
-      outcome.rms.alreadyExisted
-        ? t('staybrain.alreadyThere', { reference: outcome.rms.reservationId })
-        : t('staybrain.booked', { reference: outcome.rms.reservationId }),
-    )
-
-    formOpen.value = false
-    chosenUnit.value = null
-    /* Both halves: ours changed, and so did the property's calendar. */
-    ours.value = await fetchReservationsForListing(row.id)
-    await loadFromRms()
-  } catch (error) {
-    /*
-     * Each failure gets its own sentence. A clash names the guest in the way, so
-     * somebody can pick another unit or another week instead of guessing.
-     */
-    if (error instanceof RmsConflict) {
-      ui.notify(
-        'danger',
-        t('staybrain.clash', {
-          guest: error.guestName || t('staybrain.anotherGuest'),
-          from: formatDate(error.from),
-          to: formatDate(error.to),
-        }),
-      )
-      await loadFromRms()
-    } else {
-      ui.notify('danger', (error as Error).message || t('errors.generic'))
-      ours.value = await fetchReservationsForListing(row.id)
-    }
-  } finally {
-    saving.value = false
-  }
-}
-
-/* ---- repair and cancel ----------------------------------------------- */
-
-const busyId = ref('')
-const pendingCancel = ref<Reservation | null>(null)
-
-/** Ask the RMS whether a booking it never confirmed actually got there. */
-async function repair(row: Reservation): Promise<void> {
-  busyId.value = row.id
-  try {
-    const result = await repairReservation(row)
-    ui.notify(
-      result === 'linked' ? 'ok' : 'warn',
-      result === 'linked' ? t('staybrain.repaired') : t('staybrain.notInRms'),
-    )
-    ours.value = await fetchReservationsForListing(listingId.value)
-    await loadFromRms()
-  } catch (error) {
-    ui.notify('danger', (error as Error).message || t('errors.generic'))
-  } finally {
-    busyId.value = ''
-  }
-}
-
-async function confirmCancel(): Promise<void> {
-  const row = pendingCancel.value
-  if (!row) return
-
-  busyId.value = row.id
-  try {
-    await cancelReservation(row)
-    ui.notify('ok', t('staybrain.cancelled'))
-    pendingCancel.value = null
-    ours.value = await fetchReservationsForListing(listingId.value)
-    await loadFromRms()
-  } catch (error) {
-    ui.notify('danger', (error as Error).message || t('errors.generic'))
-  } finally {
-    busyId.value = ''
-  }
+/** The percentage typed on the booking in the RMS, when there was one. */
+function percentOf(row: Reservation): number | null {
+  const booking = rmsBookings.value.find((b) => b.id === row.rmsBookingId)
+  return booking?.mseeCommissionPercent || null
 }
 
 onMounted(load)
@@ -396,11 +192,15 @@ onMounted(load)
           <h1 class="page-title">{{ listing.name }}</h1>
           <p class="page-subtitle">{{ listing.clientName }}</p>
         </div>
+        <button class="btn btn-secondary" :disabled="rmsLoading || !connected" @click="loadFromRms">
+          <AppIcon name="history" :size="15" />
+          {{ t('staybrain.refresh') }}
+        </button>
       </header>
 
       <RmsConnectionPanel @changed="load" />
 
-      <!-- What we sold here. Ours only, counted from our own records. -->
+      <!-- What we brought. Ours only, counted from our own records. -->
       <section class="card summary">
         <div>
           <span class="figure-label">{{ t('staybrain.ourReservations') }}</span>
@@ -418,206 +218,87 @@ onMounted(load)
           <span class="figure-hint">{{ t('staybrain.ourRevenueHint') }}</span>
         </div>
         <div>
-          <span class="figure-label">{{ t('staybrain.unitsLabel') }}</span>
-          <span class="figure-value">{{ apartments.length }}</span>
-          <span class="figure-hint">{{ t('staybrain.fromRms') }}</span>
+          <span class="figure-label">{{ t('staybrain.theirBookings') }}</span>
+          <span class="figure-value">{{ theirs }}</span>
+          <span class="figure-hint">{{ t('staybrain.theirBookingsHint') }}</span>
         </div>
       </section>
 
-      <!--
-        The calendar, as the property has it.
+      <!-- Why nothing here is editable, said once rather than implied. -->
+      <p class="where-to-book">
+        <AppIcon name="info" :size="14" />
+        {{ t('staybrain.bookInRms') }}
+      </p>
 
-        Above the list because it is the question people actually arrive with —
-        what is free, and how much of what is taken did we bring. The list below
-        answers the narrower version of it for one chosen stay.
-      -->
-      <StayBrainCalendar
-        v-if="connected && apartments.length"
-        :apartments="apartments"
-        :bookings="rmsBookings"
-        :currency="listing.currency"
-        :from-date="checkIn"
-        :to-date="checkOut"
-        @pick="pickFromCalendar"
-      />
-
-      <!-- Availability ------------------------------------------------- -->
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">{{ t('staybrain.availability') }}</h2>
-            <p class="field-hint">{{ t('staybrain.availabilityHint') }}</p>
-          </div>
-          <button
-            class="btn btn-ghost btn-sm"
-            :disabled="rmsLoading || !connected"
-            @click="loadFromRms"
-          >
-            <AppIcon name="history" :size="14" />
-            {{ t('staybrain.refresh') }}
-          </button>
-        </div>
-
-        <div class="card-body dates">
-          <div class="field">
-            <label class="field-label" for="sb-in">{{ t('staybrain.checkIn') }}</label>
-            <input id="sb-in" v-model="checkIn" class="input" type="date" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="sb-out">{{ t('staybrain.checkOut') }}</label>
-            <input id="sb-out" v-model="checkOut" class="input" type="date" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="sb-guests">{{ t('staybrain.guests') }}</label>
-            <input id="sb-guests" v-model.number="guests" class="input" type="number" min="1" />
-          </div>
-          <div class="field summary-line">
-            <span class="field-label">{{ t('staybrain.nights') }}</span>
-            <p class="computed">{{ nights }}</p>
-          </div>
-        </div>
-
-        <div v-if="!listing.rmsWorkspaceId" class="card-body">
+      <div v-if="!listing.rmsWorkspaceId" class="card">
+        <div class="card-body">
           <p class="field-hint warn">
             <AppIcon name="alert" :size="13" />
             {{ t('staybrain.notLinked') }}
           </p>
         </div>
+      </div>
 
-        <div v-else-if="!connected" class="card-body">
-          <p class="field-hint warn">{{ t('staybrain.connectForAvailability') }}</p>
+      <div v-else-if="!connected" class="card">
+        <div class="card-body">
+          <p class="field-hint">{{ t('staybrain.connectForAvailability') }}</p>
         </div>
+      </div>
 
-        <div v-else-if="rmsLoading" class="card-body stack">
-          <div v-for="n in 3" :key="n" class="skeleton" style="height: 36px" />
+      <div v-else-if="rmsLoading" class="card">
+        <div class="card-body stack">
+          <div v-for="n in 4" :key="n" class="skeleton" style="height: 30px" />
         </div>
+      </div>
 
-        <div v-else-if="rmsError" class="card-body">
+      <div v-else-if="rmsError" class="card">
+        <div class="card-body">
           <p class="field-hint warn">
             <AppIcon name="alert" :size="13" />
             {{ rmsError }}
           </p>
         </div>
+      </div>
 
-        <div v-else-if="!apartments.length" class="empty">
-          <p class="empty-title">{{ t('staybrain.noUnits') }}</p>
-          <p class="empty-text">{{ t('staybrain.noUnitsHint') }}</p>
-        </div>
+      <template v-else>
+        <!-- The calendar, exactly as the property has it. -->
+        <StayBrainCalendar
+          v-if="apartments.length"
+          :apartments="apartments"
+          :bookings="rmsBookings"
+          :currency="listing.currency"
+        />
 
-        <template v-else>
-          <p class="card-body count">
-            {{ t('staybrain.freeOf', { free: freeCount, all: apartments.length }) }}
-          </p>
-
+        <!-- The units, with what the RMS knows about each. -->
+        <section v-if="apartments.length" class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('staybrain.unitsLabel') }}</h2>
+            <p class="field-hint">{{ t('staybrain.fromRms') }}</p>
+          </div>
           <ul class="units">
-            <li v-for="unit in availability" :key="unit.apartment.id" class="unit">
-              <div class="unit-main">
-                <span class="unit-name">{{ unit.apartment.name }}</span>
-                <span class="unit-meta">
-                  {{ t('staybrain.sleeps', { n: unit.apartment.maxGuests }) }}
-                  <template v-if="unit.apartment.pricePerNight > 0">
-                    <span class="tertiary">·</span>
-                    {{ listingMoney(Math.round(unit.apartment.pricePerNight * 100)) }}
-                    {{ t('staybrain.perNight') }}
-                  </template>
-                </span>
-              </div>
-
-              <div class="unit-state">
-                <span v-if="unit.free" class="pill free">{{ t('staybrain.free') }}</span>
-                <span v-else class="pill taken">{{ t('staybrain.taken') }}</span>
-                <span v-if="unit.clash" class="unit-clash">
-                  {{ unit.clash.guestName || t('staybrain.anotherGuest') }}
-                  <span class="tertiary">
-                    {{ formatDate(unit.clash.checkIn) }} – {{ formatDate(unit.clash.checkOut) }}
-                  </span>
-                  <span v-if="isOurs(unit.clash)" class="mine">{{ t('staybrain.oursTag') }}</span>
-                </span>
-                <span v-if="unit.tooSmall" class="unit-clash warn">
-                  {{ t('staybrain.tooSmall', { n: unit.apartment.maxGuests }) }}
-                </span>
-              </div>
-
-              <button
-                v-if="canCreate"
-                class="btn btn-secondary btn-sm"
-                :disabled="!unit.free"
-                @click="startBooking(unit.apartment)"
-              >
-                {{ t('staybrain.book') }}
-              </button>
+            <li v-for="unit in apartments" :key="unit.id" class="unit">
+              <span class="unit-name">{{ unit.name }}</span>
+              <span class="unit-meta">{{ t('staybrain.sleeps', { n: unit.maxGuests }) }}</span>
+              <span class="unit-meta">
+                <template v-if="unit.pricePerNight > 0">
+                  {{ listingMoney(Math.round(unit.pricePerNight * 100)) }}
+                  {{ t('staybrain.perNight') }}
+                </template>
+              </span>
+              <span v-if="unit.description" class="unit-meta desc">{{ unit.description }}</span>
             </li>
           </ul>
-        </template>
-      </section>
+        </section>
 
-      <!-- The booking form --------------------------------------------- -->
-      <section v-if="formOpen && chosenUnit" class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title">
-              {{ t('staybrain.bookingIn', { unit: chosenUnit.name }) }}
-            </h2>
-            <p class="field-hint">
-              {{ formatDate(checkIn) }} – {{ formatDate(checkOut) }} ·
-              {{ t('staybrain.nightsCount', { n: nights }) }}
-            </p>
-          </div>
-          <button class="btn btn-ghost btn-sm" @click="formOpen = false">
-            <AppIcon name="close" :size="15" />
-          </button>
-        </div>
-
-        <div class="card-body field-grid">
-          <div class="field">
-            <label class="field-label" for="sb-guest">{{ t('staybrain.guestName') }}</label>
-            <input id="sb-guest" v-model="guestName" class="input" :maxlength="LIMITS.name" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="sb-contact">{{ t('staybrain.contact') }}</label>
-            <input id="sb-contact" v-model="guestContact" class="input" :maxlength="LIMITS.shortText" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="sb-origin">{{ t('staybrain.origin') }}</label>
-            <input id="sb-origin" v-model="guestOrigin" class="input" :maxlength="LIMITS.shortText" />
-            <p class="field-hint">{{ t('staybrain.originHint') }}</p>
-          </div>
-          <div class="field">
-            <label class="field-label" for="sb-total">{{ t('staybrain.total') }}</label>
-            <input id="sb-total" v-model.number="total" class="input" type="number" min="0" step="0.01" />
-            <p class="field-hint">{{ t('staybrain.totalHint') }}</p>
+        <div v-else class="card">
+          <div class="empty">
+            <p class="empty-title">{{ t('staybrain.noUnits') }}</p>
+            <p class="empty-text">{{ t('staybrain.noUnitsHint') }}</p>
           </div>
         </div>
+      </template>
 
-        <div class="card-body">
-          <div class="field">
-            <label class="field-label" for="sb-note">{{ t('staybrain.note') }}</label>
-            <input id="sb-note" v-model="note" class="input" :maxlength="LIMITS.shortText" />
-          </div>
-
-          <!--
-            Said before the booking is made: what the guest pays is the owner's,
-            what we earn is ours, and they are different numbers.
-          -->
-          <p v-if="canSeeRevenue" class="split">
-            <span>{{ t('staybrain.theyGet', { amount: listingMoney(Math.round(total * 100)) }) }}</span>
-            <span class="brand">{{ t('staybrain.weGet', { amount: listingMoney(earningPreview) }) }}</span>
-          </p>
-
-          <div class="row end">
-            <button class="btn btn-secondary" @click="formOpen = false">
-              {{ t('common.cancel') }}
-            </button>
-            <button class="btn btn-primary" :disabled="saving" @click="commit">
-              <span v-if="saving" class="spinner" />
-              {{ t('staybrain.confirmBooking') }}
-            </button>
-          </div>
-          <p class="field-hint">{{ t('staybrain.confirmHint') }}</p>
-        </div>
-      </section>
-
-      <!-- What we brought --------------------------------------------- -->
+      <!-- The guests we brought, with everything the RMS knows about them. -->
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">{{ t('staybrain.ourBookings') }}</h2>
@@ -632,20 +313,20 @@ onMounted(load)
           <li v-for="row in ours" :key="row.id" class="booking">
             <div class="booking-main">
               <span class="booking-guest">{{ row.guestName }}</span>
+              <span v-if="row.guestContact" class="booking-meta">{{ row.guestContact }}</span>
               <span class="booking-meta">
-                {{ row.apartmentName }}
-                <span class="tertiary">·</span>
                 {{ formatDate(row.checkIn) }} – {{ formatDate(row.checkOut) }}
+                <span class="tertiary">·</span>
+                {{ t('staybrain.nightsCount', { n: row.nights }) }}
               </span>
-              <span v-if="row.rmsReservationId" class="tertiary small">
-                {{ row.rmsReservationId }}
-              </span>
+              <span v-if="row.note" class="booking-meta desc">{{ row.note }}</span>
             </div>
 
             <div class="booking-money">
               <span>{{ money(row.value.baseMinor) }}</span>
               <span v-if="canSeeRevenue" class="brand small">
                 {{ t('staybrain.weGetShort', { amount: money(row.earning?.baseMinor ?? 0) }) }}
+                <template v-if="percentOf(row)">({{ percentOf(row) }}%)</template>
               </span>
             </div>
 
@@ -653,7 +334,6 @@ onMounted(load)
               <span class="pill" :class="row.status === 'cancelled' ? 'taken' : 'free'">
                 {{ t(`reservationStatus.${row.status}`) }}
               </span>
-              <!-- The owner's money, from the owner's system. Not editable here. -->
               <span v-if="paymentOf(row)" class="paid" :class="`paid-${paymentOf(row)?.status}`">
                 {{ t(`paymentState.${paymentOf(row)?.status}`) }}
                 <span class="tertiary">
@@ -662,46 +342,14 @@ onMounted(load)
                   {{ listingMoney(Math.round((paymentOf(row)?.total ?? 0) * 100)) }}
                 </span>
               </span>
-              <span class="sync" :class="`sync-${row.syncState}`">
-                {{ t(`syncState.${row.syncState}`) }}
+              <span v-if="row.rmsReservationId" class="tertiary small">
+                {{ row.rmsReservationId }}
               </span>
-              <span v-if="row.syncError" class="sync-error">{{ row.syncError }}</span>
-            </div>
-
-            <div class="booking-actions">
-              <button
-                v-if="row.syncState !== 'taken' && canCreate"
-                class="btn btn-ghost btn-sm"
-                :disabled="busyId === row.id || !connected"
-                :title="t('staybrain.checkRms')"
-                @click="repair(row)"
-              >
-                <AppIcon name="history" :size="14" />
-              </button>
-              <button
-                v-if="row.status !== 'cancelled' && canCreate"
-                class="btn btn-ghost btn-sm danger"
-                :disabled="busyId === row.id"
-                :title="t('staybrain.cancel')"
-                @click="pendingCancel = row"
-              >
-                <AppIcon name="close" :size="14" />
-              </button>
             </div>
           </li>
         </ul>
       </section>
     </template>
-
-    <ConfirmDialog
-      :open="pendingCancel !== null"
-      :title="t('staybrain.cancelTitle')"
-      :message="t('staybrain.cancelMessage', { guest: pendingCancel?.guestName ?? '' })"
-      danger
-      :busy="busyId !== ''"
-      @confirm="confirmCancel"
-      @cancel="pendingCancel = null"
-    />
   </div>
 </template>
 
@@ -754,21 +402,12 @@ onMounted(load)
   color: var(--brand-500);
 }
 
-.dates {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-}
-
-.summary-line .computed {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
-.count {
+.where-to-book {
+  align-items: center;
   color: var(--text-secondary);
+  display: flex;
   font-size: var(--text-sm);
+  gap: var(--space-2);
 }
 
 .units,
@@ -778,36 +417,17 @@ onMounted(load)
   padding: 0;
 }
 
-.unit,
-.booking {
-  align-items: center;
+.unit {
+  align-items: baseline;
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-}
-
-.unit {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
-}
-
-.booking {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: var(--space-2) var(--space-4);
 }
 
 .unit + .unit,
 .booking + .booking {
   border-top: 1px solid var(--border-subtle);
-}
-
-.unit-main,
-.unit-state,
-.booking-main,
-.booking-money,
-.booking-state {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .unit-name,
@@ -816,10 +436,30 @@ onMounted(load)
 }
 
 .unit-meta,
-.booking-meta,
-.unit-clash {
+.booking-meta {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
+}
+
+.desc {
+  grid-column: 1 / -1;
+}
+
+.booking {
+  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  padding: var(--space-3) var(--space-4);
+}
+
+.booking-main,
+.booking-money,
+.booking-state {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .small {
@@ -845,24 +485,6 @@ onMounted(load)
   color: var(--text-tertiary);
 }
 
-.mine {
-  background: var(--brand-50);
-  border-radius: var(--radius-full);
-  color: var(--brand-700);
-  font-size: var(--text-xs);
-  margin-left: 4px;
-  padding: 0 6px;
-}
-
-.sync {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
-.sync-taken {
-  color: var(--ok-500);
-}
-
 .paid {
   font-size: var(--text-xs);
 }
@@ -875,60 +497,19 @@ onMounted(load)
   color: var(--warn-500);
 }
 
-.sync-failed,
-.sync-error {
-  color: var(--danger-500);
-  font-size: var(--text-xs);
-}
-
-.warn {
-  color: var(--warn-500);
-}
-
 .field-hint.warn {
   align-items: center;
+  color: var(--warn-500);
   display: flex;
   gap: 4px;
 }
 
-.field-grid {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.split {
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  font-size: var(--text-sm);
-  gap: var(--space-4);
-  justify-content: space-between;
-  margin: var(--space-3) 0;
-  padding-top: var(--space-3);
-}
-
-.row.end {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: flex-end;
-}
-
-.booking-actions {
-  display: flex;
-  gap: 2px;
-}
-
-.booking-actions .danger:hover {
-  color: var(--danger-500);
-}
-
 @media (max-width: 760px) {
-  .unit,
-  .booking {
+  .booking,
+  .unit {
     grid-template-columns: 1fr auto;
   }
 
-  .unit-state,
   .booking-state {
     grid-column: 1 / -1;
     flex-direction: row;

@@ -10,27 +10,20 @@
  *   which we brought six reports six — and can never drift towards thirty,
  *   because the two numbers come from different databases.
  *
- * THE ORDER OF THE WRITES in `createReservation` is the part to read carefully.
- * It is not the obvious order, and the reason is in the comment there.
+ * NOTHING HERE WRITES TO THE RMS. Bookings are taken there and marked there;
+ * this side reads them, records what it brought, and works out what it earned.
  */
 
 import { logAudit } from './audit'
 import { saveReservation } from './reservations'
-import { actor, newId, patch, readAll, readWhere, where, write } from './store'
-import {
-  cancelRmsBooking,
-  createRmsBooking,
-  findBookingByReservation,
-  type RmsBookingResult,
-} from './rms'
+import { actor, patch, readAll, readWhere, where, write } from './store'
 import { blankTransaction, saveTransaction } from './finance'
 import { moneyOf } from './sales'
 import { remove } from './records'
-import { BASE_CURRENCY, fromMinor, type Money } from '@/types/money'
+import { BASE_CURRENCY, type Money } from '@/types/money'
 import {
   EMPTY_TOTALS,
   MSEE_SOURCE,
-  earningFor,
   earningOf,
   type ListingTotals,
   type RmsBooking,
@@ -132,231 +125,6 @@ export function totalsByListing(rows: Reservation[]): Map<string, ListingTotals>
   const out = new Map<string, ListingTotals>()
   byListing.forEach((list, id) => out.set(id, totalsOf(list)))
   return out
-}
-
-/* ------------------------------------------------------------------ *
- * Making a reservation
- * ------------------------------------------------------------------ */
-
-export interface NewReservation {
-  listing: StayBrainListing
-  apartmentId: string
-  apartmentName: string
-  /** Nightly rate from the RMS, in the listing's currency, as a plain amount. */
-  pricePerNight: number
-  /** The whole booking, in the listing's currency, as a plain amount. */
-  total: number
-  guestName: string
-  guestContact: string
-  /** The guest's town or country — the RMS's `origin`. */
-  guestOrigin: string
-  checkIn: string
-  checkOut: string
-  nights: number
-  guests: number
-  note: string
-}
-
-export interface ReservationOutcome {
-  reservationId: string
-  rms: RmsBookingResult
-  earning: Money
-}
-
-/**
- * Sell a booking: record it here, put it in the RMS, then confirm it here.
- *
- * THE ORDER, AND WHY IT IS THIS WAY.
- *
- * 1. Write our own reservation first, as `pending`. This gives us an id, and the
- *    id is what makes the RMS write idempotent — the RMS document is named after
- *    it, so the same call twice writes the same document.
- *
- * 2. Create the booking in the RMS. If this throws, our row stays `pending` with
- *    the reason on it. NOTHING is counted: `pending` earns nothing, because a
- *    booking the property never received is not a sale.
- *
- * 3. Only now mark ours `taken` and record what it earns.
- *
- * Writing ours second would be the obvious order and it is the wrong one: a
- * booking would appear in somebody's calendar that this system had no record of,
- * and nobody would ever find it. This way the worst case is a row here marked
- * `pending` that the RMS actually holds — visible, recoverable, and recovered by
- * `repairReservation` below, which asks the RMS by our own id.
- */
-export async function createReservation(input: NewReservation): Promise<ReservationOutcome> {
-  const me = actor()
-  const { listing } = input
-
-  if (!listing.rmsWorkspaceId) {
-    throw new Error('This listing is not linked to an RMS account yet.')
-  }
-
-  const value = moneyOf(input.total, listing.currency, listing.rate, input.checkIn)
-  const earning = earningFor(listing.earning, value)
-
-  /* 1. Ours, pending, with an id of its own. */
-  const reservationId = newId()
-
-  await saveReservation({
-    id: reservationId,
-    clientId: listing.clientId,
-    clientName: listing.clientName,
-    guestName: input.guestName,
-    guestContact: input.guestContact,
-    checkIn: input.checkIn,
-    checkOut: input.checkOut,
-    nights: input.nights,
-    guests: input.guests,
-    value,
-    source: listing.name,
-    status: 'confirmed',
-    note: input.note,
-    syncState: 'pending',
-    rmsReservationId: '',
-    rmsBookingId: '',
-    takenAt: null,
-    syncError: '',
-    listingId: listing.id,
-    rmsWorkspaceId: listing.rmsWorkspaceId,
-    apartmentId: input.apartmentId,
-    apartmentName: input.apartmentName,
-    earning,
-    ownerUid: me.uid,
-    ownerName: me.name,
-    deletedAt: null,
-    deletedBy: null,
-    deletedByName: '',
-    createdAt: '',
-    createdBy: '',
-    updatedAt: '',
-  })
-
-  /* 2. Theirs. This is the step that decides whether a sale happened. */
-  let rms: RmsBookingResult
-  try {
-    rms = await createRmsBooking({
-      workspaceId: listing.rmsWorkspaceId,
-      apartmentId: input.apartmentId,
-      mseeReservationId: reservationId,
-      guestName: input.guestName,
-      phone: input.guestContact,
-      origin: input.guestOrigin,
-      checkIn: input.checkIn,
-      checkOut: input.checkOut,
-      pricePerNight: input.pricePerNight,
-      totalPrice: input.total,
-      depositAmount: 0,
-      notes: input.note,
-      mseeUserName: me.name,
-      /* The same figure both systems will report. */
-      commissionAmount: fromMinor(earning.minor, listing.currency),
-      commissionPercent:
-        listing.earning.model === 'percent_of_value' ? listing.earning.percent : 0,
-    })
-  } catch (error) {
-    /*
-     * Mark why, and stop. The row stays `pending`, which counts for nothing, and
-     * the message is kept so the person who looks at it later knows what the RMS
-     * said rather than that "something failed".
-     */
-    await markFailed(reservationId, (error as Error).message)
-    throw error
-  }
-
-  /* 3. Confirm ours against what the RMS actually gave back. */
-  await patch('reservations', reservationId, {
-    syncState: 'taken',
-    rmsReservationId: rms.reservationId,
-    rmsBookingId: rms.id,
-    takenAt: new Date().toISOString(),
-    syncError: '',
-  })
-
-  await logAudit({
-    action: 'reservation.created',
-    targetType: 'client',
-    targetId: listing.clientId,
-    targetLabel: listing.name,
-    metadata: {
-      reservationId,
-      rmsBookingId: rms.id,
-      rmsReference: rms.reservationId,
-      apartment: input.apartmentName,
-      guest: input.guestName,
-      checkIn: input.checkIn,
-      nights: input.nights,
-      valueMinor: value.minor,
-      earningMinor: earning.minor,
-      alreadyExisted: rms.alreadyExisted,
-    },
-  })
-
-  return { reservationId, rms, earning }
-}
-
-async function markFailed(reservationId: string, reason: string): Promise<void> {
-  await patch('reservations', reservationId, {
-    syncState: 'failed',
-    /* Trimmed: this is shown on a card, not in a log. */
-    syncError: reason.slice(0, 300),
-  })
-}
-
-/**
- * Repair a reservation whose RMS answer never arrived.
- *
- * The one failure that cannot be designed away: the RMS accepted the booking and
- * the reply was lost. Asking it by our own id settles the question — if the
- * booking is there, the link is recorded and the sale counts; if it is not, the
- * row stays as it was and can be sent again. Either way no guest is booked twice,
- * because the document id was ours from the start.
- */
-export async function repairReservation(row: Reservation): Promise<'linked' | 'absent'> {
-  const booking = await findBookingByReservation(row.id)
-
-  if (!booking) return 'absent'
-
-  await patch('reservations', row.id, {
-    syncState: 'taken',
-    rmsReservationId: booking.reservationId,
-    rmsBookingId: booking.id,
-    takenAt: new Date().toISOString(),
-    syncError: '',
-  })
-
-  await logAudit({
-    action: 'reservation.updated',
-    targetType: 'client',
-    targetId: row.clientId,
-    targetLabel: row.clientName,
-    metadata: { reservationId: row.id, repaired: true, rmsBookingId: booking.id },
-  })
-
-  return 'linked'
-}
-
-/**
- * Cancel one we sold, in both systems.
- *
- * The RMS first: if it refuses, nothing here changes, because a booking still in
- * the property's calendar must not read as cancelled on our side. A guest turned
- * away by a cancellation we only imagined is the failure worth preventing.
- */
-export async function cancelReservation(row: Reservation): Promise<void> {
-  if (row.syncState === 'taken' && row.rmsBookingId) {
-    await cancelRmsBooking(row.rmsWorkspaceId, row.rmsBookingId, row.apartmentId)
-  }
-
-  await patch('reservations', row.id, { status: 'cancelled' })
-
-  await logAudit({
-    action: 'reservation.updated',
-    targetType: 'client',
-    targetId: row.clientId,
-    targetLabel: row.clientName,
-    metadata: { reservationId: row.id, cancelled: true, rmsBookingId: row.rmsBookingId },
-  })
 }
 
 /* ------------------------------------------------------------------ *

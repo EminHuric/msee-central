@@ -39,8 +39,6 @@ const props = defineProps<{
   toDate?: string
 }>()
 
-const emit = defineEmits<{ pick: [apartment: RmsApartment, date: string] }>()
-
 const { t, locale } = useI18n()
 
 /** How many nights the grid shows at once. A month reads well on a laptop. */
@@ -232,18 +230,17 @@ const theirsCount = computed(
           </div>
 
           <!--
-            The empty nights come first and the bars lie over them, so a night
-            with no booking is still something somebody can click.
+            The empty nights come first and the bars lie over them. Not clickable:
+            bookings are taken in the RMS, and a cell that looked like a button
+            here would be a promise this screen cannot keep.
           -->
-          <button
+          <div
             v-for="(night, n) in nights"
             :key="`${apartment.id}-${night.date}`"
-            type="button"
             class="cell"
             :class="{ weekend: night.weekend, today: night.today, ranged: night.inRange }"
             :style="{ gridRow: i + 2, gridColumn: n + 2 }"
             :title="`${apartment.name} · ${formatDate(night.date)}`"
-            @click="emit('pick', apartment, night.date)"
           />
 
           <div
@@ -378,16 +375,8 @@ const theirsCount = computed(
 }
 
 .cell {
-  background: transparent;
-  border: 0;
   border-left: 1px solid var(--border-subtle);
   border-top: 1px solid var(--border-subtle);
-  cursor: pointer;
-  padding: 0;
-}
-
-.cell:hover {
-  background: var(--bg-surface-2);
 }
 
 .cell.weekend {

@@ -1040,10 +1040,29 @@ service cloud.firestore {
     match /reservations/{reservationId} {
       allow read: if canRead('reservations');
 
+      /*
+       * A reservation is born in one of two states, and both have to be allowed.
+       *
+       *   `pending` — entered here and not in the reservation system yet.
+       *   `taken`   — picked up FROM that system, where it already exists. These
+       *               arrive already confirmed, because being there is how they
+       *               were found.
+       *
+       * The second needs the evidence the first does not: a non-empty
+       * `rmsBookingId`, which only comes from having actually read the booking.
+       * Without this clause every imported booking was refused, which is how a
+       * screen that imports silently ends up importing nothing.
+       */
       allow create: if isInternal() && can('reservations.create')
         && request.resource.data.createdBy == me()
-        /* A new booking has not reached the RMS yet, whatever the form sent. */
-        && request.resource.data.syncState == 'pending';
+        && (
+          request.resource.data.syncState == 'pending'
+          || (
+            request.resource.data.syncState == 'taken'
+            && request.resource.data.rmsBookingId is string
+            && request.resource.data.rmsBookingId.size() > 0
+          )
+        );
 
       allow update: if isInternal()
         && (

@@ -3043,6 +3043,9 @@ export default {
     now: 'Today',
   },
   staybrain: {
+    theirBookings: 'The property’s own',
+    theirBookingsHint: 'Taken directly by the owner. Not our sale.',
+    bookInRms: 'Bookings are taken and changed in the RMS. Tick "Booked through MsEe" there and type the commission — it appears here by itself.',
     openProperties: 'Properties & bookings',
     picked: 'Picked up {n} booking(s) marked as ours in the RMS.',
     unknownProperty: 'Unknown property',
@@ -3110,7 +3113,7 @@ export default {
     nightsCount: '{n} night(s)',
     unitsLabel: 'Units',
     fromRms: 'From the RMS',
-    connectForAvailability: 'Connect to the RMS to see what is free.',
+    connectForAvailability: 'Connect to the RMS to see the calendar and pick up bookings marked as ours.',
     noUnits: 'This account has no units',
     noUnitsHint: 'Add them in the RMS — this is a view of their data, not a second place to keep it.',
     freeOf: '{free} of {all} free for those dates',

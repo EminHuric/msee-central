@@ -711,6 +711,56 @@ try {
     updatedAt: new Date().toISOString(),
   })
 
+  /*
+   * An imported booking is created already `taken` — it exists in the other
+   * system, which is how it was found. It must carry the id that proves it.
+   */
+  await mustAllow('co-owner CAN create a reservation picked up from the RMS', () =>
+    setDoc(doc(db, 'reservations', `rules-resv-import-${stamp}`), {
+      id: `rules-resv-import-${stamp}`,
+      clientId: 'rules-client',
+      clientName: 'Rules Hotel',
+      guestName: 'Imported Guest',
+      checkIn: '2026-12-01',
+      checkOut: '2026-12-03',
+      nights: 2,
+      guests: 2,
+      value: { minor: 20000, currency: 'EUR', rate: 1, baseMinor: 20000, rateDate: '2026-12-01' },
+      status: 'confirmed',
+      syncState: 'taken',
+      rmsBookingId: `rms-${stamp}`,
+      rmsReservationId: `RSV-2026-${stamp % 1000000}`,
+      takenAt: new Date().toISOString(),
+      syncError: '',
+      /* A literal, not the `listingId` const: that is declared further down. */
+      listingId: `rules-listing-${stamp}`,
+      rmsWorkspaceId: 'rules-workspace',
+      apartmentId: 'rules-apartment',
+      apartmentName: 'A1',
+      earning: { minor: 3000, currency: 'EUR', rate: 1, baseMinor: 3000, rateDate: '2026-12-01' },
+      ownerUid: null,
+      ownerName: '',
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('co-owner CANNOT create one claiming to be taken with no id', () =>
+    setDoc(doc(db, 'reservations', `forged-resv-${stamp}`), {
+      id: `forged-resv-${stamp}`,
+      clientId: 'rules-client',
+      guestName: 'Invented',
+      syncState: 'taken',
+      rmsBookingId: '',
+      value: { minor: 1, currency: 'EUR', rate: 1, baseMinor: 1, rateDate: '2026-12-01' },
+      createdAt: new Date().toISOString(),
+      createdBy: ownerUid,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
   await mustAllow('co-owner CAN correct a reservation', () =>
     updateDoc(doc(db, 'reservations', ownerResv), {
       nights: 3,
