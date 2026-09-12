@@ -22,9 +22,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RmsConnectionPanel from '@/components/RmsConnectionPanel.vue'
 import StayBrainListingDialog from '@/components/StayBrainListingDialog.vue'
 import {
+  deleteListing,
   fetchListings,
   fetchStayBrainReservations,
   totalsByListing,
@@ -46,11 +48,47 @@ const listings = ref<StayBrainListing[]>([])
 const reservations = ref<Reservation[]>([])
 
 const editing = ref<StayBrainListing | null>(null)
+const pendingDelete = ref<StayBrainListing | null>(null)
+const deleting = ref(false)
 
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_MANAGE))
 const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW_REVENUE))
 
 const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
+
+/**
+ * What this property earns us, in words.
+ *
+ * On the card because the terms are per client and that is the point: one hotel
+ * at a flat fee, another at a percentage, a third at a different fee. Keeping it
+ * only inside the edit dialog made per-client pricing look like a single global
+ * setting — which is the opposite of what it is.
+ */
+function termsOf(listing: StayBrainListing): string {
+  if (listing.earning.model === 'percent_of_value') {
+    return t('staybrain.termsPercent', { percent: listing.earning.percent })
+  }
+  return t('staybrain.termsFixed', {
+    amount: formatMoney(listing.earning.amount.minor, listing.earning.amount.currency, locale.value),
+  })
+}
+
+async function confirmDelete(): Promise<void> {
+  const row = pendingDelete.value
+  if (!row || deleting.value) return
+
+  deleting.value = true
+  try {
+    await deleteListing(row)
+    ui.notify('ok', t('staybrain.listingDeleted'))
+    pendingDelete.value = null
+    await load()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    deleting.value = false
+  }
+}
 
 const totals = computed(() => totalsByListing(reservations.value))
 
@@ -211,6 +249,12 @@ onMounted(load)
               </div>
             </dl>
 
+            <!-- The deal for THIS client, which is why it is on the card. -->
+            <p v-if="canSeeRevenue" class="listing-terms">
+              <AppIcon name="wallet" :size="12" />
+              {{ termsOf(listing) }}
+            </p>
+
             <p v-if="!listing.rmsWorkspaceId" class="listing-warning">
               <AppIcon name="alert" :size="13" />
               {{ t('staybrain.notLinked') }}
@@ -222,6 +266,15 @@ onMounted(load)
               <AppIcon name="edit" :size="13" />
               {{ t('staybrain.terms') }}
             </button>
+            <span class="spacer" />
+            <button
+              class="btn btn-ghost btn-sm danger"
+              :aria-label="t('staybrain.removeListing')"
+              :title="t('staybrain.removeListing')"
+              @click="pendingDelete = listing"
+            >
+              <AppIcon name="trash" :size="14" />
+            </button>
           </footer>
         </article>
       </div>
@@ -232,10 +285,30 @@ onMounted(load)
           <li v-for="listing in retired" :key="listing.id">
             <RouterLink :to="`/staybrain/${listing.id}`">{{ listing.name }}</RouterLink>
             <span class="tertiary">{{ listing.clientName }}</span>
+            <span class="spacer" />
+            <button
+              v-if="canManage"
+              class="btn btn-ghost btn-sm danger"
+              :aria-label="t('staybrain.removeListing')"
+              :title="t('staybrain.removeListing')"
+              @click="pendingDelete = listing"
+            >
+              <AppIcon name="trash" :size="13" />
+            </button>
           </li>
         </ul>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="pendingDelete !== null"
+      :title="t('staybrain.removeTitle')"
+      :message="t('staybrain.removeMessage', { name: pendingDelete?.name ?? '' })"
+      danger
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
 
     <StayBrainListingDialog
       :open="dialogOpen"
@@ -354,6 +427,15 @@ onMounted(load)
   margin: 0;
 }
 
+.listing-terms {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  font-size: var(--text-xs);
+  gap: 4px;
+  margin-top: var(--space-3);
+}
+
 .listing-warning {
   align-items: center;
   color: var(--warn-500);
@@ -381,8 +463,17 @@ onMounted(load)
 }
 
 .retired li {
+  align-items: center;
   display: flex;
   gap: var(--space-2);
   padding: 2px 0;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.danger:hover {
+  color: var(--danger-500);
 }
 </style>

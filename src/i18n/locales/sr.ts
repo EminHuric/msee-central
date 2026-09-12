@@ -3042,6 +3042,12 @@ export default {
     now: 'Danas',
   },
   staybrain: {
+    termsFixed: '{amount} po rezervaciji',
+    termsPercent: '{percent}% od svake rezervacije',
+    removeListing: 'Ukloni ovaj smeštaj',
+    removeTitle: 'Ukloniti ovaj smeštaj?',
+    removeMessage: '{name} ide u korpu za otpatke. Rezervacije koje su već zabeležene ostaju, kao i cifre — ništa o zaradi se ne menja.',
+    listingDeleted: 'Smeštaj prebačen u korpu za otpatke.',
     theirBookings: 'Rezervacije objekta',
     theirBookingsHint: 'Vlasnik ih je uzeo direktno. Nije naša prodaja.',
     bookInRms: 'Rezervacije se unose i menjaju u RMS-u. Tamo kucni "Booked through MsEe" i upiši procenat — ovde se pojavi samo.',

@@ -3043,6 +3043,12 @@ export default {
     now: 'Today',
   },
   staybrain: {
+    termsFixed: '{amount} per reservation',
+    termsPercent: '{percent}% of each booking',
+    removeListing: 'Remove this property',
+    removeTitle: 'Remove this property?',
+    removeMessage: '{name} goes to the recycle bin. The reservations already recorded for it stay, and so do the figures — nothing about what was earned changes.',
+    listingDeleted: 'Property moved to the recycle bin.',
     theirBookings: 'The property’s own',
     theirBookingsHint: 'Taken directly by the owner. Not our sale.',
     bookInRms: 'Bookings are taken and changed in the RMS. Tick "Booked through MsEe" there and type the commission — it appears here by itself.',
