@@ -122,16 +122,24 @@ function requireSession(): { uid: string; email: string } {
  * ------------------------------------------------------------------ */
 
 /**
- * Every account on the RMS platform.
+ * The RMS accounts that have invited us to sell for them.
  *
- * Used once, when somebody links a StayBrain listing to the property it belongs
- * to. The agency account can list these because it is an administrator over
- * there; it is the same list the RMS's own admin screen shows.
+ * THE FILTER IS NOT COSMETIC — IT IS WHAT MAKES THE QUERY LEGAL. The RMS's rules
+ * let the agency read an account only when that account has set
+ * `agencyAccess: true`, and Firestore checks a rule against every document a
+ * query would return. So an unfiltered list of `users` fails on the first account
+ * that never invited us; asking only for the ones that did is both the narrower
+ * request and the one that succeeds.
+ *
+ * It also makes the picker honest: an account that has not switched access on
+ * cannot be chosen, rather than being chosen and refusing every booking later.
  */
 export async function fetchRmsAccounts(): Promise<RmsAccount[]> {
   requireSession()
   try {
-    const snap = await getDocs(collection(rmsDb(), 'users'))
+    const snap = await getDocs(
+      query(collection(rmsDb(), 'users'), where('agencyAccess', '==', true)),
+    )
     return snap.docs
       .map((d) => {
         const data = d.data()
