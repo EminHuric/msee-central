@@ -138,6 +138,7 @@ let testUid = null
 let ownerUid = null
 let founderSnapshot = null
 let affiliateUid = null
+let integrationUid = null
 
 /**
  * Collections these tests write into, and the shape of the ids they use.
@@ -153,6 +154,7 @@ let affiliateUid = null
  * from earlier runs go too.
  */
 const TEST_COLLECTIONS = [
+  'intake',
   'walletEntries',
   'dashboardLayouts',
   'leads',
@@ -857,12 +859,117 @@ try {
     getDoc(doc(db, 'affiliates', 'somebody-elses-affiliate-record')),
   )
 
+  /* ================= PHASE FOUR: THE RMS INTEGRATION ================= *
+   *
+   * The account the RMS writes with. It exists so that the key on that server
+   * buys as little as possible: the ability to send us figures, and nothing
+   * else. These checks are what make that claim true rather than intended.
+   */
+
+  console.log()
+  console.log('  now acting as the RMS integration account')
+  console.log()
+
+  await signOut(clientAuth).catch(() => {})
+
+  const intakeEmail = `rules-intake-${stamp}@msee-central-test.com`
+  const intakePassword = `rules-intake-password-${stamp}`
+  const intakeCredential = await createUserWithEmailAndPassword(
+    clientAuth,
+    intakeEmail,
+    intakePassword,
+  )
+  integrationUid = intakeCredential.user.uid
+
+  await adminDb.collection('userPermissions').doc(integrationUid).set({
+    uid: integrationUid,
+    status: 'active',
+    accountType: 'integration',
+    isCeo: false,
+    isFounder: false,
+    roleIds: [],
+    /*
+     * Every permission in the catalogue, deliberately.
+     *
+     * The point of the checks below is that `accountType` decides this, not the
+     * permission list — so even an integration account somebody has mistakenly
+     * granted everything still cannot read the company.
+     */
+    permissions: allPermissionDocs.docs.map((d) => d.id),
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'rules-check',
+  })
+
+  await signInWithEmailAndPassword(clientAuth, intakeEmail, intakePassword)
+
+  await mustAllow('the RMS CAN send a row', () =>
+    setDoc(doc(db, 'intake', `rules-intake-${stamp}`), {
+      source: 'rms',
+      kind: 'client_day',
+      status: 'received',
+      externalId: `rules-intake-${stamp}`,
+      date: '2026-09-12',
+      externalClientRef: 'RULES-HOTEL',
+      externalClientName: 'Rules Hotel',
+      reservations: 4,
+      nights: 9,
+      receivedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('the RMS CAN replace its own row, so a retry is safe', () =>
+    setDoc(doc(db, 'intake', `rules-intake-${stamp}`), {
+      source: 'rms',
+      kind: 'client_day',
+      status: 'received',
+      externalId: `rules-intake-${stamp}`,
+      date: '2026-09-12',
+      externalClientRef: 'RULES-HOTEL',
+      externalClientName: 'Rules Hotel',
+      reservations: 5,
+      nights: 11,
+      receivedAt: new Date().toISOString(),
+    }),
+  )
+
+  /* It may not declare its own row already dealt with. */
+  await mustDeny('the RMS CANNOT mark a row as applied', () =>
+    updateDoc(doc(db, 'intake', `rules-intake-${stamp}`), { status: 'applied' }),
+  )
+
+  /*
+   * And it can read nothing at all. This is the half that matters: the key
+   * sitting on that server is worth a one-way pipe and no more.
+   */
+  for (const [label, path] of [
+    ['clients', 'clients'],
+    ['leads', 'leads'],
+    ['sales', 'sales'],
+    ['transactions', 'transactions'],
+    ['services', 'services'],
+    ['employees', 'employees'],
+    ['wallet entries', 'walletEntries'],
+    ['what it just sent', 'intake'],
+  ]) {
+    await mustDeny(`the RMS CANNOT read ${label}`, () =>
+      getDoc(doc(db, path, 'any-record')),
+    )
+  }
+
+  await mustDeny('the RMS CANNOT write a wallet entry', () =>
+    setDoc(doc(db, 'walletEntries', `rules-intake-wallet-${stamp}`), {
+      employeeUid: 'somebody',
+      amountBaseMinor: 100000,
+      status: 'paid',
+    }),
+  )
+
 } finally {
   /* --- clean up ----------------------------------------------------- */
 
   await signOut(clientAuth).catch(() => {})
 
-  for (const uid of [testUid, ownerUid, affiliateUid]) {
+  for (const uid of [testUid, ownerUid, affiliateUid, integrationUid]) {
     if (!uid) continue
     await adminDb.collection('registrationRequests').doc(uid).delete().catch(() => {})
     await adminDb.collection('employees').doc(uid).delete().catch(() => {})

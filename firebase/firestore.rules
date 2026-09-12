@@ -129,9 +129,20 @@ service cloud.firestore {
       return isActive() && access().get('accountType', 'employee') == 'affiliate';
     }
 
-    /** Inside the company: staff, whatever their role. */
+    /**
+     * Inside the company: staff, whatever their role.
+     *
+     * An ALLOW-LIST, and it has to be. This said 'active and not an
+     * affiliate', which meant every account type that was not specifically
+     * excluded counted as staff — so when the RMS integration account was
+     * added, it silently became internal and could read clients, leads, sales
+     * and wallets. A rule check found that the first time it was asked.
+     *
+     * Naming the type that IS staff fails the other way: a new kind of account
+     * gets nothing until somebody decides it should.
+     */
     function isInternal() {
-      return isActive() && !isAffiliate();
+      return isActive() && access().get('accountType', 'employee') == 'employee';
     }
 
     /*
@@ -904,8 +915,16 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /walletEntries/{entryId} {
-      allow read: if isActive()
-        && (resource.data.employeeUid == me() || can('wallet.view_all'));
+      /*
+       * Your own, or everybody's if you are staff holding wallet.view_all.
+       *
+       * The second half asks isInternal() rather than isActive(): an account
+       * that is not staff has no business reading the payroll of people who
+       * are, whatever permissions it happens to carry.
+       */
+      allow read: if
+        (isActive() && resource.data.employeeUid == me())
+        || (isInternal() && can('wallet.view_all'));
 
       allow create: if isInternal()
         && can('wallet.adjust')
@@ -925,6 +944,58 @@ service cloud.firestore {
 
       /* An entry is cancelled, never deleted. */
       allow delete: if false;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * intake — what another system sends in
+     *
+     * THE DIRECTION IS THE POINT. MsEe Central cannot reach out to the RMS from
+     * a browser: that needs a key, and a key in a browser is a published key.
+     * The RMS reaching in has no such problem — it has a server, the key lives
+     * there, and it writes with an account of its own.
+     *
+     * That account is marked 'integration' and can do exactly one thing:
+     * create and overwrite rows here. It reads nothing, writes nowhere else,
+     * and holds no permissions. If its key leaks, what leaks is the ability to
+     * send us numbers — not the ability to read the company.
+     *
+     * Overwriting its own row is deliberate: the document id is the sender's
+     * own id, so a retry replaces rather than duplicates. An integration that
+     * cannot be retried safely gets retried unsafely.
+     *
+     * What it may NOT do is touch a row somebody here has already acted on.
+     * Once a row is applied it has produced a ledger entry, and rewriting the
+     * figure behind that entry would make the two disagree.
+     * ------------------------------------------------------------------ */
+
+    function isIntegration() {
+      return isActive() && access().get('accountType', 'employee') == 'integration';
+    }
+
+    match /intake/{rowId} {
+      allow read: if isInternal() && can('finance.view');
+
+      allow create: if isIntegration()
+        && request.resource.data.status == 'received';
+
+      allow update: if
+        /* The sender, replacing its own row — but never one already acted on. */
+        (
+          isIntegration()
+          && resource.data.status == 'received'
+          && request.resource.data.status == 'received'
+        )
+        /* Somebody here, matching a row to a client or applying it. */
+        || (
+          isInternal()
+          && can('finance.edit')
+          && changedOnly([
+            'status', 'clientId', 'employeeUid', 'appliedAt', 'appliedBy',
+            'walletEntryId', 'note', 'updatedAt',
+          ])
+        );
+
+      allow delete: if canPurge();
     }
 
     match /notificationPrefs/{uid} {

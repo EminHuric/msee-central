@@ -2790,6 +2790,7 @@ export default {
   },
 
   externalSystem: {
+    rms: 'RMS',
     staybrain: 'StayBrain',
     booking: 'Booking system',
     website: 'Website',
@@ -2837,6 +2838,19 @@ export default {
     noSelfCredit: 'Nobody adds to their own ledger.',
     markPaid: 'Mark as paid out',
     approve: 'Approve',
+    reasonRequired: 'Say what this is for.',
+    amountRequired: 'Enter an amount.',
+    payoutDefault: 'Paid out',
+    payoutRecorded: 'Payout recorded.',
+    titleFor: 'Earnings — {name}',
+    ceoHint: 'Nothing here is ever edited. A correction is a new line, so the history of what the company owed survives being wrong.',
+    recordPayout: 'Record a payout',
+    deductionHint: 'Stored as a negative line. The original stays where it is.',
+    reasonPlaceholder: 'Excellent work on Hotel ABC',
+    reasonHint: 'This is what the person reads, so write it for them.',
+    payWhole: 'Whole balance',
+    payoutHint: 'Recorded as money leaving the ledger. What was earned stays earned.',
+    ceoEmptyHint: 'Add a bonus or a commission and it appears here.',
   },
 
   walletKind: {

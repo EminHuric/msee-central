@@ -69,7 +69,7 @@ export const NO_REFERRAL: Referral = {
  * booking system at once, and because the next product should not need a
  * schema change to be recorded here.
  */
-export const EXTERNAL_SYSTEMS = ['staybrain', 'booking', 'website', 'other'] as const
+export const EXTERNAL_SYSTEMS = ['rms', 'staybrain', 'booking', 'website', 'other'] as const
 export type ExternalSystem = (typeof EXTERNAL_SYSTEMS)[number]
 
 export interface ExternalRef {

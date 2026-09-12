@@ -2789,6 +2789,7 @@ export default {
   },
 
   externalSystem: {
+    rms: 'RMS',
     staybrain: 'StayBrain',
     booking: 'Sistem rezervacija',
     website: 'Sajt',
@@ -2836,6 +2837,19 @@ export default {
     noSelfCredit: 'Niko ne upisuje u sopstvenu knjigu.',
     markPaid: 'Označi kao isplaćeno',
     approve: 'Odobri',
+    reasonRequired: 'Napiši za šta je ovo.',
+    amountRequired: 'Unesi iznos.',
+    payoutDefault: 'Isplata',
+    payoutRecorded: 'Isplata upisana.',
+    titleFor: 'Zarada — {name}',
+    ceoHint: 'Ovde se ništa ne menja. Ispravka je nova stavka, pa istorija toga šta je firma dugovala preživi i kad je bila pogrešna.',
+    recordPayout: 'Upiši isplatu',
+    deductionHint: 'Upisuje se kao negativna stavka. Prvobitna ostaje gde je.',
+    reasonPlaceholder: 'Odličan rad na Hotelu ABC',
+    reasonHint: 'Ovo čita ta osoba, pa piši za nju.',
+    payWhole: 'Ceo saldo',
+    payoutHint: 'Upisuje se kao novac koji izlazi iz knjige. Ono što je zarađeno ostaje zarađeno.',
+    ceoEmptyHint: 'Dodaj bonus ili proviziju i pojaviće se ovde.',
   },
 
   walletKind: {

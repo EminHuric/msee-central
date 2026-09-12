@@ -48,6 +48,15 @@ export function canAccessApplication(status: AccountStatus): boolean {
  * drawn.
  * ------------------------------------------------------------------ */
 
+/*
+ * The kinds of account a PERSON can have.
+ *
+ * A third value exists in the database and is deliberately not here:
+ * 'integration'. That is the account the RMS writes with — created only by
+ * tools/setup-integration.mjs, recognised only by the security rules, and never
+ * offered as a choice. Adding it to this list would put it in the dropdown that
+ * creates employees, which is the last place it should appear.
+ */
 export const ACCOUNT_TYPES = ['employee', 'affiliate'] as const
 export type AccountType = (typeof ACCOUNT_TYPES)[number]
 

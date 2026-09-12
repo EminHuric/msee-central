@@ -15,6 +15,7 @@ import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import EmployeeAccessPanel from '@/components/EmployeeAccessPanel.vue'
+import EmployeeWalletPanel from '@/components/EmployeeWalletPanel.vue'
 import EmployeeManagePanel from '@/components/EmployeeManagePanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
@@ -67,6 +68,15 @@ const canManage = computed(() =>
     PERMISSIONS.ROLES_ASSIGN,
     PERMISSIONS.EMPLOYEES_MANAGE_STATUS,
   ),
+)
+
+/*
+ * Somebody else's ledger needs `wallet.view_all`; your own needs nothing.
+ * The panel itself is read-only without `wallet.adjust`, and the database
+ * refuses a write either way.
+ */
+const canSeeWallet = computed(
+  () => auth.hasPermission(PERMISSIONS.WALLET_VIEW_ALL) || route.params.uid === auth.uid,
 )
 
 const uid = computed(() => String(route.params.uid ?? ''))
@@ -304,6 +314,9 @@ watch(uid, load)
         :positions="positions"
         @updated="load"
       />
+
+      <!-- Their earnings, and the CEO's controls over them. -->
+      <EmployeeWalletPanel v-if="canSeeWallet" :employee="detail.profile" />
 
       <!-- What this one person may do, independent of anybody else. -->
       <EmployeeAccessPanel
