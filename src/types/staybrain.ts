@@ -149,6 +149,28 @@ export interface StayBrainListing {
   name: string
   note: string
 
+  /**
+   * What this client paid to join StayBrain.
+   *
+   * PER CLIENT, because it is negotiated per client — one pays the list price,
+   * another less, another more. It is our revenue the moment it is agreed, and it
+   * is a different kind of revenue from commission on bookings: this is for the
+   * service, that is for the work. They are added only at the very end, under a
+   * label that says it is a total.
+   */
+  joinFee: Money
+  /** Free text: when it was paid, in instalments, or anything worth knowing. */
+  joinFeeNote: string
+
+  /**
+   * The fallback commission, used only when a booking carries none of its own.
+   *
+   * The commission is normally typed on the booking in the reservation system,
+   * per booking, because a winter week and a peak August week are not the same
+   * deal. This is what a booking nobody priced falls back to, and it is zero by
+   * default — an unpriced booking earns nothing rather than silently earning
+   * whatever a form once defaulted to.
+   */
   earning: EarningTerms
 
   /** Bookings are entered in the currency the property prices in. */
@@ -176,6 +198,8 @@ export function blankListing(currency: CurrencyCode = 'EUR'): StayBrainListing {
     rmsAccountEmail: '',
     name: '',
     note: '',
+    joinFee: NO_MONEY(currency),
+    joinFeeNote: '',
     earning: {
       model: 'fixed_per_reservation',
       amount: NO_MONEY(currency),

@@ -61,15 +61,24 @@ const rmsBookings = ref<RmsBooking[]>([])
 const ours = ref<Reservation[]>([])
 
 /**
- * Connected AS THE ACCOUNT THIS PROPERTY NEEDS, which is not the same as
- * connected at all: the previous session may belong to another client.
+ * Connected to the reservation system at all.
+ *
+ * NOT "connected as this property's own account", which is what this used to
+ * demand and why nothing loaded. Two kinds of login can read a property:
+ *
+ *   the property's own account — which needs that client's password, and we do
+ *   not always have it;
+ *
+ *   an administrator account on the platform — one login that reads every
+ *   property, which is what the owner of the platform already has.
+ *
+ * Insisting on the first made the second useless and left every property saying
+ * "not connected" to somebody who was, in fact, connected. Whether a session can
+ * actually read this property is a question only the read can answer, so the read
+ * is what decides: it either returns the calendar or it is refused, and a refusal
+ * says so.
  */
-const connected = computed(
-  () =>
-    rmsSession.value !== null &&
-    (listing.value?.rmsAccountEmail ?? '').trim().toLowerCase() ===
-      rmsSession.value.email.trim().toLowerCase(),
-)
+const connected = computed(() => rmsSession.value !== null)
 
 const connecting = ref(false)
 const loginProblem = ref('')
@@ -109,7 +118,7 @@ async function load(): Promise<void> {
      * remembers. Nothing is asked of anybody when there is one — which is the
      * point of remembering it.
      */
-    if (row.rmsWorkspaceId && row.rmsAccountEmail) await connect()
+    if (row.rmsWorkspaceId) await connect()
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
   } finally {
@@ -123,24 +132,46 @@ async function load(): Promise<void> {
  * `password` is passed only the first time on a device. After that it comes from
  * what was remembered, so opening a property is one click and no typing.
  */
-async function connect(password?: string): Promise<void> {
+async function connect(login?: { email: string; password: string }): Promise<void> {
   const row = listing.value
-  if (!row?.rmsAccountEmail || connecting.value) return
+  if (!row || connecting.value) return
 
   connecting.value = true
   loginProblem.value = ''
   try {
-    const result = await rmsConnectAs(row.rmsAccountEmail, password)
-
-    if (result.state === 'ready') {
+    /* A login just typed: use it, and remember it if it works. */
+    if (login) {
+      const result = await rmsConnectAs(login.email, login.password)
+      if (result.state !== 'ready') {
+        loginProblem.value = t('rms.propertyRefused', {
+          code: result.state === 'failed' ? result.code : 'incomplete',
+        })
+        return
+      }
       await loadFromRms()
       return
     }
 
-    if (result.state === 'failed') {
-      /* The code verbatim: a refused login has a reason and hiding it wastes
-       * somebody's afternoon on a password that was never the problem. */
-      loginProblem.value = t('rms.propertyRefused', { code: result.code })
+    /*
+     * No login typed, so try in order of preference:
+     *
+     *   1. this property's own account, if this browser remembers its password;
+     *   2. whatever session already exists — an administrator login reads every
+     *      property, and that is the common case.
+     *
+     * Only when neither applies does anybody get asked for anything.
+     */
+    if (row.rmsAccountEmail) {
+      const result = await rmsConnectAs(row.rmsAccountEmail)
+      if (result.state === 'ready') {
+        await loadFromRms()
+        return
+      }
+    }
+
+    if (rmsSession.value) {
+      await loadFromRms()
+      return
     }
   } finally {
     connecting.value = false
@@ -184,6 +215,13 @@ async function loadFromRms(): Promise<void> {
     apartments.value = []
     rmsBookings.value = []
     rmsError.value = (error as Error).message
+    /*
+     * Refused rather than unreachable means this session cannot see this
+     * property — so the login panel is the answer, not a retry.
+     */
+    if ((error as Error).name === 'RmsRefused') {
+      loginProblem.value = t('rms.cannotSeeProperty')
+    }
   } finally {
     rmsLoading.value = false
   }

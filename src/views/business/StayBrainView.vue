@@ -61,13 +61,26 @@ const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
  * only inside the edit dialog made per-client pricing look like a single global
  * setting — which is the opposite of what it is.
  */
-function termsOf(listing: StayBrainListing): string {
-  if (listing.earning.model === 'percent_of_value') {
-    return t('staybrain.termsPercent', { percent: listing.earning.percent })
+/**
+ * Everything one client is worth to us, in the three parts it is made of.
+ *
+ * KEPT APART ALL THE WAY UP. The fee is for joining the service; the commission
+ * is for the bookings we brought; the client's turnover is neither — it is their
+ * money, and it is here only because "we brought them €12,000" is the sentence
+ * that justifies the other two. Adding the first two happens once, at the end,
+ * under a label that says total.
+ */
+function valueOf(listing: StayBrainListing) {
+  const row = totalsFor(listing.id)
+  const fee = listing.joinFee?.baseMinor ?? 0
+
+  return {
+    feeBaseMinor: fee,
+    reservations: row.reservations,
+    turnoverBaseMinor: row.turnoverBaseMinor,
+    commissionBaseMinor: row.revenueBaseMinor,
+    totalBaseMinor: fee + row.revenueBaseMinor,
   }
-  return t('staybrain.termsFixed', {
-    amount: formatMoney(listing.earning.amount.minor, listing.earning.amount.currency, locale.value),
-  })
 }
 
 async function confirmDelete(): Promise<void> {
@@ -103,6 +116,11 @@ const overall = computed(() =>
     }),
     { ...EMPTY_TOTALS },
   ),
+)
+
+/** Joining fees, across every client. Our revenue for the service itself. */
+const feesTotal = computed(() =>
+  listings.value.reduce((sum, row) => sum + (row.joinFee?.baseMinor ?? 0), 0),
 )
 
 /** Bookings entered here that the RMS never confirmed. Worth chasing. */
@@ -186,10 +204,23 @@ onMounted(load)
           <span class="figure-hint">{{ t('staybrain.ourTurnoverHint') }}</span>
         </div>
 
+        <div v-if="canSeeRevenue" class="summary-figure">
+          <span class="figure-label">{{ t('staybrain.feesTotal') }}</span>
+          <span class="figure-value">{{ money(feesTotal) }}</span>
+          <span class="figure-hint">{{ t('staybrain.feesTotalHint') }}</span>
+        </div>
+
+        <div v-if="canSeeRevenue" class="summary-figure">
+          <span class="figure-label">{{ t('staybrain.commissionTotal') }}</span>
+          <span class="figure-value">{{ money(overall.revenueBaseMinor) }}</span>
+          <span class="figure-hint">{{ t('staybrain.commissionTotalHint') }}</span>
+        </div>
+
+        <!-- The only place the two are added, and it says so. -->
         <div v-if="canSeeRevenue" class="summary-figure lead">
-          <span class="figure-label">{{ t('staybrain.ourRevenue') }}</span>
-          <span class="figure-value brand">{{ money(overall.revenueBaseMinor) }}</span>
-          <span class="figure-hint">{{ t('staybrain.ourRevenueHint') }}</span>
+          <span class="figure-label">{{ t('staybrain.earnedTotal') }}</span>
+          <span class="figure-value brand">{{ money(feesTotal + overall.revenueBaseMinor) }}</span>
+          <span class="figure-hint">{{ t('staybrain.earnedTotalHint') }}</span>
         </div>
 
         <div v-if="unconfirmed > 0" class="summary-figure warn">
@@ -221,23 +252,29 @@ onMounted(load)
             <dl class="listing-figures">
               <div>
                 <dt>{{ t('staybrain.ourReservations') }}</dt>
-                <dd>{{ totalsFor(listing.id).reservations }}</dd>
+                <dd>{{ valueOf(listing).reservations }}</dd>
               </div>
               <div>
                 <dt>{{ t('staybrain.ourTurnover') }}</dt>
-                <dd>{{ money(totalsFor(listing.id).turnoverBaseMinor) }}</dd>
+                <dd>{{ money(valueOf(listing).turnoverBaseMinor) }}</dd>
               </div>
-              <div v-if="canSeeRevenue">
-                <dt>{{ t('staybrain.ourRevenue') }}</dt>
-                <dd class="brand">{{ money(totalsFor(listing.id).revenueBaseMinor) }}</dd>
-              </div>
+              <template v-if="canSeeRevenue">
+                <div>
+                  <dt>{{ t('staybrain.joinFeeShort') }}</dt>
+                  <dd>{{ money(valueOf(listing).feeBaseMinor) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('staybrain.commissionShort') }}</dt>
+                  <dd>{{ money(valueOf(listing).commissionBaseMinor) }}</dd>
+                </div>
+                <div class="total">
+                  <dt>{{ t('staybrain.earnedTotal') }}</dt>
+                  <dd class="brand">{{ money(valueOf(listing).totalBaseMinor) }}</dd>
+                </div>
+              </template>
             </dl>
 
-            <!-- The deal for THIS client, which is why it is on the card. -->
-            <p v-if="canSeeRevenue" class="listing-terms">
-              <AppIcon name="wallet" :size="12" />
-              {{ termsOf(listing) }}
-            </p>
+            <p class="listing-open">{{ t('staybrain.openToSee') }}</p>
 
             <p v-if="!listing.rmsWorkspaceId" class="listing-warning">
               <AppIcon name="alert" :size="13" />
@@ -411,12 +448,15 @@ onMounted(load)
   margin: 0;
 }
 
-.listing-terms {
-  align-items: center;
-  color: var(--text-secondary);
-  display: flex;
+.listing-figures .total {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 2px;
+  padding-top: 4px;
+}
+
+.listing-open {
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
-  gap: 4px;
   margin-top: var(--space-3);
 }
 

@@ -33,32 +33,35 @@ const props = defineProps<{
   busy?: boolean
 }>()
 
-const emit = defineEmits<{ connect: [password: string]; forget: [] }>()
+const emit = defineEmits<{ connect: [login: { email: string; password: string }]; forget: [] }>()
 
 const { t } = useI18n()
 
+const email = ref(props.email)
 const password = ref('')
 const open = ref(false)
 
-/** Connected, and connected as the account this property actually needs. */
-const connected = computed(
-  () =>
-    rmsSession.value !== null &&
-    props.email.trim().toLowerCase() === rmsSession.value.email.trim().toLowerCase(),
-)
+/**
+ * Connected, and nothing stronger.
+ *
+ * Whether this session can read this particular property is answered by the read
+ * itself, not guessed from which account it is: an administrator login reads
+ * every property, so comparing emails would call a working connection broken.
+ */
+const connected = computed(() => rmsSession.value !== null)
 
 const remembered = computed(() => remembersRmsLogin(props.email))
 
 function submit(): void {
-  if (!password.value) return
-  emit('connect', password.value)
+  if (!email.value.trim() || !password.value) return
+  emit('connect', { email: email.value.trim(), password: password.value })
   /* Cleared the moment it leaves this component. */
   password.value = ''
   open.value = false
 }
 
 function forget(): void {
-  forgetRmsLogin(props.email)
+  forgetRmsLogin(email.value || props.email)
   emit('forget')
 }
 </script>
@@ -72,11 +75,10 @@ function forget(): void {
           {{ connected ? t('rms.propertyLive') : t('rms.propertyLocked') }}
         </p>
         <p class="hint">
-          <template v-if="!props.email">{{ t('rms.noAccountOnListing') }}</template>
-          <template v-else-if="connected">
-            {{ t('rms.propertyLiveHint', { email: props.email }) }}
+          <template v-if="connected">
+            {{ t('rms.propertyLiveHint', { email: rmsSession?.email ?? '' }) }}
           </template>
-          <template v-else>{{ t('rms.propertyLockedHint', { email: props.email }) }}</template>
+          <template v-else>{{ t('rms.signInToRead') }}</template>
         </p>
         <p v-if="props.problem" class="problem">{{ props.problem }}</p>
       </div>
@@ -92,23 +94,32 @@ function forget(): void {
         {{ t('rms.forget') }}
       </button>
       <button
-        v-else-if="!connected && props.email && !open"
+        v-else-if="!connected && !open"
         class="btn btn-secondary btn-sm"
         :disabled="props.busy"
         @click="open = true"
       >
-        {{ t('rms.enterPassword') }}
+        {{ t('rms.connect') }}
       </button>
     </div>
 
     <form v-if="open && !connected" class="form" @submit.prevent="submit">
       <div class="field">
-        <span class="field-label">{{ t('rms.email') }}</span>
+        <label class="field-label" for="prop-email">{{ t('rms.email') }}</label>
         <!--
-          Shown, not editable. Changing which account a property belongs to is a
-          change to the property, made where the property is edited.
+          Editable, and filled in with the property's own account.
+
+          Either login reads this property: the account that owns it, or an
+          administrator account on the platform. Locking this field to the first
+          shut out the second, which is the one the platform's owner actually has.
         -->
-        <p class="account">{{ props.email }}</p>
+        <input
+          id="prop-email"
+          v-model="email"
+          class="input"
+          type="email"
+          autocomplete="off"
+        />
       </div>
 
       <div class="field">

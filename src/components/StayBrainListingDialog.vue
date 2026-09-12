@@ -26,7 +26,7 @@ import { remembersRmsLogin } from '@/lib/rmsAccounts'
 import { LIMITS } from '@/lib/validation'
 import { useUiStore } from '@/stores/ui'
 import { CURRENCIES, fromMinor, type CurrencyCode } from '@/types/money'
-import { EARNING_MODELS, blankListing, type StayBrainListing } from '@/types/staybrain'
+import { blankListing, type StayBrainListing } from '@/types/staybrain'
 import type { Client } from '@/types/business'
 
 const props = defineProps<{ open: boolean; listing: StayBrainListing | null }>()
@@ -36,7 +36,7 @@ const ui = useUiStore()
 const { t } = useI18n()
 
 const draft = ref<StayBrainListing>(blankListing())
-const amount = ref(0)
+const fee = ref(0)
 const saving = ref(false)
 
 const clients = ref<Client[]>([])
@@ -71,7 +71,7 @@ watch(
     if (!open) return
 
     draft.value = props.listing ? { ...props.listing } : blankListing()
-    amount.value = fromMinor(draft.value.earning.amount.minor, draft.value.currency)
+    fee.value = fromMinor(draft.value.joinFee.minor, draft.value.currency)
 
     rmsEmail.value = draft.value.rmsAccountEmail
     rmsPassword.value = ''
@@ -152,21 +152,13 @@ async function commit(): Promise<void> {
     ui.notify('danger', t('staybrain.needName'))
     return
   }
-  if (draft.value.earning.model === 'fixed_per_reservation' && amount.value <= 0) {
-    ui.notify('danger', t('staybrain.needAmount'))
-    return
-  }
-
   saving.value = true
   try {
     await saveListing({
       ...draft.value,
       name: draft.value.name.trim(),
       note: draft.value.note.trim(),
-      earning: {
-        ...draft.value.earning,
-        amount: moneyOf(amount.value, draft.value.currency, draft.value.rate),
-      },
+      joinFee: moneyOf(fee.value, draft.value.currency, draft.value.rate),
     })
     ui.notify('ok', t('staybrain.listingSaved'))
     emit('saved')
@@ -276,27 +268,17 @@ async function commit(): Promise<void> {
         </template>
       </div>
 
-      <!-- What it earns --------------------------------------------------- -->
+      <!-- What the client paid to join --------------------------------- -->
       <fieldset class="terms">
-        <legend class="field-label">{{ t('staybrain.earning') }}</legend>
+        <legend class="field-label">{{ t('staybrain.joinFee') }}</legend>
 
         <div class="field-grid">
           <div class="field">
-            <label class="field-label" for="sb-model">{{ t('staybrain.earningModel') }}</label>
-            <select id="sb-model" v-model="draft.earning.model" class="select">
-              <option v-for="m in EARNING_MODELS" :key="m" :value="m">
-                {{ t(`earningModel.${m}`) }}
-              </option>
-            </select>
-            <p class="field-hint">{{ t(`earningModelHint.${draft.earning.model}`) }}</p>
-          </div>
-
-          <div v-if="draft.earning.model === 'fixed_per_reservation'" class="field">
-            <label class="field-label" for="sb-amount">{{ t('staybrain.perReservation') }}</label>
+            <label class="field-label" for="sb-fee">{{ t('staybrain.joinFeeAmount') }}</label>
             <div class="row">
               <input
-                id="sb-amount"
-                v-model.number="amount"
+                id="sb-fee"
+                v-model.number="fee"
                 class="input"
                 type="number"
                 min="0"
@@ -310,19 +292,17 @@ async function commit(): Promise<void> {
                 <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
-            <p class="field-hint">{{ t('staybrain.perReservationHint', { amount }) }}</p>
+            <p class="field-hint">{{ t('staybrain.joinFeeHint') }}</p>
           </div>
 
-          <div v-else class="field">
-            <label class="field-label" for="sb-percent">{{ t('staybrain.percent') }}</label>
+          <div class="field">
+            <label class="field-label" for="sb-fee-note">{{ t('staybrain.joinFeeNote') }}</label>
             <input
-              id="sb-percent"
-              v-model.number="draft.earning.percent"
+              id="sb-fee-note"
+              v-model="draft.joinFeeNote"
               class="input"
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
+              :maxlength="LIMITS.shortText"
+              :placeholder="t('staybrain.joinFeeNotePlaceholder')"
             />
           </div>
 
@@ -339,6 +319,16 @@ async function commit(): Promise<void> {
             <p class="field-hint">{{ t('staybrain.rateHint') }}</p>
           </div>
         </div>
+
+        <!--
+          The commission is NOT set here.
+
+          It is typed on each booking in the reservation system, where the price
+          is, because that is where it is agreed — by percentage or per night, per
+          booking. Asking for it twice would mean two answers and no way to know
+          which one counted.
+        -->
+        <p class="field-hint">{{ t('staybrain.commissionElsewhere') }}</p>
       </fieldset>
 
       <div class="field">
