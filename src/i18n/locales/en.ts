@@ -1979,6 +1979,9 @@ export default {
     hasContract: 'Open contract',
     deleteSale: 'Delete this deal?',
     deleteText: 'The deal is removed. Anything already invoiced stays.',
+    recordCommission: 'Record commission',
+    commissionRecorded: 'Written to their ledger, awaiting approval.',
+    commissionExists: 'Already recorded for this sale.',
   },
 
   contractStatus: {
@@ -2904,6 +2907,31 @@ export default {
     granted: 'added',
     revoked: 'removed',
     off: '',
+  },
+
+  trading: {
+    theirReference: 'Their reference',
+    title: 'Client trading',
+    subtitle: 'What the RMS reports, day by day. Totals are summed from those days, never stored.',
+    match: 'Match to clients',
+    matched: 'No rows found a client. | {n} row found its client. | {n} rows found their clients.',
+    empty: 'Nothing has been sent yet',
+    emptyHint: 'Run npm run setup:integration and give the printed details to whoever works on the RMS. Figures appear here as soon as it starts sending.',
+    turnover: 'Turnover',
+    ourShare: 'What we earn',
+    reservations: 'Reservations',
+    nights: 'Nights',
+    byClient: 'By client',
+    through: 'Reported through',
+    earnings: 'Earnings to apply',
+    earningsHint: 'Written to the ledger as awaiting approval, never as paid.',
+    person: 'Person',
+    apply: 'Send to their ledger',
+    setAside: 'Set aside',
+    applied: 'Written to the ledger.',
+    noPerson: 'Nobody here matches that reference or name.',
+    unmatched: 'Belongs to nobody we know',
+    unmatchedHint: 'Record the reference on the client — Clients, edit, Other systems — then match again.',
   },
 
 }

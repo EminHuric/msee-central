@@ -30,6 +30,7 @@ import {
   fetchSales,
   moneyOf,
   saveSale,
+  recordCommissionFor,
   structureFromTerms,
   totalsOf,
 } from '@/api/sales'
@@ -354,6 +355,45 @@ function openFromQuery(): void {
   if (!route.query.new) return
   startNew()
   void router.replace({ query: {} })
+}
+
+/* ---- What a sale earns the person who made it ------------------------- */
+
+const busyCommission = ref(false)
+
+/**
+ * Whether the commission can be recorded here and now.
+ *
+ * Needs the rate, which means the terms were readable, and needs somebody with
+ * `wallet.adjust` — and never for your own sale, because the database refuses
+ * a self-credit and offering the button would only produce an error.
+ */
+function canRecordCommission(sale: Sale): boolean {
+  if (!auth.hasPermission(PERMISSIONS.WALLET_ADJUST)) return false
+  if (!sale.ownerUid || sale.ownerUid === auth.uid) return false
+
+  const percent = serviceTerms.value.get(sale.serviceId ?? '')?.commissionPercent ?? 0
+  return percent > 0
+}
+
+async function recordCommission(sale: Sale): Promise<void> {
+  const percent = serviceTerms.value.get(sale.serviceId ?? '')?.commissionPercent ?? 0
+  const owner = people.value.find((p) => p.uid === sale.ownerUid)
+  if (!owner || busyCommission.value) return
+
+  busyCommission.value = true
+  try {
+    const id = await recordCommissionFor(
+      sale,
+      { uid: owner.uid, name: `${owner.firstName} ${owner.lastName}`.trim() },
+      percent,
+    )
+    ui.notify(id ? 'ok' : 'info', id ? t('sales.commissionRecorded') : t('sales.commissionExists'))
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    busyCommission.value = false
+  }
 }
 
 onMounted(async () => {
@@ -701,6 +741,19 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="col-actions">
+                <!--
+                  Record what the seller earned on this sale.
+                  Only for somebody who can see the rate, which is why it is a
+                  button rather than something the save does invisibly.
+                -->
+                <button
+                  v-if="canRecordCommission(sale)"
+                  class="btn btn-ghost btn-sm"
+                  :disabled="busyCommission"
+                  @click="recordCommission(sale)"
+                >
+                  {{ t('sales.recordCommission') }}
+                </button>
                 <button
                   v-if="canMoney && (balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) > 0"
                   class="btn btn-secondary btn-sm"

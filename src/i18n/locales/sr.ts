@@ -1978,6 +1978,9 @@ export default {
     hasContract: 'Otvori ugovor',
     deleteSale: 'Obrisati ovaj posao?',
     deleteText: 'Posao se briše. Ono što je već fakturisano ostaje.',
+    recordCommission: 'Upiši proviziju',
+    commissionRecorded: 'Upisano u njegovu knjigu, čeka odobrenje.',
+    commissionExists: 'Već je upisano za ovu prodaju.',
   },
 
   contractStatus: {
@@ -2903,6 +2906,31 @@ export default {
     granted: 'dodato',
     revoked: 'uklonjeno',
     off: '',
+  },
+
+  trading: {
+    theirReference: 'Njihova referenca',
+    title: 'Promet klijenata',
+    subtitle: 'Ono što RMS javlja, dan po dan. Zbirovi se sabiraju iz tih dana, nigde se ne čuvaju.',
+    match: 'Poveži sa klijentima',
+    matched: 'Nijedan red nije našao klijenta. | {n} red je našao klijenta. | {n} reda su našla klijente. | {n} redova je našlo klijente.',
+    empty: 'Još ništa nije poslato',
+    emptyHint: 'Pokreni npm run setup:integration i daj ispisane podatke onome ko radi na RMS-u. Brojke se pojavljuju ovde čim počne da šalje.',
+    turnover: 'Promet',
+    ourShare: 'Naša zarada',
+    reservations: 'Rezervacije',
+    nights: 'Noćenja',
+    byClient: 'Po klijentu',
+    through: 'Javljeno do',
+    earnings: 'Zarade za upis',
+    earningsHint: 'Upisuje se u knjigu kao čeka odobrenje, nikad kao isplaćeno.',
+    person: 'Osoba',
+    apply: 'Upiši u njegovu knjigu',
+    setAside: 'Ostavi po strani',
+    applied: 'Upisano u knjigu.',
+    noPerson: 'Nijedna osoba ne odgovara toj referenci ni imenu.',
+    unmatched: 'Ne pripada nikome koga znamo',
+    unmatchedHint: 'Upiši referencu kod klijenta — Klijenti, uredi, Drugi sistemi — pa ponovo poveži.',
   },
 
 }

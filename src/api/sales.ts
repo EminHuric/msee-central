@@ -17,6 +17,7 @@ import { logAudit } from './audit'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
 import { actor, readAll, readOne, readWhere, today, where, write } from './store'
+import { addEntry } from './wallet'
 
 import { toMinor, type CurrencyCode, type Money } from '@/types/money'
 import {
@@ -196,4 +197,118 @@ export function totalsOf(sales: Sale[], transactions: Transaction[]): SalesTotal
     outstandingBaseMinor: rows.reduce((n, b) => n + b.remainingBaseMinor, 0),
     advanceDueCount: rows.filter((b) => b.advanceDue).length,
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * What a sale earns the person who made it
+ * ------------------------------------------------------------------ */
+
+/**
+ * Write the seller's commission into their ledger.
+ *
+ * Deliberately a separate, explicit act rather than something `saveSale` does
+ * on its own, and the reason is the permission split: the rate lives in the
+ * service's commercial terms, which a salesperson without
+ * `services.view_price` cannot read. If this ran inside the save it would
+ * succeed for some people and silently do nothing for others — the same button
+ * behaving differently depending on who pressed it, which is worse than a
+ * button that has to be pressed.
+ *
+ * So whoever can see the figures records the commission, and can see that they
+ * did.
+ *
+ * Written as `pending`, never `paid`. What somebody earned is arithmetic; that
+ * the company has approved paying it is a decision, and the ledger keeps those
+ * apart.
+ *
+ * Returns null when there is nothing to record: no seller, no rate, or an
+ * entry already exists for this sale.
+ */
+export async function recordCommissionFor(
+  sale: Sale,
+  seller: { uid: string; name: string },
+  commissionPercent: number,
+): Promise<string | null> {
+  if (!commissionPercent || commissionPercent <= 0) return null
+  if (!seller.uid) return null
+
+  /* One entry per sale. Pressing twice must not pay twice. */
+  const existing = await readWhere<{ id: string; saleId: string | null }>(
+    'walletEntries',
+    where('saleId', '==', sale.id),
+  )
+  if (existing.length > 0) return null
+
+  const amount = Math.round((sale.value.baseMinor * commissionPercent) / 100)
+  if (amount <= 0) return null
+
+  return addEntry({
+    employeeUid: seller.uid,
+    employeeName: seller.name,
+    kind: 'commission',
+    amountBaseMinor: amount,
+    status: 'pending',
+    reason: `${commissionPercent}% · ${sale.title}`,
+    saleId: sale.id,
+    saleLabel: sale.title,
+    bonusAwardId: null,
+    goalId: null,
+    date: sale.saleDate,
+    approvedBy: null,
+    approvedAt: null,
+    paidAt: null,
+    createdAt: '',
+    createdBy: '',
+    createdByName: '',
+    updatedAt: '',
+  })
+}
+
+/**
+ * Reverse a commission when the sale behind it goes away.
+ *
+ * A correcting entry, never a deletion. "You earned €150 in March" was true
+ * when it was written; what changed is that the sale was cancelled, and both
+ * facts belong in the ledger. Deleting the first would leave somebody's history
+ * saying something that did not happen.
+ */
+export async function reverseCommissionFor(sale: Sale, reason: string): Promise<number> {
+  const entries = await readWhere<{
+    id: string
+    employeeUid: string
+    employeeName: string
+    amountBaseMinor: number
+    saleId: string | null
+    kind: string
+  }>('walletEntries', where('saleId', '==', sale.id))
+
+  let reversed = 0
+
+  for (const entry of entries) {
+    if (entry.kind !== 'commission' || entry.amountBaseMinor <= 0) continue
+
+    await addEntry({
+      employeeUid: entry.employeeUid,
+      employeeName: entry.employeeName,
+      kind: 'adjustment',
+      amountBaseMinor: -entry.amountBaseMinor,
+      status: 'approved',
+      reason,
+      saleId: sale.id,
+      saleLabel: sale.title,
+      bonusAwardId: null,
+      goalId: null,
+      date: today(),
+      approvedBy: null,
+      approvedAt: null,
+      paidAt: null,
+      createdAt: '',
+      createdBy: '',
+      createdByName: '',
+      updatedAt: '',
+    })
+    reversed += 1
+  }
+
+  return reversed
 }

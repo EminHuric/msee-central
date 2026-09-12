@@ -52,6 +52,7 @@ export type CollectionName =
   | 'bonusAwards'
   | 'incentiveWork'
   | 'walletEntries'
+  | 'intake'
   | 'calendarEvents'
   | 'notes'
   | 'activity'
