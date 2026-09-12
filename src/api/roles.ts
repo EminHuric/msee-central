@@ -23,6 +23,7 @@ import { getDb } from '@/lib/firebase'
 import { currentLocale } from '@/i18n'
 import type { Role } from '@/types/domain'
 import type { Permission } from '@/types/permissions'
+import { effectivePermissions } from '@/types/access'
 
 export async function fetchRoles(): Promise<Role[]> {
   const snap = await getDocs(query(collection(getDb(), 'roles'), orderBy('name')))
@@ -166,7 +167,17 @@ export async function resyncHolders(roleId: string): Promise<Resync> {
     const roleIds: string[] = holder.data().roleIds ?? []
     const mine = roleIds.map((id) => byId.get(id)).filter((r): r is Role => !!r)
 
-    const permissions = [...new Set(mine.flatMap((r) => r.permissions))] as Permission[]
+    /*
+     * The roles supply the baseline; this person's own grants and revocations
+     * sit on top of it. Recomputing from the roles alone is what made
+     * individual permissions impossible — every role edit wiped them.
+     */
+    const rolePermissions = [...new Set(mine.flatMap((r) => r.permissions))] as Permission[]
+    const permissions = effectivePermissions(rolePermissions, {
+      granted: (holder.data().granted ?? []) as Permission[],
+      revoked: (holder.data().revoked ?? []) as Permission[],
+      scopes: holder.data().scopes ?? {},
+    })
     const grantsAll = mine.some((r) => r.grantsAll)
 
     try {

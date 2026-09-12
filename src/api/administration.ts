@@ -22,13 +22,15 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
+  setDoc,
   writeBatch,
 } from 'firebase/firestore'
 
 import { logAudit } from './audit'
 import { getDb } from '@/lib/firebase'
-import type { AccountStatus, EmploymentStatus, Role } from '@/types/domain'
+import type { AccountStatus, AccountType, EmploymentStatus, Role } from '@/types/domain'
 import type { Permission } from '@/types/permissions'
+import { effectivePermissions, type AccessOverrides } from '@/types/access'
 
 export class SelfActionError extends Error {
   constructor() {
@@ -224,9 +226,26 @@ export async function assignRoles(
   // Refuse the one self-edit that cannot be undone from inside the app.
   if (editingSelf && !grantsAll) throw new SelfDemotionError()
 
-  const permissions = [
+  /*
+   * Individual decisions survive a change of role.
+   *
+   * The roles supply the baseline; whatever the CEO has granted or revoked for
+   * this person alone sits on top of it. Recomputing from the roles only —
+   * which is what happened before — silently threw those away every time
+   * somebody's role was changed.
+   */
+  const existing = await getDoc(doc(getDb(), 'userPermissions', uid))
+  const overrides: AccessOverrides = {
+    granted: (existing.data()?.granted ?? []) as Permission[],
+    revoked: (existing.data()?.revoked ?? []) as Permission[],
+    scopes: existing.data()?.scopes ?? {},
+  }
+
+  const rolePermissions = [
     ...new Set(chosen.flatMap((role) => role.permissions)),
   ] as Permission[]
+
+  const permissions = effectivePermissions(rolePermissions, overrides)
 
   const db = getDb()
   const now = new Date().toISOString()
@@ -236,6 +255,9 @@ export async function assignRoles(
   batch.update(doc(db, 'userPermissions', uid), {
     roleIds,
     permissions,
+    /* Written back unchanged, so the next recomputation can see them. */
+    granted: overrides.granted,
+    revoked: overrides.revoked,
     isCeo: grantsAll,
     updatedAt: now,
     updatedBy: actorUid,
@@ -258,6 +280,10 @@ export async function fetchUserAccess(uid: string): Promise<{
   isCeo: boolean
   isFounder: boolean
   status: AccountStatus
+  /* The individual decisions standing on top of the roles. */
+  granted: string[]
+  revoked: string[]
+  scopes: Record<string, string>
 } | null> {
   const snap = await getDoc(doc(getDb(), 'userPermissions', uid))
   if (!snap.exists()) return null
@@ -267,6 +293,9 @@ export async function fetchUserAccess(uid: string): Promise<{
     isCeo: data.isCeo === true,
     isFounder: data.isFounder === true,
     status: data.status as AccountStatus,
+    granted: (data.granted ?? []) as string[],
+    revoked: (data.revoked ?? []) as string[],
+    scopes: (data.scopes ?? {}) as Record<string, string>,
   }
 }
 
@@ -423,4 +452,126 @@ export function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48)
+}
+
+/* ------------------------------------------------------------------ *
+ * Individual access
+ * ------------------------------------------------------------------ */
+
+/**
+ * Change what ONE person may do, without touching their role.
+ *
+ * This is the function the whole feature exists for. A role is a template; the
+ * verdict is per person, and two people holding the same role can end up with
+ * completely different access because the decisions live here rather than in
+ * the role.
+ *
+ * The effective list is recomputed from the roles plus these overrides, so it
+ * stays correct when either side changes — and it is written to
+ * `permissions`, the field every security rule already reads. No rule changed
+ * to make this work.
+ */
+export async function saveOverrides(
+  uid: string,
+  label: string,
+  overrides: AccessOverrides,
+  allRoles: Role[],
+  actorUid: string,
+  targetIsFounder = false,
+): Promise<Permission[]> {
+  /* The founder's access is theirs alone. */
+  if (targetIsFounder && uid !== actorUid) throw new FounderProtectedError()
+
+  const db = getDb()
+  const snap = await getDoc(doc(db, 'userPermissions', uid))
+  const roleIds: string[] = snap.data()?.roleIds ?? []
+
+  const rolePermissions = [
+    ...new Set(
+      allRoles.filter((r) => roleIds.includes(r.id)).flatMap((r) => r.permissions),
+    ),
+  ] as Permission[]
+
+  const permissions = effectivePermissions(rolePermissions, overrides)
+  const now = new Date().toISOString()
+
+  await setDoc(
+    doc(db, 'userPermissions', uid),
+    {
+      uid,
+      permissions,
+      granted: overrides.granted,
+      revoked: overrides.revoked,
+      scopes: overrides.scopes,
+      updatedAt: now,
+      updatedBy: actorUid,
+    },
+    { merge: true },
+  )
+
+  /*
+   * Logged with both lists, not just the total.
+   *
+   * "Permissions changed" tells nobody anything six months later. What was
+   * given and what was taken is the part somebody will need to read back.
+   */
+  await logAudit({
+    action: 'permissions.changed',
+    targetType: 'user',
+    targetId: uid,
+    targetLabel: label,
+    metadata: {
+      granted: overrides.granted,
+      revoked: overrides.revoked,
+      scopes: overrides.scopes,
+      effectiveCount: permissions.length,
+    },
+  })
+
+  return permissions
+}
+
+/**
+ * Change whether somebody is staff or an outside partner.
+ *
+ * Far more consequential than it looks, and worth spelling out: every internal
+ * rule in the database begins with `isInternal()`, which is false for a
+ * partner. So an account marked `affiliate` reads NOTHING internal — no
+ * clients, no leads, no services — however many permissions it holds.
+ *
+ * That had happened here: a member of staff was created as a partner and could
+ * sign in, hold seventeen permissions, and see nothing at all. Nothing in the
+ * application could change it afterwards, which is why this exists.
+ */
+export async function setAccountType(
+  uid: string,
+  label: string,
+  accountType: AccountType,
+  actorUid: string,
+  targetIsFounder = false,
+): Promise<void> {
+  if (uid === actorUid) throw new SelfActionError()
+  if (targetIsFounder) throw new FounderProtectedError()
+
+  const db = getDb()
+  const now = new Date().toISOString()
+  const batch = writeBatch(db)
+
+  /* Both copies, or the directory and the rules disagree about who somebody is. */
+  batch.update(doc(db, 'employees', uid), { accountType, updatedAt: now })
+  batch.update(doc(db, 'userPermissions', uid), {
+    accountType,
+    updatedAt: now,
+    updatedBy: actorUid,
+  })
+
+  await batch.commit()
+
+  await logAudit({
+    action: 'account.type_changed',
+    targetType: 'user',
+    targetId: uid,
+    targetLabel: label,
+    metadata: { accountType },
+  })
 }

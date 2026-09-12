@@ -223,8 +223,27 @@ export interface UserPermissions {
    */
   isFounder: boolean
   roleIds: string[]
-  /** Union of the permissions of every assigned role. */
+  /**
+   * What this person may actually do — the field every security rule reads.
+   *
+   * NOT simply the union of their roles. It is the roles plus `granted`, minus
+   * `revoked`, computed by `effectivePermissions`. Writing it here rather than
+   * resolving it in the rules is what keeps a permission check to one document
+   * read instead of a walk through the role graph.
+   */
   permissions: Permission[]
+  /**
+   * Permissions given to this person alone, on top of their roles.
+   *
+   * Kept apart from `permissions` so a role change still flows through. A
+   * single merged list would freeze somebody out of future role additions the
+   * moment anybody customised them.
+   */
+  granted?: Permission[]
+  /** Permissions taken from this person alone, whatever their roles grant. */
+  revoked?: Permission[]
+  /** Whose records they may see, per module. Absent means the default. */
+  scopes?: Record<string, string>
   updatedAt: string
   updatedBy: string
 }
@@ -339,6 +358,7 @@ export const AUDIT_ACTIONS = [
   'account.suspended',
   'account.activated',
   'account.deactivated',
+  'account.type_changed',
   'role.created',
   'role.updated',
   'role.deactivated',

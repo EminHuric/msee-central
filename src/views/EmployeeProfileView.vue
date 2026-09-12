@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EmployeeAccessPanel from '@/components/EmployeeAccessPanel.vue'
 import EmployeeManagePanel from '@/components/EmployeeManagePanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
@@ -301,6 +302,13 @@ watch(uid, load)
         :employee="detail.profile"
         :departments="departments"
         :positions="positions"
+        @updated="load"
+      />
+
+      <!-- What this one person may do, independent of anybody else. -->
+      <EmployeeAccessPanel
+        v-if="canManage && showManage"
+        :employee="detail.profile"
         @updated="load"
       />
 

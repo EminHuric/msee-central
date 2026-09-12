@@ -56,6 +56,7 @@ import {
   RECOVERABLE,
   REWARD_TYPES,
   SALE_CHANNELS,
+  SCOPES,
   TRANSACTION_CATEGORIES,
   TRANSACTION_TYPES,
   WALLET_KINDS,
@@ -225,6 +226,8 @@ const DYNAMIC_KEYS = {
   projectStatus: PROJECT_STATUSES,
   'recycle.kinds': RECOVERABLE,
   saleChannel: SALE_CHANNELS,
+  scope: SCOPES,
+  scopeHint: SCOPES,
   source: CLIENT_SOURCES,
   transactionCategory: TRANSACTION_CATEGORIES,
   transactionType: TRANSACTION_TYPES,
@@ -245,6 +248,8 @@ const FREEFORM_PREFIXES = new Set([
   'period',
   'dossier',
   'permission',
+  /* Four labels describing where a permission came from. */
+  'accessSource',
   /* Two small fixed sets belonging to the overview chart: the six metric
      names, and the two groups they fall into. Both live in that component
      rather than in an enum, because nothing else measures them. */

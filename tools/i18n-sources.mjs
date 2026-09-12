@@ -68,3 +68,5 @@ export {
 export { PERMISSION_GROUPS } from '../src/types/permissions.ts'
 
 export { WALLET_KINDS, WALLET_STATUSES } from '../src/types/wallet.ts'
+
+export { SCOPES } from '../src/types/access.ts'

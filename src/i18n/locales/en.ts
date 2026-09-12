@@ -569,6 +569,7 @@ export default {
     'record.purged': 'Record destroyed permanently',
     'wallet.entry_added': 'Earnings entry added',
     'wallet.status_changed': 'Earnings entry changed',
+    'account.type_changed': 'Kind of account changed',
   },
 
   nav2: {
@@ -2851,6 +2852,44 @@ export default {
     approved: 'Approved',
     paid: 'Paid',
     cancelled: 'Cancelled',
+  },
+
+  access: {
+    title: 'Access',
+    subtitle: 'The role is a starting point. Everything here applies to this person alone.',
+    accountType: 'Kind of account',
+    affiliateWarning: 'An outside partner reads nothing internal — no clients, no leads, no services — however many permissions they hold. Staff must be set to Employee.',
+    effectiveCount: 'permissions in force',
+    fromRole: '{n} from the role',
+    overrides: '{n} set for this person',
+    resetToRole: 'Back to the role',
+    searchPermissions: 'Search permissions',
+    enableAll: 'All on',
+    disableAll: 'All off',
+    scope: 'Whose records',
+    saved: 'Saved. {n} permissions now in force.',
+    typeChanged: 'The kind of account has changed.',
+  },
+
+  scope: {
+    own: 'Only their own',
+    team: 'Their team',
+    department: 'Their department',
+    all: 'Everything',
+  },
+
+  scopeHint: {
+    own: 'Records they own, were assigned, or created.',
+    team: 'Their own, plus their team.',
+    department: 'Everything in their department.',
+    all: 'Every record in the company.',
+  },
+
+  accessSource: {
+    role: 'from the role',
+    granted: 'added',
+    revoked: 'removed',
+    off: '',
   },
 
 }

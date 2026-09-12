@@ -568,6 +568,7 @@ export default {
     'record.purged': 'Zapis trajno uništen',
     'wallet.entry_added': 'Stavka zarade dodata',
     'wallet.status_changed': 'Stavka zarade izmenjena',
+    'account.type_changed': 'Vrsta naloga promenjena',
   },
 
   nav2: {
@@ -2850,6 +2851,44 @@ export default {
     approved: 'Odobreno',
     paid: 'Isplaćeno',
     cancelled: 'Otkazano',
+  },
+
+  access: {
+    title: 'Pristup',
+    subtitle: 'Uloga je polazna tacka. Sve ovde vazi samo za ovu osobu.',
+    accountType: 'Vrsta naloga',
+    affiliateWarning: 'Spoljni partner ne cita nista interno — ni klijente, ni kontakte, ni usluge — koliko god dozvola imao. Zaposleni mora biti Zaposleni.',
+    effectiveCount: 'dozvola na snazi',
+    fromRole: '{n} iz uloge',
+    overrides: '{n} postavljeno za ovu osobu',
+    resetToRole: 'Vrati na ulogu',
+    searchPermissions: 'Pretrazi dozvole',
+    enableAll: 'Sve uključi',
+    disableAll: 'Sve isključi',
+    scope: 'Cije zapise',
+    saved: 'Sacuvano. {n} dozvola je sada na snazi.',
+    typeChanged: 'Vrsta naloga je promenjena.',
+  },
+
+  scope: {
+    own: 'Samo svoje',
+    team: 'Svoj tim',
+    department: 'Svoj sektor',
+    all: 'Sve',
+  },
+
+  scopeHint: {
+    own: 'Zapisi koje poseduje, koji su mu dodeljeni ili koje je napravio.',
+    team: 'Svoje, plus svoj tim.',
+    department: 'Sve u svom sektoru.',
+    all: 'Svaki zapis u firmi.',
+  },
+
+  accessSource: {
+    role: 'iz uloge',
+    granted: 'dodato',
+    revoked: 'uklonjeno',
+    off: '',
   },
 
 }
