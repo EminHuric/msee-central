@@ -3174,6 +3174,10 @@ export default {
   },
 
   rms: {
+    signInFailedCode: 'The RMS refused the sign-in: {code}',
+    refererBlocked: 'The RMS project’s API key only accepts requests from its own site. Add this site to the key’s allowed referrers in Google Cloud Console (APIs & Services → Credentials), or remove the restriction.',
+    badKey: 'The RMS project’s API key is not valid. Check VITE_RMS_API_KEY.',
+    methodOff: 'Email and password sign-in is switched off for the RMS project. Turn it on in Firebase Console → Authentication → Sign-in method.',
     live: 'Connected to the RMS',
     liveHint: 'Signed in as {email}. Availability and new bookings are live.',
     notConnected: 'Not connected to the RMS',

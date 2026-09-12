@@ -3173,6 +3173,10 @@ export default {
   },
 
   rms: {
+    signInFailedCode: 'RMS je odbio prijavu: {code}',
+    refererBlocked: 'API ključ RMS projekta prima zahteve samo sa svog sajta. Dodaj ovaj sajt u dozvoljene referrere tog ključa u Google Cloud Console (APIs & Services → Credentials), ili skloni ograničenje.',
+    badKey: 'API ključ RMS projekta nije valjan. Proveri VITE_RMS_API_KEY.',
+    methodOff: 'Prijava mejlom i lozinkom je isključena na RMS projektu. Uključi je u Firebase Console → Authentication → Sign-in method.',
     live: 'Povezano sa RMS-om',
     liveHint: 'Prijavljen kao {email}. Dostupnost i nove rezervacije rade.',
     notConnected: 'Nije povezano sa RMS-om',

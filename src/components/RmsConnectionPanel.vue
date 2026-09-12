@@ -53,6 +53,12 @@ const connected = computed(() => rmsSession.value !== null)
  * `auth/invalid-credential` covers a wrong password and an account that does not
  * exist, because Firebase deliberately does not distinguish them — so neither
  * does this.
+ *
+ * THE LAST LINE IS THE IMPORTANT ONE. An unrecognised code is shown verbatim
+ * rather than folded into "could not sign in". Hiding it is how a connection that
+ * fails for a configurable reason — a referrer-restricted API key, email sign-in
+ * switched off in that project — looks identical to a typed password, and
+ * somebody retypes their password for an hour against a problem in a console.
  */
 function reasonFor(code: string): string {
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
@@ -61,7 +67,18 @@ function reasonFor(code: string): string {
   if (code === 'auth/user-not-found') return t('rms.wrongCredentials')
   if (code === 'auth/too-many-requests') return t('rms.tooMany')
   if (code === 'auth/network-request-failed') return t('rms.offline')
-  return t('rms.signInFailed')
+
+  /* The key is locked to the RMS's own domains and this one is not among them. */
+  if (code.includes('requests-from-referer') || code.includes('blocked')) {
+    return t('rms.refererBlocked')
+  }
+  if (code === 'auth/api-key-not-valid' || code === 'auth/invalid-api-key') {
+    return t('rms.badKey')
+  }
+  /* Email and password sign-in is switched off for that Firebase project. */
+  if (code === 'auth/operation-not-allowed') return t('rms.methodOff')
+
+  return t('rms.signInFailedCode', { code })
 }
 
 async function connect(): Promise<void> {
