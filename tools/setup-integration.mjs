@@ -6,11 +6,18 @@
  * RMS reaching in has none of that problem — it already has a server, the key
  * lives there, and it writes here as itself.
  *
- * WHAT THIS ACCOUNT CAN DO. One thing: write rows into `intake`. It reads
- * nothing, writes nowhere else, and holds no permissions at all. If its
- * password leaks, what leaks is the ability to send us numbers — not the
- * ability to read the company. That is the entire point of giving it its own
- * account rather than reusing somebody's.
+ * WHAT THIS ACCOUNT CAN DO. Two things, both narrow:
+ *
+ *   write rows into `intake` — the turnover the RMS reports;
+ *   collect reservations — read the ones marked `pending`, and say whether each
+ *   was taken or refused.
+ *
+ * Nothing else. It cannot read a client, a sale, an employee or a wallet; it
+ * cannot read a reservation it has already taken; and on a reservation it may
+ * write only the four fields that describe the sync. If its password leaks,
+ * what leaks is the ability to send us numbers and collect the bookings waiting
+ * to be collected — not the ability to read the company. That is the entire
+ * point of giving it its own account rather than reusing somebody's.
  *
  *   npm run setup:integration
  *   npm run setup:integration -- --reset   (new password for the existing one)
@@ -113,6 +120,74 @@ if (reset || password) {
 }
 
 console.log(`
+  ---- what the RMS collects ----
+
+  This is the other half, and it is new. Bookings MsEe brings are entered in
+  MsEe Central and the RMS comes and takes them. Nothing is pushed to you: a
+  push would need your credentials in a browser, and a browser keeps no secrets.
+
+  ONE QUERY, AND IT IS THE ONLY THING THIS ACCOUNT CAN READ:
+
+    collection 'reservations', where syncState == 'pending'
+
+  The rules allow exactly that. A row you have already taken becomes invisible
+  to you the moment you mark it, and so does one a person here is still fixing.
+  That is deliberate: this account can collect what is waiting and can never
+  walk the history of what we brought.
+
+  A row looks like this:
+
+    {
+      id: 'aBc123…',                   // OUR id. Keep it — see below.
+      clientId: 'hotel-abc-x7k2',
+      clientName: 'Hotel ABC',
+      guestName: 'Marko Petrovic',
+      guestContact: '+382 67 123 456',
+      checkIn: '2026-10-01',
+      checkOut: '2026-10-04',
+      nights: 3,                       // Agreed nights, which may not be the
+      guests: 2,                       //   gap between the two dates.
+      value: { minor: 45000, currency: 'EUR', rate: 117, baseMinor: 5265000,
+               rateDate: '2026-10-01' },
+      source: 'Instagram campaign',    // Free text. Where we brought them from.
+      status: 'confirmed',
+      note: '',
+      syncState: 'pending', rmsReservationId: '', takenAt: null, syncError: '',
+      ownerUid: '…', ownerName: 'Sadeta Sadikovic'
+    }
+
+  WHEN YOU HAVE CREATED IT, update the same document with four fields:
+
+    { syncState: 'taken', rmsReservationId: '<your booking id>',
+      takenAt: '<ISO timestamp>', updatedAt: '<ISO timestamp>' }
+
+  'rmsReservationId' is required and must not be empty — the rules refuse a
+  'taken' without one, because a booking you claim to hold that cannot be
+  matched to anything on your side is worse than one still waiting.
+
+  WHEN YOU CANNOT, say so instead:
+
+    { syncState: 'failed', syncError: 'Dates clash with an existing booking',
+      updatedAt: '<ISO timestamp>' }
+
+  Write one line a person can act on. Somebody here sees it on the client, fixes
+  the booking, and asks again — deliberately by hand, because a retry on a timer
+  either loops for ever or succeeds after a human fixed it without them knowing
+  which. Nothing retries itself.
+
+  THOSE ARE THE ONLY FIELDS YOU MAY WRITE. The guest, the dates, the value and
+  the status are ours; the rules refuse any change to them even from this
+  account. You also cannot create a reservation here, and cannot delete one.
+
+  DEDUPE BY OUR DOCUMENT ID — this is the one thing that can go wrong.
+
+  Taking a booking and marking it taken are two operations, and a crash between
+  them leaves the row 'pending'. You will be handed it again, because from our
+  side it was never collected. So store our 'id' against the booking you create
+  and treat it as the idempotency key: if you already hold that id, mark the row
+  taken with the id you already have and create nothing. A duplicate booking at
+  the property is a real guest turned away, which is far worse than a retry.
+
   ---- what the RMS sends ----
 
   Sign in with the email and password above, then write one document per row to
@@ -132,7 +207,7 @@ console.log(`
       // What the client took, every channel. This is what the RMS knows.
       turnover:   { minor: 420000, currency: 'EUR', rate: 117, baseMinor: 49140000, rateDate: '2026-09-12' },
       // The part WE brought them, if the RMS can tell. null when it cannot —
-      // MsEe Central records that itself, on the client.
+      // MsEe Central counts that itself now, from the bookings above.
       attributed: null,
       // Our commission on that part. null for the same reason.
       ourShare:   null,
@@ -160,42 +235,42 @@ console.log(`
       note: '', receivedAt: '<now>', appliedAt: null, appliedBy: null, walletEntryId: null
     }
 
-  THE ONE CHANGE WORTH MAKING IN THE RMS: a channel on each reservation.
+  ---- how the two halves fit ----
 
-  'attributed' is the part MsEe brought. The RMS cannot report it today, and it
-  is the only figure that matters for judging whether our work pays — so the
-  question is where it can be answered honestly.
+  THREE FIGURES, NOT TWO.
 
-  It can be answered in the RMS, and nowhere else, because the RMS is where the
-  channel is known the moment a booking arrives: Booking.com, the direct site we
-  built, a link from one of our campaigns. Record that channel per reservation
-  and 'attributed' stops being an estimate and becomes a sum — countable,
-  auditable reservation by reservation, and recomputed every day without anybody
-  typing anything.
+    Their turnover   everything the client took, through every channel.
+                     The RMS knows this and nothing else does. Send it.
+    We brought       the part that came from our work. COUNTED from the
+                     reservations you collect above — one of them is one we
+                     brought, because entering it here is the only way it
+                     exists. Send 'attributed' as null.
+    Our share        our commission on what we brought. MsEe Central holds the
+                     rate per client and works it out. Send 'ourShare' as null.
 
-  So: add a source/channel field per reservation, decide once which channels are
-  ours, and send the total of those as 'attributed'. That is the whole change.
+  Collapsing the first two would credit us with bookings that would have
+  happened anyway, and a company measuring itself that way cannot tell whether
+  its own work pays.
+
+  WHAT THE RESERVATION PULL REPLACED. The previous plan was a channel field on
+  every reservation in the RMS, so the RMS could total up the bookings that came
+  from our campaigns. Entering the booking here is better and that is why it
+  changed: it makes attribution a count rather than a measurement, it needs no
+  change to the RMS's data model, and it records the guest we brought by name.
+
+  A channel field is still worth having for a different question — which of the
+  property's OWN bookings arrived through the site or campaigns we built, with no
+  guest we booked ourselves. Nothing here depends on it.
 
   WHAT DOES NOT GO IN THE RMS: our percentage. That is a term in our agreement
   with the client, not a fact about their property, and changing our commission
-  should not mean editing their booking software. MsEe Central holds the rate
-  per client and computes our share from what you send. Send 'ourShare' as null.
-
-  Until the channel exists, MsEe Central records 'attributed' by hand, month by
-  month, labelled as measured or estimated. That keeps working afterwards as the
-  fallback for any client whose channels are not tracked.
-
-  THREE FIGURES, NOT TWO. 'turnover' is everything the client took, through
-  every channel — that is theirs. 'attributed' is the part MsEe brought them,
-  which the RMS usually cannot tell and should send as null; it is recorded in
-  MsEe Central on the client instead. 'ourShare' is our commission on that
-  part. Collapsing the first two would credit us with bookings that would have
-  happened anyway.
+  should not mean editing their booking software.
 
   HOW A ROW FINDS ITS CLIENT. By the reference you already recorded on that
   client in MsEe Central — Clients, edit, "Other systems", system "RMS". A row
   whose reference matches nothing stays unmatched and visible rather than being
-  attached to a guess.
+  attached to a guess. Reservations need no matching: they already name the
+  client, because they were entered against one.
 
   MONEY IS INTEGER MINOR UNITS. €4,200.00 is minor: 420000. Never a decimal:
   this system has no floating-point money anywhere and will not start here.

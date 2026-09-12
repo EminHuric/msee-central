@@ -60,6 +60,8 @@ const EXPECTED = [
   { name: 'incentiveWork', soft: true },
   { name: 'commissions' },
   { name: 'notes' },
+  { name: 'reservations', soft: true, owner: 'ownerUid' },
+  { name: 'attribution' },
 ]
 
 /** References that must point at something that exists. */
@@ -71,6 +73,8 @@ const LINKS = [
   { from: 'transactions', field: 'clientId', to: 'clients' },
   { from: 'leads', field: 'clientId', to: 'clients' },
   { from: 'bonusAwards', field: 'sourceId', to: 'bonusPrograms', when: 'programme' },
+  { from: 'reservations', field: 'clientId', to: 'clients' },
+  { from: 'attribution', field: 'clientId', to: 'clients' },
 ]
 
 const problems = []

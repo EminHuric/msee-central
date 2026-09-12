@@ -1012,6 +1012,82 @@ service cloud.firestore {
       allow delete: if canPurge();
     }
 
+
+    /* ------------------------------------------------------------------ *
+     * reservations — the bookings we brought, and the one place the RMS
+     * reaches in to collect them
+     *
+     * Two callers, and they are allowed opposite things.
+     *
+     * STAFF own the booking. They enter it, correct it, and delete it under
+     * the usual scope: without `view_all` you see the ones you brought.
+     *
+     * THE RMS owns only the collection of it. It may read what has not been
+     * taken yet and say what happened to it. Three limits make that safe:
+     *
+     *   it reads `pending` rows ONLY, which means its query must say so —
+     *   a booking it has already taken is invisible to it, and so is every
+     *   row a human here is still fixing;
+     *
+     *   it may change nothing but the four sync fields, so the guest, the
+     *   dates and the money are beyond its reach even though it is the
+     *   system those figures are being sent to;
+     *
+     *   it cannot create a reservation here at all. Turnover comes in
+     *   through `intake`; this collection is what WE brought, and a row the
+     *   RMS invented would be a booking we did not bring.
+     *
+     * And the mirror of that: staff may not write `taken`. That state is an
+     * assertion that another system now holds the booking, and the only
+     * caller who can tell the truth about it is that system. A human who
+     * knows the RMS will never hold a booking says `local_only` instead,
+     * which is an honest statement about this system rather than a guess
+     * about the other one.
+     * ------------------------------------------------------------------ */
+
+    match /reservations/{reservationId} {
+      allow read: if canRead('reservations')
+        || (isIntegration() && resource.data.syncState == 'pending');
+
+      allow create: if isInternal() && can('reservations.create')
+        && request.resource.data.createdBy == me()
+        /* A new booking has not been collected, whatever the form sent. */
+        && request.resource.data.syncState == 'pending';
+
+      allow update: if
+        (
+          isInternal()
+          && (
+            (isBinChange() && (can('reservations.delete') || can('recycle_bin.restore')))
+            || (
+              can('reservations.edit')
+              /* Nobody here may claim the RMS has taken it. */
+              && (
+                request.resource.data.syncState == resource.data.syncState
+                || request.resource.data.syncState in ['pending', 'local_only']
+              )
+            )
+          )
+        )
+        || (
+          /* The RMS, reporting what it did with a row it collected. */
+          isIntegration()
+          && resource.data.syncState == 'pending'
+          && changedOnly(['syncState', 'rmsReservationId', 'takenAt', 'syncError', 'updatedAt'])
+          && (
+            (
+              request.resource.data.syncState == 'taken'
+              /* A taken booking without the RMS's own id cannot be reconciled. */
+              && request.resource.data.rmsReservationId is string
+              && request.resource.data.rmsReservationId.size() > 0
+            )
+            || request.resource.data.syncState == 'failed'
+          )
+        );
+
+      allow delete: if canPurge();
+    }
+
     match /notificationPrefs/{uid} {
       allow read, write: if isSelf(uid);
     }

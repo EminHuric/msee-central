@@ -72,3 +72,5 @@ export { WALLET_KINDS, WALLET_STATUSES } from '../src/types/wallet.ts'
 export { SCOPES } from '../src/types/access.ts'
 
 export { ATTRIBUTION_BASES } from '../src/types/attribution.ts'
+
+export { RESERVATION_STATUSES, SYNC_STATES } from '../src/types/reservations.ts'

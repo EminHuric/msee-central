@@ -107,6 +107,16 @@ export async function saveRole(input: RoleInput, isNew: boolean): Promise<Resync
     targetLabel: input.name,
     metadata: {
       permissionCount: input.permissions.length,
+      /*
+       * The list itself, not only how long it was.
+       *
+       * Written because a count is useless the day somebody needs it. A role
+       * that has been tailored by hand exists in exactly one place — the role
+       * document — and when that document is overwritten there is nothing left
+       * to compare against. The audit log is the only record of a configuration
+       * that no longer exists, so it has to carry the configuration.
+       */
+      permissions: input.permissions,
       status: input.status,
       holdersUpdated: resynced.updated,
       holdersSkipped: resynced.skipped,

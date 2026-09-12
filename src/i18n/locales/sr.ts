@@ -568,6 +568,8 @@ export default {
     'record.purged': 'Zapis trajno uništen',
     'wallet.entry_added': 'Stavka zarade dodata',
     'wallet.status_changed': 'Stavka zarade izmenjena',
+    'reservation.created': 'Rezervacija uneta',
+    'reservation.updated': 'Rezervacija izmenjena',
     'account.type_changed': 'Vrsta naloga promenjena',
   },
 
@@ -820,6 +822,7 @@ export default {
     basics: 'Podaci',
     tabOverview: 'Pregled',
     tabSales: 'Prodaja',
+    tabBookings: 'Rezervacije',
     tabFinance: 'Finansije',
     tabProjects: 'Projekti',
     tabActivity: 'Aktivnost',
@@ -1332,9 +1335,37 @@ export default {
     bonuses: 'Bonusi i nagrade',
     recycle: 'Korpa za otpatke',
     wallet: 'Zarada zaposlenih',
+    reservations: 'Rezervacije',
   },
 
   permission: {
+    reservations: {
+      view: {
+        label: 'Vidi rezervacije',
+        description:
+          'Čitaj rezervacije koje si doneo — goste, datume i vrednost.',
+      },
+      view_all: {
+        label: 'Vidi rezervacije svih',
+        description:
+          'Sve rezervacije koje je firma donela, ne samo tvoje. Ovo je menadžerski pregled.',
+      },
+      create: {
+        label: 'Unesi rezervaciju',
+        description:
+          'Zabeleži rezervaciju koju si doneo klijentu. Čeka da je RMS preuzme.',
+      },
+      edit: {
+        label: 'Izmeni rezervaciju',
+        description:
+          'Ispravi datume, vrednost ili status. Rezervacija koju RMS već ima ostaje preuzeta — izmena se dogovara sa objektom, ne šalje se po drugi put.',
+      },
+      delete: {
+        label: 'Obriši rezervaciju',
+        description:
+          'Ide u korpu za otpatke. Prestaje da se računa u ono što si doneo.',
+      },
+    },
     wallet: {
       adjust: {
         label: 'Upisuje i odobrava zaradu',
@@ -2732,6 +2763,7 @@ export default {
     emptyHint: 'Sve obrisano prvo dolazi ovde.',
     noMatch: 'Nema poklapanja',
     kinds: {
+      reservations: 'Rezervacija',
       clients: 'Klijent',
       leads: 'Kontakt',
       projects: 'Projekat',
@@ -2960,7 +2992,87 @@ export default {
     empty: 'Još ništa nije upisano',
     emptyHint: 'Upiši mesec i tri cifre se pojave iznad.',
     saved: 'Sačuvano.',
+    countedFrom: 'Izračunato iz {n} rezervacija zabeleženih za ovaj mesec.',
     moreThanTotal: 'Ne možemo im doneti više nego što su uzeli.',
+  },
+
+  reservations: {
+    title: 'Rezervacije koje smo doneli',
+    subtitle: 'Unose se ovde, RMS ih preuzima. Ova lista je ono što smo im doneli.',
+    add: 'Unesi rezervaciju',
+
+    brought: 'Doneli smo',
+    broughtHint: '{n} rezervacija · {nights} noćenja',
+    ourShare: 'Naš deo',
+    atRate: '{rate}% od onoga što smo doneli',
+    noRate: 'Procenat još nije dogovoren — postavi ga na kartici Finansije.',
+    withRms: 'Čeka RMS',
+    pendingHint: 'Uneto, još nije preuzeto.',
+    someFailed: '{n} odbijeno od RMS-a — pogledaj razlog.',
+
+    guest: 'Gost',
+    guestPlaceholder: 'Ime, kako ga je dao',
+    contact: 'Kontakt',
+    contactHint: 'Telefon ili mejl. Dovoljno da ga dobiješ.',
+    checkIn: 'Prijava',
+    checkOut: 'Odjava',
+    nights: 'Noćenja',
+    nightsHint: 'Predloženo po datumima. Promeni ako je dogovoren drugi broj.',
+    guests: 'Gostiju',
+    value: 'Koliko gost plaća',
+    valueHint: 'Cela rezervacija, ne naš deo.',
+    source: 'Odakle je došao',
+    sourcePlaceholder: 'Instagram, Google Ads, poruka…',
+    sourceHint: 'Slobodan tekst, da nova kampanja ne zahteva izmenu sistema.',
+    status: 'Status',
+    note: 'Napomena',
+
+    willEarn: 'Ova rezervacija nam donosi {amount} po stopi od {rate}%.',
+    setRateFirst: 'Dogovori procenat na kartici Finansije i svaka rezervacija će pokazati koliko donosi.',
+
+    nightsCount: '{n} noćenja',
+    guestsCount: '{n} gostiju',
+    ours: 'naše {amount}',
+    rmsId: 'RMS #{id}',
+    retry: 'Pošalji RMS-u ponovo',
+    keepLocal: 'Ostaje samo ovde',
+
+    saved: 'Rezervacija zabeležena. RMS će je preuzeti.',
+    updated: 'Rezervacija izmenjena.',
+    queued: 'Vraćena u red za RMS.',
+    keptLocal: 'Ostaje samo ovde. I dalje se računa u ono što smo doneli.',
+    deleted: 'Rezervacija prebačena u korpu za otpatke.',
+    deleteTitle: 'Obrisati ovu rezervaciju?',
+    deleteMessage: 'Rezervacija za {guest} ide u korpu i prestaje da se računa u ono što smo doneli.',
+
+    needGuest: 'Rezervacija mora imati ime gosta.',
+    needNights: 'Rezervacija je najmanje jedno noćenje.',
+
+    empty: 'Još nema unetih rezervacija',
+    emptyHint: 'Unesi rezervacije koje donosiš ovom klijentu i brojevi iznad se računaju sami.',
+  },
+
+  reservationStatus: {
+    enquiry: 'Upit',
+    confirmed: 'Potvrđeno',
+    stayed: 'Odsedeo',
+    cancelled: 'Otkazano',
+    no_show: 'Nije došao',
+  },
+
+  reservationStatusHint: {
+    enquiry: 'Pitao je. Još se ne računa u ono što smo doneli.',
+    confirmed: 'Rezervisano. Računa se.',
+    stayed: 'Došao je. Računa se.',
+    cancelled: 'Otkazano. Ostaje u broju rezervacija, izlazi iz novca.',
+    no_show: 'Nije se pojavio. Ostaje u broju rezervacija, izlazi iz novca.',
+  },
+
+  syncState: {
+    pending: 'Čeka RMS',
+    taken: 'U RMS-u',
+    failed: 'RMS je odbio',
+    local_only: 'Samo ovde',
   },
 
   attributionBasis: {

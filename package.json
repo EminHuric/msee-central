@@ -24,6 +24,7 @@
     "buttons:check": "node --disable-warning=ExperimentalWarning tools/check-buttons.mjs",
     "data:check": "node --disable-warning=ExperimentalWarning tools/check-data.mjs",
     "tokens:check": "node --disable-warning=ExperimentalWarning tools/check-tokens.mjs",
+    "components:check": "node --disable-warning=ExperimentalWarning tools/check-components.mjs",
     "roles:seed": "node --disable-warning=ExperimentalWarning tools/seed-roles.mjs",
     "setup:integration": "node --disable-warning=ExperimentalWarning tools/setup-integration.mjs"
   },

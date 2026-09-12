@@ -9,14 +9,29 @@
 
 import { logAudit } from './audit'
 import { logActivity } from './records'
-import { orderBy, readAll, readWhere, where, write } from './store'
+import { readAll, readWhere, where, write } from './store'
 import type { Attribution } from '@/types/attribution'
 
 export const fetchAttribution = () =>
   readAll<Attribution>('attribution', 'period', 'desc')
 
-export const fetchAttributionFor = (clientId: string) =>
-  readWhere<Attribution>('attribution', where('clientId', '==', clientId), orderBy('period', 'desc'))
+/**
+ * Every month recorded for one client, newest first.
+ *
+ * Sorted here rather than by Firestore, and that is not a style choice: a
+ * `where` on one field plus an `orderBy` on another needs a composite index,
+ * Firestore does not create one on demand, and the query throws until somebody
+ * deploys it. The reader catches that and returns an empty list — so the
+ * untested version of this function returned "no months" for ever, for every
+ * client, and looked exactly like a client with no months.
+ *
+ * One client's months number in the dozens. Sorting them in the browser costs
+ * nothing and cannot be broken by a missing deploy.
+ */
+export const fetchAttributionFor = async (clientId: string): Promise<Attribution[]> => {
+  const rows = await readWhere<Attribution>('attribution', where('clientId', '==', clientId))
+  return rows.sort((a, b) => b.period.localeCompare(a.period))
+}
 
 /**
  * Record or correct a month.

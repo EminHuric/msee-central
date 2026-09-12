@@ -155,6 +155,7 @@ let integrationUid = null
  */
 const TEST_COLLECTIONS = [
   'intake',
+  'reservations',
   'attribution',
   'walletEntries',
   'dashboardLayouts',
@@ -671,6 +672,66 @@ try {
     }),
   )
 
+  /* --- a reservation the RMS has not seen is not 'taken' ------------- */
+
+  /*
+   * The mirror of the integration checks: `taken` is an assertion about
+   * another system, and not even an owner may make it on that system's behalf.
+   * A figure in this database that says the RMS holds a booking has to have
+   * come from the RMS, or the two are reconciling against a claim nobody made.
+   */
+  const ownerResv = `rules-resv-owner-${stamp}`
+
+  await adminDb.collection('reservations').doc(ownerResv).set({
+    id: ownerResv,
+    clientId: 'rules-client',
+    clientName: 'Rules Hotel',
+    guestName: 'Rules Guest',
+    guestContact: '',
+    checkIn: '2026-11-01',
+    checkOut: '2026-11-03',
+    nights: 2,
+    guests: 2,
+    value: { minor: 30000, currency: 'EUR', rate: 1, baseMinor: 30000, rateDate: '2026-11-01' },
+    source: 'rules-check',
+    status: 'confirmed',
+    note: '',
+    syncState: 'pending',
+    rmsReservationId: '',
+    takenAt: null,
+    syncError: '',
+    ownerUid,
+    ownerName: 'Rules Owner',
+    deletedAt: null,
+    deletedBy: null,
+    deletedByName: '',
+    createdAt: new Date().toISOString(),
+    createdBy: ownerUid,
+    updatedAt: new Date().toISOString(),
+  })
+
+  await mustAllow('co-owner CAN correct a reservation', () =>
+    updateDoc(doc(db, 'reservations', ownerResv), {
+      nights: 3,
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('co-owner CANNOT claim the RMS has taken a reservation', () =>
+    updateDoc(doc(db, 'reservations', ownerResv), {
+      syncState: 'taken',
+      rmsReservationId: 'hand-written',
+      takenAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('co-owner CAN say a booking will only ever live here', () =>
+    updateDoc(doc(db, 'reservations', ownerResv), {
+      syncState: 'local_only',
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
   await mustDeny('co-owner CANNOT appoint another owner', () =>
       setDoc(doc(db, 'userPermissions', `would-be-owner-${stamp}`), {
         uid: `would-be-owner-${stamp}`,
@@ -998,6 +1059,128 @@ try {
       employeeUid: 'somebody',
       amountBaseMinor: 100000,
       status: 'paid',
+    }),
+  )
+
+  /* --- reservations: the RMS collects, and can do nothing else ------- */
+
+  /*
+   * Two pending reservations, written with the Admin SDK.
+   *
+   * Written that way because the rules refuse to let the integration account
+   * create one, which is itself one of the claims below. The rows have to
+   * exist before the collector can be tested against them.
+   */
+  const takeable = `rules-resv-take-${stamp}`
+  const refusable = `rules-resv-fail-${stamp}`
+
+  for (const id of [takeable, refusable]) {
+    await adminDb.collection('reservations').doc(id).set({
+      id,
+      clientId: 'rules-client',
+      clientName: 'Rules Hotel',
+      guestName: 'Rules Guest',
+      guestContact: '',
+      checkIn: '2026-10-01',
+      checkOut: '2026-10-04',
+      nights: 3,
+      guests: 2,
+      value: { minor: 45000, currency: 'EUR', rate: 1, baseMinor: 45000, rateDate: '2026-10-01' },
+      source: 'rules-check',
+      status: 'confirmed',
+      note: '',
+      syncState: 'pending',
+      rmsReservationId: '',
+      takenAt: null,
+      syncError: '',
+      ownerUid: 'rules-owner',
+      ownerName: 'Rules Owner',
+      deletedAt: null,
+      deletedBy: null,
+      deletedByName: '',
+      createdAt: new Date().toISOString(),
+      createdBy: 'system:verify-rules',
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  await mustAllow('the RMS CAN read a reservation waiting to be collected', () =>
+    getDoc(doc(db, 'reservations', takeable)),
+  )
+
+  await mustDeny('the RMS CANNOT change what the guest pays', () =>
+    updateDoc(doc(db, 'reservations', takeable), {
+      value: { minor: 1, currency: 'EUR', rate: 1, baseMinor: 1, rateDate: '2026-10-01' },
+    }),
+  )
+
+  await mustDeny('the RMS CANNOT change the guest or the dates', () =>
+    updateDoc(doc(db, 'reservations', takeable), { guestName: 'Somebody Else', nights: 99 }),
+  )
+
+  await mustDeny('the RMS CANNOT enter a reservation of its own', () =>
+    setDoc(doc(db, 'reservations', `rules-resv-forged-${stamp}`), {
+      clientId: 'rules-client',
+      guestName: 'Invented',
+      syncState: 'pending',
+      value: { minor: 99000, currency: 'EUR', rate: 1, baseMinor: 99000, rateDate: '2026-10-01' },
+    }),
+  )
+
+  await mustDeny('the RMS CANNOT delete a reservation', () =>
+    deleteDoc(doc(db, 'reservations', refusable)),
+  )
+
+  /* A booking it claims to hold without naming its own id is unreconcilable. */
+  await mustDeny('the RMS CANNOT mark one taken without giving back its id', () =>
+    updateDoc(doc(db, 'reservations', takeable), {
+      syncState: 'taken',
+      rmsReservationId: '',
+      takenAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustDeny('the RMS CANNOT decide a booking lives only here', () =>
+    updateDoc(doc(db, 'reservations', takeable), { syncState: 'local_only' }),
+  )
+
+  await mustAllow('the RMS CAN refuse one, with a reason somebody can act on', () =>
+    updateDoc(doc(db, 'reservations', refusable), {
+      syncState: 'failed',
+      syncError: 'Dates clash with an existing booking',
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  await mustAllow('the RMS CAN take one and give back its own id', () =>
+    updateDoc(doc(db, 'reservations', takeable), {
+      syncState: 'taken',
+      rmsReservationId: `RMS-${stamp}`,
+      takenAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  )
+
+  /*
+   * And now it cannot see it any more.
+   *
+   * Not a nicety: the read rule is what forces the collector to query for
+   * pending rows, which is the same thing as it not being able to walk the
+   * whole history of what we brought. Once a row is taken it is ours again.
+   */
+  await mustDeny('the RMS CANNOT read a reservation it has already taken', () =>
+    getDoc(doc(db, 'reservations', takeable)),
+  )
+
+  await mustDeny('the RMS CANNOT read one it refused', () =>
+    getDoc(doc(db, 'reservations', refusable)),
+  )
+
+  await mustDeny('the RMS CANNOT take a row back off a human', () =>
+    updateDoc(doc(db, 'reservations', refusable), {
+      syncState: 'taken',
+      rmsReservationId: `RMS-late-${stamp}`,
+      takenAt: new Date().toISOString(),
     }),
   )
 

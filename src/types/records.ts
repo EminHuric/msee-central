@@ -45,6 +45,7 @@ export const RECOVERABLE = [
   'calendarEvents',
   'bonusPrograms',
   'incentiveWork',
+  'reservations',
 ] as const
 export type RecoverableCollection = (typeof RECOVERABLE)[number]
 

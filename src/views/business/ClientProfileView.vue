@@ -14,6 +14,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import ClientReservationsPanel from '@/components/ClientReservationsPanel.vue'
+import ClientTradingPanel from '@/components/ClientTradingPanel.vue'
 import NotesPanel from '@/components/NotesPanel.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchClient } from '@/api/clients'
@@ -47,10 +49,29 @@ const services = ref<Service[]>([])
 const activity = ref<ActivityEntry[]>([])
 const fieldDefs = ref<CustomFieldDef[]>([])
 
-type Tab = 'overview' | 'sales' | 'finance' | 'projects' | 'activity'
+type Tab = 'overview' | 'sales' | 'bookings' | 'finance' | 'projects' | 'activity'
 const tab = ref<Tab>('overview')
 
+/** The tabs this person can actually open. */
+const tabs = computed<Tab[]>(() => [
+  'overview',
+  'sales',
+  ...(canBookings.value ? (['bookings'] as Tab[]) : []),
+  'finance',
+  'projects',
+  'activity',
+])
+
 const canMoney = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
+/*
+ * Bookings are not money, and the permission is not the money one.
+ *
+ * Somebody who brings guests all day needs this tab without being shown what
+ * the company earns; somebody who reads the accounts does not automatically
+ * enter bookings. Keeping the two apart is the whole reason `reservations` is
+ * its own module in the catalogue.
+ */
+const canBookings = computed(() => auth.hasPermission(PERMISSIONS.RESERVATIONS_VIEW))
 const canEdit = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_EDIT))
 const canSeeManagement = computed(() => auth.hasPermission(PERMISSIONS.EMPLOYEES_VIEW_PRIVATE_INFO))
 
@@ -220,7 +241,7 @@ watch(clientId, load)
       <!-- Tabs --------------------------------------------------------- -->
       <div class="tabs" role="tablist">
         <button
-          v-for="key in (['overview', 'sales', 'finance', 'projects', 'activity'] as Tab[])"
+          v-for="key in tabs"
           :key="key"
           type="button"
           role="tab"
@@ -368,6 +389,15 @@ watch(clientId, load)
             </table>
           </div>
         </section>
+      </template>
+
+      <!-- Bookings ----------------------------------------------------- -->
+      <template v-else-if="tab === 'bookings'">
+        <!--
+          What we brought them, booking by booking. The figures on the finance
+          tab count this list rather than taking somebody's word for a total.
+        -->
+        <ClientReservationsPanel v-if="client" :client="client" />
       </template>
 
       <!-- Finance ------------------------------------------------------ -->

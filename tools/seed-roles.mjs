@@ -20,10 +20,15 @@
  *
  * Safe to re-run. It writes the permission list and leaves everything else —
  * names, `isSystem`, `grantsAll` — exactly as it is, and it never touches a
- * role somebody has customised unless `--force` is passed.
+ * role somebody has customised unless it is told to:
  *
- *   npm run roles:seed -- --dry
- *   npm run roles:seed
+ *   npm run roles:seed -- --dry         say what would change, write nothing
+ *   npm run roles:seed                  fill in roles nobody has configured
+ *   npm run roles:seed -- --force       also merge the template into tailored
+ *                                       roles, keeping what is already there
+ *   npm run roles:seed -- --replace     overwrite tailored roles entirely.
+ *                                       This DELETES hand-made permissions;
+ *                                       the run names every one it drops.
  */
 
 import { readFileSync } from 'node:fs'
@@ -48,6 +53,7 @@ const db = getFirestore()
 
 const dry = process.argv.includes('--dry')
 const force = process.argv.includes('--force')
+const replace = process.argv.includes('--replace')
 
 /* What anybody who works here needs to do their own job. */
 const BASE = [
@@ -64,6 +70,16 @@ const BASE = [
   'calendar.view',
   'calendar.manage',
   'employees.view',
+  /*
+   * Bookings are everybody's job, so entering one is in the base.
+   *
+   * Without `reservations.view_all` it means their own and no more: a person
+   * records what they brought, corrects their own typo, and sees nobody
+   * else's. Widening it is the manager's line below.
+   */
+  'reservations.view',
+  'reservations.create',
+  'reservations.edit',
 ]
 
 const ROLES = {
@@ -129,6 +145,8 @@ const ROLES = {
       'bonuses.view_all',
       'analytics.view',
       'performance.view_all',
+      'reservations.view_all',
+      'reservations.delete',
     ],
   },
 }
@@ -153,19 +171,47 @@ for (const [id, role] of Object.entries(ROLES)) {
   }
 
   /*
-   * A role somebody has already tailored is theirs. Only an empty or
-   * never-configured one is filled in, unless --force says otherwise.
+   * A role somebody has already tailored is theirs.
+   *
+   * Three behaviours, and the middle one is the one that matters:
+   *
+   *   default      a tailored role is left completely alone.
+   *   --force      the template is MERGED IN. Everything the template lists is
+   *                added; everything already there stays. This is what adding
+   *                a new module needs, and it cannot cost anybody a grant.
+   *   --replace    the stored list is thrown away for the template's.
+   *
+   * --force used to mean --replace, and that is how four hand-made permissions
+   * were lost from the Employee role: the run reported "17 -> 16" and the four
+   * it dropped existed nowhere else. A tool that can silently delete a
+   * configuration should have to be told to, in those words.
    */
-  const customised = existing.exists && current.length > 1 && !force
-  if (customised) {
+  const tailored = existing.exists && current.length > 1
+
+  if (tailored && !force && !replace) {
     console.log(`  ${id.padEnd(12)} left alone — ${current.length} permission(s) already set`)
+    continue
+  }
+
+  const wanted = replace || !existing.exists
+    ? role.permissions
+    : [...new Set([...current, ...role.permissions])]
+
+  const added = wanted.filter((p) => !current.includes(p))
+  const dropped = current.filter((p) => !wanted.includes(p))
+
+  if (!added.length && !dropped.length) {
+    console.log(`  ${id.padEnd(12)} already correct — ${current.length} permission(s)`)
     continue
   }
 
   console.log(
     `  ${id.padEnd(12)} ${existing.exists ? 'updated' : 'created'} — ` +
-      `${current.length} → ${role.permissions.length} permission(s)`,
+      `${current.length} → ${wanted.length} permission(s)`,
   )
+  if (added.length) console.log(`               + ${added.join(' ')}`)
+  /* Named, always. A dropped permission is somebody's access disappearing. */
+  if (dropped.length) console.log(`               - ${dropped.join(' ')}   (REMOVED)`)
 
   if (dry) continue
 
@@ -177,7 +223,7 @@ for (const [id, role] of Object.entries(ROLES)) {
       nameSr: role.name,
       description: role.description,
       descriptionSr: role.description,
-      permissions: role.permissions,
+      permissions: wanted,
       status: 'active',
       ...(existing.exists ? {} : { isSystem: false, grantsAll: false, createdAt: new Date().toISOString() }),
       updatedAt: new Date().toISOString(),

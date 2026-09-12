@@ -219,6 +219,7 @@ const LABELS: Record<RecoverableCollection, (row: Record<string, unknown>) => [s
   calendarEvents: (r) => [String(r.title ?? ''), String(r.date ?? '')],
   bonusPrograms: (r) => [String(r.name ?? ''), String(r.metric ?? '')],
   incentiveWork: (r) => [String(r.title ?? ''), String(r.assigneeName ?? '')],
+  reservations: (r) => [String(r.guestName ?? ''), String(r.clientName ?? '')],
 }
 
 /**

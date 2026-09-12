@@ -53,6 +53,22 @@ export const PERMISSIONS = {
   SALES_DELETE: 'sales.delete',
   SALES_EXPORT: 'sales.export',
 
+  // --- Reservations -----------------------------------------------------
+  /*
+   * Bookings we brought a client, and therefore our own contribution.
+   *
+   * Separate from `clients` because the two authorities are genuinely
+   * different: somebody who books guests all day has no business editing the
+   * client's contract, and whoever negotiates the contract does not need to
+   * enter bookings. `view_all` is what separates an employee who sees the
+   * bookings they brought from a manager who sees everybody's.
+   */
+  RESERVATIONS_VIEW: 'reservations.view',
+  RESERVATIONS_VIEW_ALL: 'reservations.view_all',
+  RESERVATIONS_CREATE: 'reservations.create',
+  RESERVATIONS_EDIT: 'reservations.edit',
+  RESERVATIONS_DELETE: 'reservations.delete',
+
   // --- Services --------------------------------------------------------
   SERVICES_VIEW: 'services.view',
   /*
@@ -243,6 +259,16 @@ export const PERMISSION_GROUPS = [
       PERMISSIONS.SALES_EDIT,
       PERMISSIONS.SALES_DELETE,
       PERMISSIONS.SALES_EXPORT,
+    ],
+  },
+  {
+    key: 'reservations',
+    permissions: [
+      PERMISSIONS.RESERVATIONS_VIEW,
+      PERMISSIONS.RESERVATIONS_VIEW_ALL,
+      PERMISSIONS.RESERVATIONS_CREATE,
+      PERMISSIONS.RESERVATIONS_EDIT,
+      PERMISSIONS.RESERVATIONS_DELETE,
     ],
   },
   {

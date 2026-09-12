@@ -569,6 +569,8 @@ export default {
     'record.purged': 'Record destroyed permanently',
     'wallet.entry_added': 'Earnings entry added',
     'wallet.status_changed': 'Earnings entry changed',
+    'reservation.created': 'Reservation entered',
+    'reservation.updated': 'Reservation changed',
     'account.type_changed': 'Kind of account changed',
   },
 
@@ -821,6 +823,7 @@ export default {
     basics: 'Details',
     tabOverview: 'Overview',
     tabSales: 'Sales',
+    tabBookings: 'Bookings',
     tabFinance: 'Finance',
     tabProjects: 'Projects',
     tabActivity: 'Activity',
@@ -1333,9 +1336,37 @@ export default {
     bonuses: 'Bonuses & rewards',
     recycle: 'Recycle bin',
     wallet: 'Employee earnings',
+    reservations: 'Reservations',
   },
 
   permission: {
+    reservations: {
+      view: {
+        label: 'See reservations',
+        description:
+          'Read the bookings you brought, their guests, dates and value.',
+      },
+      view_all: {
+        label: 'See everyone’s reservations',
+        description:
+          'Every booking the company brought, not only your own. This is the manager’s view.',
+      },
+      create: {
+        label: 'Enter a reservation',
+        description:
+          'Record a booking you brought a client. It is queued for the RMS to collect.',
+      },
+      edit: {
+        label: 'Change a reservation',
+        description:
+          'Correct dates, value or status. A booking the RMS already holds stays taken — a change to one is a conversation with the property, not a second booking.',
+      },
+      delete: {
+        label: 'Delete a reservation',
+        description:
+          'Moves it to the recycle bin. It stops counting towards what you brought.',
+      },
+    },
     wallet: {
       adjust: {
         label: 'Add to and approve earnings',
@@ -2733,6 +2764,7 @@ export default {
     emptyHint: 'Anything deleted turns up here first.',
     noMatch: 'Nothing matches',
     kinds: {
+      reservations: 'Reservation',
       clients: 'Client',
       leads: 'Lead',
       projects: 'Project',
@@ -2961,7 +2993,87 @@ export default {
     empty: 'Nothing recorded yet',
     emptyHint: 'Record a month and the three figures appear above it.',
     saved: 'Saved.',
+    countedFrom: 'Counted from {n} booking(s) recorded for this month.',
     moreThanTotal: 'We cannot have brought them more than they took.',
+  },
+
+  reservations: {
+    title: 'Bookings we brought',
+    subtitle: 'Entered here, collected by the RMS. This list is what we brought them.',
+    add: 'Enter a booking',
+
+    brought: 'We brought',
+    broughtHint: '{n} booking(s) · {nights} night(s)',
+    ourShare: 'Our share',
+    atRate: '{rate}% of what we brought',
+    noRate: 'No rate agreed yet — set one on the finance tab.',
+    withRms: 'Waiting for the RMS',
+    pendingHint: 'Entered and not yet collected.',
+    someFailed: '{n} refused by the RMS — look at the reason.',
+
+    guest: 'Guest',
+    guestPlaceholder: 'Name, as they gave it',
+    contact: 'Contact',
+    contactHint: 'Phone or email. Enough to reach them.',
+    checkIn: 'Check-in',
+    checkOut: 'Check-out',
+    nights: 'Nights',
+    nightsHint: 'Suggested from the dates. Change it if a different number was agreed.',
+    guests: 'Guests',
+    value: 'What the guest pays',
+    valueHint: 'The whole booking, not our share.',
+    source: 'Where they came from',
+    sourcePlaceholder: 'Instagram, Google Ads, direct message…',
+    sourceHint: 'Free text, so a new campaign needs no change to the system.',
+    status: 'Status',
+    note: 'Note',
+
+    willEarn: 'This booking earns us {amount} at {rate}%.',
+    setRateFirst: 'Agree a rate on the finance tab and every booking will show what it earns.',
+
+    nightsCount: '{n} night(s)',
+    guestsCount: '{n} guest(s)',
+    ours: 'ours {amount}',
+    rmsId: 'RMS #{id}',
+    retry: 'Ask the RMS again',
+    keepLocal: 'Keep this one here only',
+
+    saved: 'Booking recorded. The RMS will collect it.',
+    updated: 'Booking changed.',
+    queued: 'Back in the queue for the RMS.',
+    keptLocal: 'Kept here only. It still counts towards what we brought.',
+    deleted: 'Booking moved to the recycle bin.',
+    deleteTitle: 'Delete this booking?',
+    deleteMessage: 'The booking for {guest} goes to the recycle bin and stops counting towards what we brought.',
+
+    needGuest: 'A booking needs a guest name.',
+    needNights: 'A booking is at least one night.',
+
+    empty: 'No bookings recorded yet',
+    emptyHint: 'Enter the bookings you bring this client and the figures above count themselves.',
+  },
+
+  reservationStatus: {
+    enquiry: 'Enquiry',
+    confirmed: 'Confirmed',
+    stayed: 'Stayed',
+    cancelled: 'Cancelled',
+    no_show: 'No-show',
+  },
+
+  reservationStatusHint: {
+    enquiry: 'Asked about it. Does not count towards what we brought yet.',
+    confirmed: 'Booked. Counts.',
+    stayed: 'They came. Counts.',
+    cancelled: 'Called off. Stays in the count of bookings, out of the money.',
+    no_show: 'Never arrived. Stays in the count of bookings, out of the money.',
+  },
+
+  syncState: {
+    pending: 'Waiting for the RMS',
+    taken: 'In the RMS',
+    failed: 'The RMS refused it',
+    local_only: 'Here only',
   },
 
   attributionBasis: {

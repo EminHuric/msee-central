@@ -54,6 +54,7 @@ export type CollectionName =
   | 'walletEntries'
   | 'intake'
   | 'attribution'
+  | 'reservations'
   | 'calendarEvents'
   | 'notes'
   | 'activity'
@@ -99,6 +100,42 @@ export function now(): string {
  * composite index per pairing, and a collection this size does not need one.
  * The rules still decide what comes back at all.
  */
+/**
+ * Say why a read came back with nothing.
+ *
+ * Every reader here returns `[]` when the query fails, which keeps a broken
+ * screen from being a blank screen — but it also makes two completely different
+ * situations look identical: "this client has no bookings" and "that query
+ * cannot run". A missing composite index is the common cause and the worst one,
+ * because Firestore does not create those on demand: the query throws, the
+ * catch swallows it, and a panel that works perfectly shows an empty list for
+ * ever. It happened here to the monthly attribution list.
+ *
+ * So failures are named. `failed-precondition` is the index case and gets the
+ * sentence that tells somebody what to do about it.
+ */
+function reportQueryFailure(name: string, error: unknown): void {
+  const code = (error as { code?: string }).code ?? ''
+  const detail = (error as { message?: string }).message ?? String(error)
+
+  if (code === 'permission-denied') {
+    console.warn(`[store] ${name}: refused by the security rules.`)
+    return
+  }
+
+  if (code === 'failed-precondition') {
+    console.error(
+      `[store] ${name}: this query needs a composite index and does not have one. ` +
+        `Either add it to firebase/firestore.indexes.json and deploy, or drop the ` +
+        `orderBy and sort the rows in memory. Until then this list is always empty.\n` +
+        detail,
+    )
+    return
+  }
+
+  console.error(`[store] ${name}: ${detail}`)
+}
+
 export async function readAll<T extends Deletable>(
   name: CollectionName,
   field = 'updatedAt',
@@ -110,7 +147,8 @@ export async function readAll<T extends Deletable>(
     return snap.docs
       .map((d) => ({ ...(d.data() as T), id: d.id }))
       .filter((row) => !row.deletedAt)
-  } catch {
+  } catch (error) {
+    reportQueryFailure(`readAll(${name})`, error)
     return []
   }
 }
@@ -123,7 +161,8 @@ export async function readDeleted<T extends Deletable>(
   try {
     const snap = await getDocs(query(collection(getDb(), name), limitTo(max)))
     return snap.docs.map((d) => ({ ...(d.data() as T), id: d.id })).filter((row) => row.deletedAt)
-  } catch {
+  } catch (error) {
+    reportQueryFailure(`readDeleted(${name})`, error)
     return []
   }
 }
@@ -138,7 +177,8 @@ export async function readWhere<T extends Deletable>(
     return snap.docs
       .map((d) => ({ ...(d.data() as T), id: d.id }))
       .filter((row) => !row.deletedAt)
-  } catch {
+  } catch (error) {
+    reportQueryFailure(`readWhere(${name})`, error)
     return []
   }
 }
