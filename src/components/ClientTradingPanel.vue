@@ -28,6 +28,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { fetchAttributionFor, saveAttribution } from '@/api/attribution'
+import { saveClient } from '@/api/clients'
 import { fetchIntake } from '@/api/intake'
 import { formatDate } from '@/i18n'
 import { LIMITS } from '@/lib/validation'
@@ -60,7 +61,26 @@ const reported = ref<IntakeRow[]>([])
 const draft = ref<Attribution | null>(null)
 const draftTurnover = ref(0)
 const draftAttributed = ref(0)
-const draftShare = ref(0)
+
+/**
+ * Our rate, as agreed with this client.
+ *
+ * Editable here because this is the screen somebody is on when they notice it
+ * is wrong, and saved on the client rather than on the month — it is a term of
+ * the agreement, not a fact about September.
+ */
+const ratePercent = ref(0)
+const rateSaving = ref(false)
+
+/**
+ * Our share, computed rather than typed.
+ *
+ * Three numbers that can disagree become two facts and a rule. Somebody typing
+ * this in would eventually type it wrong, and nothing would catch it.
+ */
+const draftShare = computed(() =>
+  Math.round(draftAttributed.value * ratePercent.value) / 100,
+)
 
 const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
 
@@ -85,6 +105,7 @@ async function load(): Promise<void> {
     ])
     rows.value = records
     reported.value = intake
+    ratePercent.value = props.client.msEeSharePercent ?? 0
   } catch {
     ui.notify('danger', t('errors.loadFailed'))
   } finally {
@@ -96,7 +117,6 @@ function start(): void {
   draft.value = blankAttribution(props.client.id, props.client.name)
   draftTurnover.value = 0
   draftAttributed.value = 0
-  draftShare.value = 0
 
   /*
    * Prefill the total from what the RMS reported for this month, when it has.
@@ -118,7 +138,21 @@ function edit(row: Attribution): void {
   draft.value = { ...row }
   draftTurnover.value = fromMinor(row.turnover.baseMinor, BASE_CURRENCY)
   draftAttributed.value = fromMinor(row.attributed.baseMinor, BASE_CURRENCY)
-  draftShare.value = fromMinor(row.ourShare.baseMinor, BASE_CURRENCY)
+}
+
+/** Save the rate on the client, where it belongs. */
+async function saveRate(): Promise<void> {
+  if (rateSaving.value) return
+
+  rateSaving.value = true
+  try {
+    await saveClient({ ...props.client, msEeSharePercent: ratePercent.value })
+    ui.notify('ok', t('attribution.rateSaved'))
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    rateSaving.value = false
+  }
 }
 
 async function commit(): Promise<void> {
@@ -176,6 +210,34 @@ onMounted(load)
     </div>
 
     <template v-else>
+      <!--
+        Our rate, as agreed with this client.
+
+        Here rather than in the RMS, and that is a deliberate line: the RMS
+        manages their property and knows what was booked. What it is worth to
+        us is a term in our agreement, and changing our commission should not
+        mean editing their booking software.
+      -->
+      <div v-if="canEdit" class="card-body rate">
+        <label class="field-label" for="a-rate">{{ t('attribution.rate') }}</label>
+        <div class="rate-row">
+          <input
+            id="a-rate"
+            v-model.number="ratePercent"
+            class="input rate-input"
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+          />
+          <span class="tertiary">%</span>
+          <button class="btn btn-secondary btn-sm" :disabled="rateSaving" @click="saveRate">
+            {{ t('common.save') }}
+          </button>
+        </div>
+        <p class="field-hint">{{ t('attribution.rateHint') }}</p>
+      </div>
+
       <!-- The three figures, kept apart on purpose. -->
       <div class="card-body figures">
         <div>
@@ -254,15 +316,16 @@ onMounted(load)
           </div>
 
           <div class="field">
-            <label class="field-label" for="a-share">{{ t('attribution.ourShare') }}</label>
-            <input
-              id="a-share"
-              v-model.number="draftShare"
-              class="input"
-              type="number"
-              step="0.01"
-              min="0"
-            />
+            <span class="field-label">{{ t('attribution.ourShare') }}</span>
+            <!--
+              Computed, not typed: the rate times what we brought. A field
+              somebody fills in is a third number that can disagree with the
+              two it is supposed to follow from.
+            -->
+            <p class="computed">{{ draftShare.toFixed(2) }}</p>
+            <p class="field-hint">
+              {{ t('attribution.shareFormula', { rate: ratePercent }) }}
+            </p>
           </div>
 
           <div class="field">
@@ -399,6 +462,17 @@ onMounted(load)
   font-size: var(--text-sm);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.rate { border-bottom: 1px solid var(--border-subtle); }
+.rate-row { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.rate-input { max-width: 110px; }
+
+.computed {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-2) 0;
 }
 
 .editor { background: var(--bg-surface-2); border-bottom: 1px solid var(--border-subtle); }

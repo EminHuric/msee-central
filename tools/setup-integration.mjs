@@ -160,6 +160,31 @@ console.log(`
       note: '', receivedAt: '<now>', appliedAt: null, appliedBy: null, walletEntryId: null
     }
 
+  THE ONE CHANGE WORTH MAKING IN THE RMS: a channel on each reservation.
+
+  'attributed' is the part MsEe brought. The RMS cannot report it today, and it
+  is the only figure that matters for judging whether our work pays — so the
+  question is where it can be answered honestly.
+
+  It can be answered in the RMS, and nowhere else, because the RMS is where the
+  channel is known the moment a booking arrives: Booking.com, the direct site we
+  built, a link from one of our campaigns. Record that channel per reservation
+  and 'attributed' stops being an estimate and becomes a sum — countable,
+  auditable reservation by reservation, and recomputed every day without anybody
+  typing anything.
+
+  So: add a source/channel field per reservation, decide once which channels are
+  ours, and send the total of those as 'attributed'. That is the whole change.
+
+  WHAT DOES NOT GO IN THE RMS: our percentage. That is a term in our agreement
+  with the client, not a fact about their property, and changing our commission
+  should not mean editing their booking software. MsEe Central holds the rate
+  per client and computes our share from what you send. Send 'ourShare' as null.
+
+  Until the channel exists, MsEe Central records 'attributed' by hand, month by
+  month, labelled as measured or estimated. That keeps working afterwards as the
+  fallback for any client whose channels are not tracked.
+
   THREE FIGURES, NOT TWO. 'turnover' is everything the client took, through
   every channel — that is theirs. 'attributed' is the part MsEe brought them,
   which the RMS usually cannot tell and should send as null; it is recorded in

@@ -121,6 +121,22 @@ export interface Client extends SoftDeletable {
   custom: CustomValues
 
   clientSince: string | null
+
+  /**
+   * Our share of what we bring them, as a whole-number percent.
+   *
+   * THIS LIVES HERE AND NOT IN THE RMS, deliberately. The RMS manages
+   * properties: it knows what was booked and through which channel. What that
+   * is worth to us is a term in our agreement with this client — a commercial
+   * relationship, not a fact about the property — and putting it in the system
+   * that runs their bookings would mean editing their software to change our
+   * contract.
+   *
+   * So the division of labour is: the RMS reports what happened, and this
+   * decides what it is worth. Our share is computed from the two rather than
+   * typed in, which means it cannot drift from the figures it is based on.
+   */
+  msEeSharePercent: number
   /**
    * Where this client exists in the other systems MsEe runs.
    *

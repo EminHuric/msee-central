@@ -2934,6 +2934,10 @@ export default {
   },
 
   attribution: {
+    rate: 'Naš procenat sa ovim klijentom',
+    rateHint: 'Uslov iz našeg ugovora, pa stoji ovde a ne u RMS-u. Naš deo se iz njega računa.',
+    rateSaved: 'Procenat sačuvan na klijentu.',
+    shareFormula: '{rate}% od onoga što smo im doneli',
     title: 'Promet i naš deo',
     subtitle: 'Šta su uzeli, koliko smo im mi doneli, i koji je tu naš deo.',
     addMonth: 'Upiši mesec',

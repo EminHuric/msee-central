@@ -49,6 +49,7 @@ export function blankClient(): Client {
     referral: { ...NO_REFERRAL },
     custom: {},
     clientSince: today(),
+    msEeSharePercent: 0,
     externalRefs: [],
     deletedAt: null,
     deletedBy: null,

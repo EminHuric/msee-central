@@ -247,7 +247,7 @@ async function write(ref, data) {
 
   for (const doc of snap.docs) {
     const data = doc.data()
-    if (data.responsibleUid !== undefined && data.custom !== undefined && data.externalRefs !== undefined) continue
+    if (data.responsibleUid !== undefined && data.custom !== undefined && data.externalRefs !== undefined && data.msEeSharePercent !== undefined) continue
 
     await write(doc.ref, {
       ...SOFT,
@@ -273,6 +273,11 @@ async function write(ref, data) {
           ? [{ system: 'staybrain', reference: data.externalClientId, url: '' }]
           : []),
       externalClientId: FieldValue.delete(),
+      /*
+       * Our rate with this client. Zero until somebody sets it, which is
+       * honest: an invented default would quietly produce invented commission.
+       */
+      msEeSharePercent: data.msEeSharePercent ?? 0,
       updatedAt: now,
     })
     moved += 1

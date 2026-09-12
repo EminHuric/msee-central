@@ -2935,6 +2935,10 @@ export default {
   },
 
   attribution: {
+    rate: 'Our rate with this client',
+    rateHint: 'A term of our agreement, so it lives here and not in the RMS. Our share is computed from it.',
+    rateSaved: 'Rate saved on the client.',
+    shareFormula: '{rate}% of what we brought them',
     title: 'Turnover and our share',
     subtitle: 'What they took, what we brought them, and what our share of that is.',
     addMonth: 'Record a month',
