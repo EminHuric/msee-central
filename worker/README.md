@@ -1,4 +1,18 @@
-# Telegram notifications
+# Telegram notifications — the harder, safer route
+
+**Most people do not need this file.** In MsEe Central, Settings → Notifications →
+Telegram takes a bot token and a chat id directly: three minutes, two Telegram
+bots, no Cloudflare account. Start there.
+
+The difference is where the bot token lives. The simple way keeps it in the
+company's settings document — out of this public repository, but readable by any
+member of staff who can read settings and knows where to look. For a bot that only
+says "a booking arrived", that is a fair trade.
+
+This file is for when it is not: the token stays in a Cloudflare Worker and never
+reaches a browser at all. Same result on your phone, about ten more minutes.
+
+# Setting up the relay
 
 Notifications from MsEe Central arriving on your phone, free, with no card and no
 billing account.

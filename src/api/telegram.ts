@@ -23,12 +23,32 @@ import { getDb, getFirebaseAuth } from '@/lib/firebase'
 const SETTINGS_PATH = ['companySettings', 'telegram'] as const
 
 export interface TelegramSettings {
-  /** The Worker's address. Not a secret — it refuses anybody without a token. */
+  /**
+   * The bot's token and the chat to send to — the simple way.
+   *
+   * WHAT THIS COSTS IN SAFETY, SAID PLAINLY. These are stored in the company's
+   * settings document, which means they are NOT in the public repository, but
+   * they do reach the browser of every member of staff who can read settings. Any
+   * of them could take the token out of the console and post as this bot, or read
+   * what people send it.
+   *
+   * For a bot whose only job is to tell one owner that a booking arrived, that is
+   * a proportionate risk: the worst somebody can do with it is send fake messages
+   * to a phone. It is not proportionate for a bot that can do anything else, and
+   * anyone adding one should use the relay below instead.
+   */
+  botToken: string
+  chatId: string
+  /**
+   * A relay's address, for anybody who would rather the token never reach a
+   * browser at all. When this is set it is used and the two fields above are
+   * ignored. See `worker/README.md`.
+   */
   relayUrl: string
   enabled: boolean
 }
 
-const BLANK: TelegramSettings = { relayUrl: '', enabled: false }
+const BLANK: TelegramSettings = { botToken: '', chatId: '', relayUrl: '', enabled: false }
 
 export async function fetchTelegramSettings(): Promise<TelegramSettings> {
   try {
@@ -37,6 +57,8 @@ export async function fetchTelegramSettings(): Promise<TelegramSettings> {
 
     const data = snap.data()
     return {
+      botToken: String(data.botToken ?? ''),
+      chatId: String(data.chatId ?? ''),
       relayUrl: String(data.relayUrl ?? ''),
       enabled: data.enabled === true,
     }
@@ -50,6 +72,8 @@ export async function saveTelegramSettings(input: TelegramSettings): Promise<voi
   await setDoc(
     doc(getDb(), ...SETTINGS_PATH),
     {
+      botToken: input.botToken.trim(),
+      chatId: input.chatId.trim(),
       relayUrl: input.relayUrl.trim(),
       enabled: input.enabled,
       updatedAt: new Date().toISOString(),
@@ -71,6 +95,39 @@ export const forgetTelegramCache = (): void => {
   cached = null
 }
 
+/** Straight to Telegram. The browser can call it; the API allows it. */
+async function viaTelegram(
+  config: TelegramSettings,
+  text: string,
+): Promise<Response | null> {
+  if (!config.botToken || !config.chatId) return null
+
+  return fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: config.chatId,
+      text,
+      disable_web_page_preview: true,
+    }),
+  })
+}
+
+/** Through a relay, which holds the token and verifies who is asking. */
+async function viaRelay(url: string, text: string): Promise<Response | null> {
+  const user = getFirebaseAuth().currentUser
+  if (!user) return null
+
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${await user.getIdToken()}`,
+    },
+    body: JSON.stringify({ text }),
+  })
+}
+
 /**
  * Send one line to Telegram, if it is switched on.
  *
@@ -84,20 +141,20 @@ export async function sendToTelegram(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const config = settings ?? cached ?? (cached = await fetchTelegramSettings())
-    if (!config.enabled || !config.relayUrl) return { ok: false, error: 'off' }
+    if (!config.enabled) return { ok: false, error: 'off' }
 
-    const user = getFirebaseAuth().currentUser
-    if (!user) return { ok: false, error: 'not signed in' }
+    /*
+     * Two ways to reach Telegram, and the relay wins when it is set up.
+     *
+     * Somebody who has gone to the trouble of standing one up has decided the
+     * token should not be in a browser, and that decision should not be undone by
+     * a token sitting in a settings field from an earlier attempt.
+     */
+    const response = config.relayUrl
+      ? await viaRelay(config.relayUrl, text)
+      : await viaTelegram(config, text)
 
-    const response = await fetch(config.relayUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        /* Proof of who is asking. The relay verifies it against this project. */
-        authorization: `Bearer ${await user.getIdToken()}`,
-      },
-      body: JSON.stringify({ text }),
-    })
+    if (!response) return { ok: false, error: 'not configured' }
 
     if (response.ok) return { ok: true }
 
@@ -106,8 +163,13 @@ export async function sendToTelegram(
      * "not your project" each point at a different setting, and turning both
      * into "could not send" would leave somebody guessing which.
      */
-    const body = (await response.json().catch(() => ({}))) as { error?: string }
-    return { ok: false, error: body.error || `HTTP ${response.status}` }
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string
+      description?: string
+    }
+    /* Telegram calls it `description`; the relay calls it `error`. Either way,
+     * the words that come back are the ones that say which step is wrong. */
+    return { ok: false, error: body.description || body.error || `HTTP ${response.status}` }
   } catch (error) {
     return { ok: false, error: (error as Error).message }
   }

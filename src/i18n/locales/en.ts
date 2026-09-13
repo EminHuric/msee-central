@@ -1294,6 +1294,12 @@ export default {
     huge: 'Largest — press to go back to normal',
   },
   telegram: {
+    botToken: 'Bot token',
+    botTokenHint: 'From @BotFather in Telegram: send /newbot and copy what it replies.',
+    chatId: 'Your chat id',
+    chatIdHint: 'From @userinfobot. Then send your own bot /start, or it cannot write to you.',
+    steps: 'Three minutes: make the bot, copy the two numbers, paste them here, press Test.',
+    advanced: 'Keep the token out of the browser (harder)',
     title: 'Telegram',
     subtitle: 'Notifications on your phone, wherever you are. Free, and it rings.',
     relayUrl: 'Relay address',

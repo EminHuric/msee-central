@@ -1293,6 +1293,12 @@ export default {
     huge: 'Najveće — pritisni za povratak na normalno',
   },
   telegram: {
+    botToken: 'Token bota',
+    botTokenHint: 'Od @BotFather u Telegramu: pošalji /newbot i kopiraj šta odgovori.',
+    chatId: 'Tvoj chat id',
+    chatIdHint: 'Od @userinfobot. Pa pošalji svom botu /start, inače ne sme da ti piše.',
+    steps: 'Tri minuta: napravi bota, kopiraj dva broja, nalepi ovde, pritisni Probu.',
+    advanced: 'Da token ne bude u browseru (teže)',
     title: 'Telegram',
     subtitle: 'Obaveštenja na telefon, gde god da si. Besplatno, i zvoni.',
     relayUrl: 'Adresa relea',

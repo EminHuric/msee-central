@@ -54,7 +54,7 @@ const canAnnounce = computed(() => auth.hasPermission(PERMISSIONS.ANNOUNCEMENTS_
 /* Where notifications are sent is a company setting, not a personal one. */
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.SETTINGS_EDIT))
 
-const telegram = ref<TelegramSettings>({ relayUrl: '', enabled: false })
+const telegram = ref<TelegramSettings>({ botToken: '', chatId: '', relayUrl: '', enabled: false })
 const tgBusy = ref(false)
 const tgResult = ref('')
 const tgOk = ref(false)
@@ -215,17 +215,42 @@ onMounted(async () => {
       </div>
 
       <div class="card-body stack">
-        <div class="field">
-          <label class="field-label" for="tg-url">{{ t('telegram.relayUrl') }}</label>
-          <input
-            id="tg-url"
-            v-model="telegram.relayUrl"
-            class="input"
-            type="url"
-            placeholder="https://something.workers.dev"
-          />
-          <p class="field-hint">{{ t('telegram.relayHint') }}</p>
+        <!--
+          The two fields anybody can fill in three minutes, from two Telegram
+          bots. The harder, safer route is below and folded away, because
+          offering both at the same size means choosing between them before
+          understanding either.
+        -->
+        <div class="field-grid">
+          <div class="field">
+            <label class="field-label" for="tg-token">{{ t('telegram.botToken') }}</label>
+            <input id="tg-token" v-model="telegram.botToken" class="input" autocomplete="off" />
+            <p class="field-hint">{{ t('telegram.botTokenHint') }}</p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="tg-chat">{{ t('telegram.chatId') }}</label>
+            <input id="tg-chat" v-model="telegram.chatId" class="input" autocomplete="off" />
+            <p class="field-hint">{{ t('telegram.chatIdHint') }}</p>
+          </div>
         </div>
+
+        <p class="field-hint">{{ t('telegram.steps') }}</p>
+
+        <details class="advanced">
+          <summary>{{ t('telegram.advanced') }}</summary>
+          <div class="field">
+            <label class="field-label" for="tg-url">{{ t('telegram.relayUrl') }}</label>
+            <input
+              id="tg-url"
+              v-model="telegram.relayUrl"
+              class="input"
+              type="url"
+              placeholder="https://something.workers.dev"
+            />
+            <p class="field-hint">{{ t('telegram.relayHint') }}</p>
+          </div>
+        </details>
 
         <label class="check">
           <input v-model="telegram.enabled" type="checkbox" />
@@ -337,6 +362,22 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.field-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.advanced summary {
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.advanced[open] summary {
+  margin-bottom: var(--space-3);
+}
+
 .kinds { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 200px; overflow-y: auto; }
 .spacer { flex: 1; }
