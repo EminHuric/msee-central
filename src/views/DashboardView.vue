@@ -48,7 +48,7 @@ import {
   type Snapshot,
 } from '@/api/metrics'
 import { balanceOf } from '@/types/revenue'
-import { formatDate, formatRelative } from '@/i18n'
+import { formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { remindAboutMoney } from '@/api/reminders'
@@ -126,18 +126,6 @@ const dayFigures = computed(() => companyFigures(slice(snap.value, periodOf('tod
 const everFigures = computed(() => companyFigures(snap.value, snap.value))
 
 /**
- * What the money came from, newest first.
- *
- * THE FIGURES SAY HOW MUCH; THIS SAYS FROM WHAT. A total is only trustworthy when
- * the things behind it can be seen, and "I earned 1,200 this month" becomes real
- * the moment it is eleven lines with a client and a date on each. It is also the
- * fastest way to spot something wrong — a figure nobody recognises is obvious in
- * a list and invisible in a sum.
- *
- * Sales rather than payments, because a sale is the work: it appears the moment
- * the deal is agreed, which is the same moment the headline above counts it.
- */
-/**
  * What each service has brought in, over the chosen period.
  *
  * THE DASHBOARD HAD TOTALS AND NO BREAKDOWN. "Twelve hundred this month" does not
@@ -166,11 +154,6 @@ const serviceTotals = computed(() => {
   return [...map.values()].sort((a, b) => b.value - a.value)
 })
 
-const earnedFrom = computed(() =>
-  [...snap.value.sales]
-    .sort((a, b) => b.saleDate.localeCompare(a.saleDate))
-    .slice(0, 12),
-)
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -903,35 +886,6 @@ onMounted(async () => {
               <span class="earned-what">{{ row.name }}</span>
               <span class="earned-when tertiary">{{ t('sales.countOf', { n: row.count }) }}</span>
               <span class="earned-amount">{{ money(row.value) }}</span>
-            </li>
-          </ul>
-        </section>
-
-        <!-- What the money came from ----------------------------------- -->
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2 class="card-title">{{ t('dashboard.earnedFrom') }}</h2>
-              <p class="field-hint">{{ t('dashboard.earnedFromHint') }}</p>
-            </div>
-            <RouterLink to="/sales" class="btn btn-ghost btn-sm">
-              {{ t('dashboard.seeAll') }}
-            </RouterLink>
-          </div>
-
-          <div v-if="!earnedFrom.length" class="empty">
-            <p class="empty-title">{{ t('dashboard.earnedNothing') }}</p>
-            <p class="empty-text">{{ t('dashboard.earnedNothingHint') }}</p>
-          </div>
-
-          <ul v-else class="earned">
-            <li v-for="sale in earnedFrom" :key="sale.id" class="earned-row">
-              <span class="earned-what">
-                {{ sale.title || sale.clientName }}
-                <span v-if="sale.serviceName" class="tertiary">· {{ sale.serviceName }}</span>
-              </span>
-              <span class="earned-when tertiary">{{ formatDate(sale.saleDate) }}</span>
-              <span class="earned-amount">{{ money(sale.value.baseMinor) }}</span>
             </li>
           </ul>
         </section>

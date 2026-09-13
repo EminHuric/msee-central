@@ -285,6 +285,8 @@ export interface RmsBooking {
   mseeCommissionAmount?: number
   /** Which person at the agency brought it, as typed over there. */
   mseeBroughtBy?: string
+  /** When it was marked as ours — the day the commission was earned. */
+  mseeMarkedAt?: string
 }
 
 /** An RMS account, from its `users` collection. */

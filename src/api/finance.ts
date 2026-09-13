@@ -131,7 +131,8 @@ export async function saveTransaction(
       entityLabel: input.clientName,
       kind: 'payment',
       summary: input.description,
-      detail: input.type,
+      /* The figure, for the same reason it is on a sale: a feed is read for it. */
+      detail: formatMoney(input.amount.minor, input.amount.currency, 'en'),
     })
   }
 
@@ -142,7 +143,8 @@ export async function saveTransaction(
       entityLabel: options.sale?.title ?? input.description,
       kind: 'payment',
       summary: input.description,
-      detail: input.type,
+      /* The figure, for the same reason it is on a sale: a feed is read for it. */
+      detail: formatMoney(input.amount.minor, input.amount.currency, 'en'),
     })
   }
 

@@ -141,13 +141,24 @@ export async function saveSale(input: Sale): Promise<string> {
     },
   })
 
+  /*
+   * The amount goes in the feed, because the feed is what gets read.
+   *
+   * "Sale · Hotel ABC · StayBrain" answers what happened and not the question
+   * somebody actually opened the page with. A line of activity with no figure on
+   * it is a line nobody can do anything with.
+   */
   await logActivity({
     entity: 'sales',
     entityId: id,
     entityLabel: input.title,
     kind: isNew ? 'created' : 'updated',
     summary: input.clientName,
-    detail: input.serviceName,
+    detail: `${input.serviceName ? `${input.serviceName} · ` : ''}${formatMoney(
+      input.value.minor,
+      input.value.currency,
+      'en',
+    )}`,
   })
 
   /* The client's own history gains the sale too, where somebody will look. */

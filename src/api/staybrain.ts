@@ -394,7 +394,7 @@ export async function importMarkedBookings(
      * A cancelled booking was never a sale.
      */
     if (booking.status !== 'cancelled') {
-      await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service, value)
+      await recordSale(listing, id, booking.guestName, earnedOn(booking), earning, service, value)
     }
 
     added += 1
@@ -421,6 +421,24 @@ async function stayBrainService(): Promise<{ id: string; name: string } | null> 
     (row) => row.name.toLowerCase().replace(/[^a-z]/g, '') === 'staybrain',
   )
   return match ? { id: match.id, name: match.name } : null
+}
+
+/**
+ * The day a commission was earned.
+ *
+ * NOT THE GUEST'S ARRIVAL, which is what this used to be and why today's takings
+ * read as nothing: a booking taken today for a stay in October dated the sale in
+ * October, so it fell outside this month, outside today, and outside every
+ * figure on the dashboard. The money was earned the moment the booking was
+ * marked as ours.
+ *
+ * `mseeMarkedAt` is stamped by the reservation system when the box is ticked.
+ * Falling back to today rather than to check-in, because a booking being read for
+ * the first time now is closer to earned now than to earned whenever the guest
+ * happens to arrive.
+ */
+function earnedOn(booking: RmsBooking): string {
+  return booking.mseeMarkedAt ? booking.mseeMarkedAt.slice(0, 10) : today()
 }
 
 /**
@@ -590,7 +608,7 @@ async function refresh(
   if (status === 'cancelled' && mine.status !== 'cancelled') {
     await dropSale(mine.id)
   } else if (status !== 'cancelled' && mine.status === 'cancelled') {
-    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService(), value)
+    await recordSale(listing, mine.id, booking.guestName, earnedOn(booking), earning, await stayBrainService(), value)
   }
 
   await patch('reservations', mine.id, {
@@ -612,7 +630,7 @@ async function refresh(
    * Rewritten by the same derived id rather than added to.
    */
   if (status !== 'cancelled') {
-    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService(), value)
+    await recordSale(listing, mine.id, booking.guestName, earnedOn(booking), earning, await stayBrainService(), value)
   }
 }
 
