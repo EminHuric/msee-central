@@ -37,12 +37,14 @@ import {
   fetchReservationsForListing,
   importMarkedBookings,
   invoicedFor,
+  recordOwnerPayment,
   stayBrainServiceId,
   totalsOf,
 } from '@/api/staybrain'
 import { patch, readOne } from '@/api/store'
 import { deleteReservation } from '@/api/reservations'
 import { formatDate } from '@/i18n'
+import { LIMITS } from '@/lib/validation'
 import { rmsConnectAs, rmsReady, rmsSession } from '@/lib/rms'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -111,6 +113,60 @@ const totals = computed(() => totalsOf(ours.value))
  * what it has earned.
  */
 const billed = ref({ invoicedBaseMinor: 0, paidBaseMinor: 0 })
+
+/* ---- collecting from the owner --------------------------------------- */
+
+const payOpen = ref(false)
+const payAmount = ref(0)
+const payDate = ref(new Date().toISOString().slice(0, 10))
+const payNote = ref('')
+const paying = ref(false)
+
+/**
+ * What the owner still owes us.
+ *
+ * Everything the bookings earned, minus everything that has arrived. Not stored
+ * anywhere: both halves are summed from records, so it cannot fall out of step
+ * with either and there is no running balance for anybody to correct.
+ */
+const owed = computed(() =>
+  Math.max(0, totals.value.revenueBaseMinor - billed.value.paidBaseMinor),
+)
+
+function startPayment(): void {
+  /* Offered in full, because settling the lot is the common case. */
+  payAmount.value = owed.value / 100
+  payDate.value = new Date().toISOString().slice(0, 10)
+  payNote.value = ''
+  payOpen.value = true
+}
+
+async function commitPayment(): Promise<void> {
+  const row = listing.value
+  if (!row || paying.value) return
+
+  if (payAmount.value <= 0) {
+    ui.notify('danger', t('staybrain.needPayAmount'))
+    return
+  }
+
+  paying.value = true
+  try {
+    await recordOwnerPayment(
+      row,
+      Math.round(payAmount.value * 100),
+      payDate.value,
+      payNote.value.trim(),
+    )
+    ui.notify('ok', t('staybrain.paymentRecorded'))
+    payOpen.value = false
+    await loadBilling()
+  } catch (error) {
+    ui.notify('danger', (error as Error).message || t('errors.generic'))
+  } finally {
+    paying.value = false
+  }
+}
 
 async function loadBilling(): Promise<void> {
   const row = listing.value
@@ -421,6 +477,64 @@ onMounted(load)
         </div>
       </section>
 
+      <!--
+        Collecting from the owner.
+
+        Earned, paid and outstanding, and a way to record money as it arrives —
+        in full or in part, as many times as it takes, because an owner settles a
+        season in one transfer or in four and both are ordinary.
+      -->
+      <section v-if="canSeeRevenue" class="card collect">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">{{ t('staybrain.collect') }}</h2>
+            <p class="field-hint">{{ t('staybrain.collectHint') }}</p>
+          </div>
+          <button v-if="!payOpen && owed > 0" class="btn btn-primary btn-sm" @click="startPayment">
+            {{ t('staybrain.recordPayment') }}
+          </button>
+        </div>
+
+        <div class="card-body collect-figures">
+          <div>
+            <span class="figure-label">{{ t('staybrain.ourRevenue') }}</span>
+            <span class="figure-value">{{ money(totals.revenueBaseMinor) }}</span>
+          </div>
+          <div>
+            <span class="figure-label">{{ t('finance.collected') }}</span>
+            <span class="figure-value">{{ money(billed.paidBaseMinor) }}</span>
+          </div>
+          <div>
+            <span class="figure-label">{{ t('finance.outstanding') }}</span>
+            <span class="figure-value" :class="{ owing: owed > 0 }">{{ money(owed) }}</span>
+            <span v-if="owed === 0" class="figure-hint">{{ t('staybrain.allSettled') }}</span>
+          </div>
+        </div>
+
+        <div v-if="payOpen" class="card-body pay-form">
+          <div class="field">
+            <label class="field-label" for="pay-amount">{{ t('staybrain.paidAmount') }}</label>
+            <input id="pay-amount" v-model.number="payAmount" class="input" type="number" min="0" step="0.01" />
+            <p class="field-hint">{{ t('staybrain.paidAmountHint') }}</p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="pay-date">{{ t('sales.paidOn') }}</label>
+            <input id="pay-date" v-model="payDate" class="input" type="date" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="pay-note">{{ t('staybrain.note') }}</label>
+            <input id="pay-note" v-model="payNote" class="input" :maxlength="LIMITS.shortText" />
+          </div>
+          <div class="pay-actions">
+            <button class="btn btn-ghost btn-sm" @click="payOpen = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary btn-sm" :disabled="paying" @click="commitPayment">
+              <span v-if="paying" class="spinner" />
+              {{ t('common.save') }}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- Why nothing here is editable, said once rather than implied. -->
       <p class="where-to-book">
         <AppIcon name="info" :size="14" />
@@ -628,6 +742,36 @@ onMounted(load)
 
 .brand {
   color: var(--brand-500);
+}
+
+.collect-figures {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.collect-figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.owing {
+  color: var(--warn-500);
+}
+
+.pay-form {
+  align-items: flex-end;
+  border-top: 1px solid var(--border-subtle);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.pay-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 .where-to-book {

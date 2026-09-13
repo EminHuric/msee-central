@@ -173,6 +173,51 @@ export async function invoicedFor(
   }
 }
 
+/**
+ * Record what a property owner has actually paid us.
+ *
+ * PART OR ALL, AND AS MANY TIMES AS IT TAKES. An owner settles a season in one
+ * transfer or in four, and both are normal. So this is a payment and not a
+ * settlement: each one is its own record, what remains is what the commissions
+ * come to minus what has arrived, and nothing here has to be reconciled by hand.
+ *
+ * It writes into the ordinary Finance model as income against the client, marked
+ * paid because the money is in — the same row any other payment produces, so it
+ * lands in the same totals and the same reports with nothing special about it.
+ */
+export async function recordOwnerPayment(
+  listing: StayBrainListing,
+  amountBaseMinor: number,
+  date: string,
+  note: string,
+): Promise<string> {
+  if (amountBaseMinor <= 0) throw new Error('An amount is needed.')
+
+  const service = await stayBrainService()
+  const me = actor()
+
+  return saveTransaction({
+    ...blankTransaction('income'),
+    category: 'service_payment',
+    description: note || `StayBrain · ${listing.name}`,
+    amount: {
+      minor: amountBaseMinor,
+      currency: BASE_CURRENCY,
+      rate: 1,
+      baseMinor: amountBaseMinor,
+      rateDate: date,
+    },
+    date,
+    status: 'paid',
+    clientId: listing.clientId,
+    clientName: listing.clientName,
+    serviceId: service?.id ?? null,
+    serviceName: service?.name ?? 'StayBrain',
+    employeeUid: me.uid,
+    employeeName: me.name,
+  })
+}
+
 /** The StayBrain service, for callers that need its id. */
 export const stayBrainServiceId = async (): Promise<string | null> =>
   (await stayBrainService())?.id ?? null
