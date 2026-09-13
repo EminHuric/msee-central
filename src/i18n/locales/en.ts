@@ -3061,6 +3061,10 @@ export default {
     needAmount: 'Say how much they get.',
   },
   staybrain: {
+    invoicedLabel: 'Invoiced',
+    paidSoFar: '{amount} paid so far',
+    allPaid: 'all paid',
+    cancelledCount: '{n} cancelled',
     clientCount: 'Clients',
     pricePerClient: 'Priced per client — see each property.',
     broughtBy: 'brought by {name}',

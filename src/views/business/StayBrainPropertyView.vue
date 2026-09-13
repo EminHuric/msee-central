@@ -37,6 +37,8 @@ import {
   fetchReservationsForListing,
   importMarkedBookings,
   invoiceEarnings,
+  invoicedFor,
+  stayBrainServiceId,
   totalsOf,
 } from '@/api/staybrain'
 import { readOne } from '@/api/store'
@@ -100,6 +102,25 @@ const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VI
 const money = (minor: number) => formatMoney(minor, listing.value?.currency ?? 'EUR', locale.value)
 const totals = computed(() => totalsOf(ours.value))
 
+/*
+ * What has been billed to this client, and what they have actually paid.
+ *
+ * Earned, invoiced and paid are three different facts. Earned is what the
+ * bookings came to; invoiced is what we have asked for; paid is what arrived.
+ * Showing only the first would flatter the company and only the last would hide
+ * what it has earned.
+ */
+const billed = ref({ invoicedBaseMinor: 0, paidBaseMinor: 0 })
+
+async function loadBilling(): Promise<void> {
+  const row = listing.value
+  if (!row) return
+  billed.value = await invoicedFor(row.clientId, await stayBrainServiceId()).catch(() => ({
+    invoicedBaseMinor: 0,
+    paidBaseMinor: 0,
+  }))
+}
+
 /** The property's own bookings — not ours, and never counted as sales. */
 const theirs = computed(
   () => rmsBookings.value.filter((b) => b.source !== 'MSEE' && b.status !== 'cancelled').length,
@@ -122,6 +143,7 @@ async function load(): Promise<void> {
 
     listing.value = row
     ours.value = await fetchReservationsForListing(row.id)
+    await loadBilling()
 
     /*
      * Connect as this property's own account, with the password this browser
@@ -300,6 +322,7 @@ async function invoice(): Promise<void> {
     )
     ui.notify('ok', t('staybrain.invoiced'))
     invoiceOpen.value = false
+    await loadBilling()
   } catch (error) {
     ui.notify('danger', (error as Error).message || t('errors.generic'))
   } finally {
@@ -365,7 +388,12 @@ onMounted(load)
         <div>
           <span class="figure-label">{{ t('staybrain.ourReservations') }}</span>
           <span class="figure-value">{{ totals.reservations }}</span>
-          <span class="figure-hint">{{ t('staybrain.nightsSold', { n: totals.nights }) }}</span>
+          <span class="figure-hint">
+            {{ t('staybrain.nightsSold', { n: totals.nights }) }}
+            <template v-if="totals.cancelled > 0">
+              · {{ t('staybrain.cancelledCount', { n: totals.cancelled }) }}
+            </template>
+          </span>
         </div>
         <div>
           <span class="figure-label">{{ t('staybrain.ourTurnover') }}</span>
@@ -377,6 +405,16 @@ onMounted(load)
           <span class="figure-value brand">{{ money(totals.revenueBaseMinor) }}</span>
           <span class="figure-hint">{{ t('staybrain.ourRevenueHint') }}</span>
         </div>
+        <div v-if="canSeeRevenue">
+          <span class="figure-label">{{ t('staybrain.invoicedLabel') }}</span>
+          <span class="figure-value">{{ money(billed.invoicedBaseMinor) }}</span>
+          <span class="figure-hint">
+            {{ billed.paidBaseMinor >= billed.invoicedBaseMinor && billed.invoicedBaseMinor > 0
+              ? t('staybrain.allPaid')
+              : t('staybrain.paidSoFar', { amount: money(billed.paidBaseMinor) }) }}
+          </span>
+        </div>
+
         <div>
           <span class="figure-label">{{ t('staybrain.theirBookings') }}</span>
           <span class="figure-value">{{ theirs }}</span>

@@ -32,6 +32,7 @@ import {
   type StayBrainListing,
 } from '@/types/staybrain'
 import { EARNING_STATUSES, type Reservation } from '@/types/reservations'
+import type { Transaction } from '@/types/revenue'
 
 /* ------------------------------------------------------------------ *
  * Listings
@@ -109,7 +110,17 @@ export function totalsOf(rows: Reservation[]): ListingTotals {
   const earning = rows.filter((r) => EARNING_STATUSES.includes(r.status))
 
   return {
-    reservations: rows.length,
+    /*
+     * The ones that count, and only those.
+     *
+     * This used to be every row, cancellations included, on the reasoning that
+     * "eleven brought, two cancelled" is a fuller sentence. It reads as a wrong
+     * number: cancel a booking and the card still says seven. The headline is
+     * what stands; the cancelled ones are counted separately for anybody who
+     * wants them.
+     */
+    reservations: earning.length,
+    cancelled: rows.filter((r) => r.status === 'cancelled').length,
     earning: earning.length,
     nights: earning.reduce((n, r) => n + r.nights, 0),
     turnoverBaseMinor: earning.reduce((n, r) => n + r.value.baseMinor, 0),
@@ -131,6 +142,39 @@ export function totalsByListing(rows: Reservation[]): Map<string, ListingTotals>
   byListing.forEach((list, id) => out.set(id, totalsOf(list)))
   return out
 }
+
+/**
+ * What has been invoiced to a client for StayBrain, and what they have paid.
+ *
+ * Two different facts and never one. A sale is revenue the moment it is agreed —
+ * that is what the dashboard counts as sold — and it becomes money when it
+ * arrives. Showing only one of them would either flatter the company or hide what
+ * it has earned.
+ *
+ * Found by the service stamped on the invoice, so it survives the description
+ * being edited. A client with two StayBrain properties would see both here; that
+ * is a real limit and not worth a second identifier until it happens.
+ */
+export async function invoicedFor(
+  clientId: string,
+  serviceId: string | null,
+): Promise<{ invoicedBaseMinor: number; paidBaseMinor: number }> {
+  const rows = await readWhere<Transaction>('transactions', where('clientId', '==', clientId))
+  const mine = rows.filter(
+    (row) => row.type === 'income' && (!serviceId || row.serviceId === serviceId),
+  )
+
+  return {
+    invoicedBaseMinor: mine.reduce((n, row) => n + row.amount.baseMinor, 0),
+    paidBaseMinor: mine
+      .filter((row) => row.status === 'paid')
+      .reduce((n, row) => n + row.amount.baseMinor, 0),
+  }
+}
+
+/** The StayBrain service, for callers that need its id. */
+export const stayBrainServiceId = async (): Promise<string | null> =>
+  (await stayBrainService())?.id ?? null
 
 /* ------------------------------------------------------------------ *
  * Picking up what was marked in the RMS
@@ -461,9 +505,14 @@ export async function invoiceEarnings(
 
   const me = actor()
 
+  const service = await stayBrainService()
+
   return saveTransaction({
     ...blankTransaction('income'),
     category: 'service_payment',
+    /* Stamped with the service so the property can find its own invoices. */
+    serviceId: service?.id ?? null,
+    serviceName: service?.name ?? 'StayBrain',
     description,
     amount,
     date: `${period}-01`,

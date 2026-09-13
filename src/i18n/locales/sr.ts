@@ -3060,6 +3060,10 @@ export default {
     needAmount: 'Upiši koliko dobija.',
   },
   staybrain: {
+    invoicedLabel: 'Fakturisano',
+    paidSoFar: 'naplaćeno {amount}',
+    allPaid: 'sve naplaćeno',
+    cancelledCount: '{n} otkazano',
     clientCount: 'Klijenata',
     pricePerClient: 'Cena po klijentu — vidi svaki smeštaj.',
     broughtBy: 'doneo {name}',

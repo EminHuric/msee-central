@@ -399,8 +399,10 @@ export function availabilityFor(
  * ------------------------------------------------------------------ */
 
 export interface ListingTotals {
-  /** Bookings we brought. Cancellations counted, because they happened. */
+  /** Bookings we brought that still stand. */
   reservations: number
+  /** Brought and then called off. Counted apart, never in the headline. */
+  cancelled: number
   /** Of those, the ones that still count for money. */
   earning: number
   nights: number
@@ -412,6 +414,7 @@ export interface ListingTotals {
 
 export const EMPTY_TOTALS: ListingTotals = {
   reservations: 0,
+  cancelled: 0,
   earning: 0,
   nights: 0,
   turnoverBaseMinor: 0,

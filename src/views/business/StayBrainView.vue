@@ -138,6 +138,7 @@ const overall = computed(() =>
   [...totals.value.values()].reduce(
     (sum, row) => ({
       reservations: sum.reservations + row.reservations,
+      cancelled: sum.cancelled + row.cancelled,
       earning: sum.earning + row.earning,
       nights: sum.nights + row.nights,
       turnoverBaseMinor: sum.turnoverBaseMinor + row.turnoverBaseMinor,
