@@ -428,6 +428,8 @@ export default {
   },
 
   dashboard: {
+    byService: 'Od koje usluge',
+    byServiceHint: 'Sve prodato u ovom periodu, po usluzi.',
     earnedFrom: 'Od čega je novac',
     earnedFromHint: 'Najnovije prvo. Zbir je pouzdan tek kad se vidi šta stoji iza njega.',
     earnedNothing: 'Još ništa nije zabeleženo',
@@ -1989,6 +1991,7 @@ export default {
   },
 
   sales: {
+    countOf: '{n} prodaja',
     ofBasis: '{percent}% od {amount}',
     paidOn: 'Plaćeno dana',
     paidOnHint: 'Dan kad je novac stigao, a to nije uvek danas.',

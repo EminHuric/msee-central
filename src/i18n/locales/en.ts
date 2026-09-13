@@ -429,6 +429,8 @@ export default {
   },
 
   dashboard: {
+    byService: 'Which service it came from',
+    byServiceHint: 'Everything sold in this period, by service.',
     earnedFrom: 'What the money came from',
     earnedFromHint: 'Newest first. A total is only trustworthy when you can see what is behind it.',
     earnedNothing: 'Nothing recorded yet',
@@ -1990,6 +1992,7 @@ export default {
   },
 
   sales: {
+    countOf: '{n} sale(s)',
     ofBasis: '{percent}% of {amount}',
     paidOn: 'Paid on',
     paidOnHint: 'The day the money arrived, which is not always today.',

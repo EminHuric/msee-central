@@ -291,6 +291,35 @@ export async function importMarkedBookings(
   let updated = 0
   let earned = 0
 
+  /*
+   * Every reservation must have its sale, including the ones imported before
+   * there were any.
+   *
+   * WHY THIS IS A REPAIR AND NOT A MIGRATION. Commissions became sales after some
+   * bookings had already been picked up, so those earned money that appeared
+   * nowhere — the property knew about it and the dashboard did not. A one-off
+   * script would have fixed today and left the same hole open for any future gap.
+   *
+   * So the sales are read once, and anything missing is written as it is found.
+   * A run with nothing missing costs one query and no writes, which is the usual
+   * case; the first run after a gap quietly closes it.
+   */
+  const sales = await readAll<Sale>('sales', 'saleDate', 'desc')
+  const haveSale = new Set(sales.map((row) => row.id))
+
+  /* The joining fee is the same story: written on save, and repaired here. */
+  if (!haveSale.has(`sb_fee_${listing.id}`)) {
+    await recordFeeSale(listing, listing.id)
+  }
+
+  for (const row of existing) {
+    if (haveSale.has(`sb_${row.id}`)) continue
+    if (row.status === 'cancelled') continue
+    if ((row.earning?.baseMinor ?? 0) <= 0) continue
+
+    await recordSale(listing, row.id, row.guestName, row.checkIn, row.earning, service, row.value)
+  }
+
   for (const booking of ours) {
     /*
      * Matched by the RMS booking id, which covers both routes at once.

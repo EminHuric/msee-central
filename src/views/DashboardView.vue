@@ -137,6 +137,35 @@ const everFigures = computed(() => companyFigures(snap.value, snap.value))
  * Sales rather than payments, because a sale is the work: it appears the moment
  * the deal is agreed, which is the same moment the headline above counts it.
  */
+/**
+ * What each service has brought in, over the chosen period.
+ *
+ * THE DASHBOARD HAD TOTALS AND NO BREAKDOWN. "Twelve hundred this month" does not
+ * say whether that was StayBrain or marketing, which is the first thing anybody
+ * wants to know and the thing that decides where the next week goes. Analytics
+ * answers it in depth; this answers it at a glance, on the page somebody actually
+ * opens.
+ *
+ * Every service that sold anything, largest first, and nothing that sold nothing.
+ */
+const serviceTotals = computed(() => {
+  const map = new Map<string, { name: string; value: number; count: number }>()
+
+  current.value.sales.forEach((sale) => {
+    const key = sale.serviceId ?? 'none'
+    const row = map.get(key) ?? {
+      name: sale.serviceName || t('analytics.noService'),
+      value: 0,
+      count: 0,
+    }
+    row.value += sale.value.baseMinor
+    row.count += 1
+    map.set(key, row)
+  })
+
+  return [...map.values()].sort((a, b) => b.value - a.value)
+})
+
 const earnedFrom = computed(() =>
   [...snap.value.sales]
     .sort((a, b) => b.saleDate.localeCompare(a.saleDate))
@@ -859,6 +888,24 @@ onMounted(async () => {
 
         <!-- StayBrain -------------------------------------------------- -->
         <StayBrainWidget v-if="shows('staybrain')" />
+
+        <!-- Which service it came from --------------------------------- -->
+        <section v-if="serviceTotals.length" class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">{{ t('dashboard.byService') }}</h2>
+              <p class="field-hint">{{ t('dashboard.byServiceHint') }}</p>
+            </div>
+            <span class="earned-amount">{{ money(figures.soldBaseMinor) }}</span>
+          </div>
+          <ul class="earned">
+            <li v-for="row in serviceTotals" :key="row.name" class="earned-row">
+              <span class="earned-what">{{ row.name }}</span>
+              <span class="earned-when tertiary">{{ t('sales.countOf', { n: row.count }) }}</span>
+              <span class="earned-amount">{{ money(row.value) }}</span>
+            </li>
+          </ul>
+        </section>
 
         <!-- What the money came from ----------------------------------- -->
         <section class="card">
