@@ -19,14 +19,15 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { fetchClients } from '@/api/clients'
+import { fetchRmsAccounts } from '@/api/rms'
 import { saveListing } from '@/api/staybrain'
 import { moneyOf } from '@/api/sales'
-import { rmsConnectAs } from '@/lib/rms'
+import { rmsConnectAs, rmsSession } from '@/lib/rms'
 import { remembersRmsLogin } from '@/lib/rmsAccounts'
 import { LIMITS } from '@/lib/validation'
 import { useUiStore } from '@/stores/ui'
 import { CURRENCIES, fromMinor, type CurrencyCode } from '@/types/money'
-import { blankListing, type StayBrainListing } from '@/types/staybrain'
+import { blankListing, type RmsAccount, type StayBrainListing } from '@/types/staybrain'
 import type { Client } from '@/types/business'
 
 const props = defineProps<{ open: boolean; listing: StayBrainListing | null }>()
@@ -60,7 +61,19 @@ const rmsPassword = ref('')
 const checking = ref(false)
 const linkProblem = ref('')
 
+/*
+ * The accounts this session may list.
+ *
+ * Empty means "not an administrator over there", which is not a failure — it is
+ * the signal to link by signing in as the property's own account instead. The
+ * screen offers whichever route is open, and both end in the same two fields on
+ * the listing: which account, and its id.
+ */
+const accounts = ref<RmsAccount[]>([])
+const lookingUp = ref(false)
+
 const linked = computed(() => Boolean(draft.value.rmsWorkspaceId))
+const canPick = computed(() => rmsSession.value !== null && accounts.value.length > 0)
 const alreadyRemembered = computed(
   () => Boolean(draft.value.rmsAccountEmail) && remembersRmsLogin(draft.value.rmsAccountEmail),
 )
@@ -78,8 +91,24 @@ watch(
     linkProblem.value = ''
 
     clients.value = await fetchClients().catch(() => [])
+
+    /* Offer the list when it can be had; say nothing when it cannot. */
+    if (rmsSession.value) {
+      lookingUp.value = true
+      accounts.value = await fetchRmsAccounts().catch(() => [])
+      lookingUp.value = false
+    }
   },
 )
+
+/** Pick a client's account from the list — the route an administrator has. */
+function chooseAccount(id: string): void {
+  const account = accounts.value.find((a) => a.id === id)
+  if (!account) return
+  draft.value.rmsWorkspaceId = account.id
+  draft.value.rmsAccountEmail = account.email
+  linkProblem.value = ''
+}
 
 /**
  * Sign in as the property's account, and take its id from the session.
@@ -224,6 +253,30 @@ async function commit(): Promise<void> {
         </div>
 
         <template v-else>
+          <!--
+            The list, when this session may see it. One click, no password: an
+            administrator on the platform already has the right to read every
+            account, so making them type a client's password would be asking for
+            something they do not need and may not have.
+          -->
+          <div v-if="canPick" class="field">
+            <label class="field-label" for="sb-pick">{{ t('staybrain.pickAccount') }}</label>
+            <select
+              id="sb-pick"
+              class="select"
+              :value="draft.rmsWorkspaceId"
+              @change="chooseAccount(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">{{ t('staybrain.pickAccount') }}</option>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">
+                {{ a.username || a.email }} — {{ t('staybrain.unitCount', { n: a.apartmentCount }) }}
+              </option>
+            </select>
+            <p class="field-hint">{{ t('staybrain.pickHint') }}</p>
+          </div>
+
+          <p v-if="canPick" class="field-hint or">{{ t('staybrain.orSignIn') }}</p>
+
           <div class="field-grid">
             <div class="field">
               <label class="field-label" for="sb-rms-email">{{ t('rms.email') }}</label>
@@ -426,6 +479,10 @@ async function commit(): Promise<void> {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
+}
+
+.or {
+  margin: var(--space-2) 0;
 }
 
 .linked {

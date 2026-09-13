@@ -3043,6 +3043,8 @@ export default {
     now: 'Today',
   },
   staybrain: {
+    pickHint: 'Available because you are signed in as an administrator of the reservation platform.',
+    orSignIn: 'Or sign in as this property’s own account:',
     joinFee: 'What this client paid to join',
     joinFeeAmount: 'Amount paid',
     joinFeeHint: 'Per client, because it is agreed per client. One pays more, another less.',

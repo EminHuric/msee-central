@@ -24,7 +24,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
 
 import { rmsDb, rmsUser } from '@/lib/rms'
-import type { RmsApartment, RmsBooking } from '@/types/staybrain'
+import type { RmsAccount, RmsApartment, RmsBooking } from '@/types/staybrain'
 
 /* ------------------------------------------------------------------ *
  * Failures, named
@@ -85,14 +85,39 @@ function requireSession(): { uid: string; email: string } {
  * Reading
  * ------------------------------------------------------------------ */
 
-/*
- * There is deliberately no "list every account" function here.
+/**
+ * The accounts on the reservation platform, when this session may list them.
  *
- * Listing them needs administrator rights on the reservation platform, and a
- * property is linked by signing in as its own account instead — which needs no
- * such rights and proves the link at the same time. Code that only works under a
- * privilege this design avoids is worse than no code.
+ * ONLY AN ADMINISTRATOR CAN, and that is why this returns an empty list rather
+ * than throwing when it cannot: linking a property offers two routes, and this is
+ * the easy one. An owner signed in as a platform administrator picks the client
+ * from a list; anybody else signs in as the property's own account instead. A
+ * refusal here is not an error, it is the answer "not that route".
  */
+export async function fetchRmsAccounts(): Promise<RmsAccount[]> {
+  requireSession()
+  try {
+    const snap = await getDocs(collection(rmsDb(), 'users'))
+    return snap.docs
+      .map((d) => {
+        const data = d.data()
+        return {
+          id: d.id,
+          username: String(data.username ?? ''),
+          email: String(data.email ?? ''),
+          role: String(data.role ?? 'user'),
+          disabled: data.disabled === true,
+          apartmentCount: Number(data.apartmentCount ?? 0),
+          bookingCount: Number(data.bookingCount ?? 0),
+          agencyAccess: data.agencyAccess === true,
+        }
+      })
+      .sort((a, b) => (a.username || a.email).localeCompare(b.username || b.email))
+  } catch {
+    /* Not an administrator over there. The other route still works. */
+    return []
+  }
+}
 
 export async function fetchApartments(workspaceId: string): Promise<RmsApartment[]> {
   requireSession()

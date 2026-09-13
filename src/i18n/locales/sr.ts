@@ -3042,6 +3042,8 @@ export default {
     now: 'Danas',
   },
   staybrain: {
+    pickHint: 'Dostupno jer si prijavljen kao administrator rezervacione platforme.',
+    orSignIn: 'Ili se prijavi kao nalog samog smeštaja:',
     joinFee: 'Koliko je ovaj klijent platio za ulaz',
     joinFeeAmount: 'Plaćen iznos',
     joinFeeHint: 'Po klijentu, jer se i dogovara po klijentu. Jedan plati više, drugi manje.',
