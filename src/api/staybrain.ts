@@ -17,7 +17,7 @@
 import { logAudit } from './audit'
 import { notify } from './notifications'
 import { saveReservation } from './reservations'
-import { actor, patch, readAll, readWhere, today, where, write } from './store'
+import { actor, patch, readAll, readOne, readWhere, today, where, write } from './store'
 import { getDb } from '@/lib/firebase'
 import { collection, getDocs, query, where as fsWhere } from 'firebase/firestore'
 import { blankTransaction, saveTransaction } from './finance'
@@ -35,7 +35,7 @@ import {
   type StayBrainListing,
 } from '@/types/staybrain'
 import { EARNING_STATUSES, type Reservation } from '@/types/reservations'
-import type { Transaction } from '@/types/revenue'
+import type { Sale, Transaction } from '@/types/revenue'
 
 /* ------------------------------------------------------------------ *
  * Listings
@@ -453,8 +453,20 @@ async function recordFeeSale(listing: StayBrainListing, id: string): Promise<voi
   const service = await stayBrainService()
   const me = actor()
 
+  /*
+   * Anything decided on the sale itself survives this.
+   *
+   * The fee is written here, but instalments, an advance and the notes are
+   * decided on the sale in Finance — and this runs again every time the listing
+   * is saved. Rebuilding the sale from scratch would quietly reset a payment plan
+   * somebody had agreed with a client, which is the kind of loss nobody notices
+   * until the client asks why the second instalment never appeared.
+   */
+  const existing = await readOne<Sale>('sales', `sb_fee_${id}`)
+
   await saveSale({
     ...blankSale(me.uid, me.name),
+    ...(existing ? { payment: existing.payment, notes: existing.notes } : {}),
     id: `sb_fee_${id}`,
     title: `StayBrain · ${listing.name}`,
     clientId: listing.clientId,
