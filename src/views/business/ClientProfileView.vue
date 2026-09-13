@@ -103,6 +103,28 @@ const totals = computed(() => {
       .filter((tx) => OUTGOING_TYPES.includes(tx.type))
       .reduce((n, tx) => n + tx.amount.baseMinor, 0),
     advanceDue: rows.filter((b) => b.advanceDue).length,
+    /*
+     * How long the oldest unpaid sale has been unpaid.
+     *
+     * The amount alone is a fact; the age is the decision. Ninety days owing and
+     * ninety euros owing are read completely differently, and only one of them
+     * needs a phone call this week.
+     */
+    oldestDays: (() => {
+      const unpaid = sales.value.filter(
+        (sale) => (balances.value.get(sale.id)?.remainingBaseMinor ?? 0) > 0,
+      )
+      if (!unpaid.length) return 0
+
+      const oldest = unpaid.reduce(
+        (earliest, sale) => (sale.saleDate < earliest ? sale.saleDate : earliest),
+        unpaid[0]!.saleDate,
+      )
+      return Math.max(
+        0,
+        Math.round((Date.now() - Date.parse(oldest)) / 86_400_000),
+      )
+    })(),
   }
 })
 
@@ -228,6 +250,14 @@ watch(clientId, load)
           <span class="figure-label">{{ t('finance.outstanding') }}</span>
           <span class="figure-value" :class="{ neg: totals.outstanding > 0 }">
             {{ money(totals.outstanding) }}
+          </span>
+          <!-- The age, which is the half that decides whether to ring them. -->
+          <span
+            v-if="totals.outstanding > 0"
+            class="figure-note"
+            :class="totals.oldestDays >= 60 ? 'neg' : totals.oldestDays >= 30 ? 'warn' : ''"
+          >
+            {{ t('finance.owedDays', { n: totals.oldestDays }) }}
           </span>
         </article>
         <article class="card figure">
@@ -526,6 +556,11 @@ watch(clientId, load)
 </template>
 
 <style scoped>
+.figure-note {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
 .profile-head { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); flex-wrap: wrap; }
 .head-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: var(--space-1); }
 .head-meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-size: var(--text-xs); }

@@ -12,6 +12,7 @@
  */
 
 import { logAudit } from './audit'
+import { tellOwners } from './owners'
 import { logActivity, remove } from './records'
 import { newId, readAll, readOne, today, write } from './store'
 import { NO_REFERRAL, type Client } from '@/types/business'
@@ -83,6 +84,15 @@ function slugId(name: string): string {
 export async function saveClient(input: Client): Promise<string> {
   const isNew = !input.id
   const id = await write('clients', { ...input, id: input.id || slugId(input.name) })
+
+  if (isNew) {
+    await tellOwners({
+      kind: 'client_new',
+      title: input.name,
+      body: input.description || '',
+      link: `/clients/${id}`,
+    })
+  }
 
   await logAudit({
     action: isNew ? 'client.created' : 'client.updated',

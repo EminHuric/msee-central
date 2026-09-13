@@ -14,12 +14,13 @@
  */
 
 import { logAudit } from './audit'
+import { tellOwners } from './owners'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
 import { actor, readAll, readOne, readWhere, today, where, write } from './store'
 import { addEntry } from './wallet'
 
-import { BASE_CURRENCY, toMinor, type CurrencyCode, type Money } from '@/types/money'
+import { BASE_CURRENCY, formatMoney, toMinor, type CurrencyCode, type Money } from '@/types/money'
 import {
   EMPTY_ANALYSIS,
   NO_STRUCTURE,
@@ -116,6 +117,16 @@ export function structureFromTerms(
 export async function saveSale(input: Sale): Promise<string> {
   const isNew = !input.id
   const id = await write('sales', input)
+
+  /* Told once, when it is new. An edit is not news. */
+  if (isNew) {
+    await tellOwners({
+      kind: 'sale_new',
+      title: input.title || input.clientName,
+      body: formatMoney(input.value.minor, input.value.currency, 'en'),
+      link: '/sales',
+    })
+  }
 
   await logAudit({
     action: isNew ? 'sale.created' : 'sale.updated',

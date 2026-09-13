@@ -14,9 +14,10 @@
  */
 
 import { logAudit } from './audit'
-import { BASE_CURRENCY } from '@/types/money'
+import { formatMoney, BASE_CURRENCY } from '@/types/money'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
+import { tellOwners } from './owners'
 import {
   actor,
   newId,
@@ -107,6 +108,21 @@ export async function saveTransaction(
       clientId: input.clientId,
     },
   })
+
+  if (isNew) {
+    /*
+     * Money moving is the event the owner most wants to hear about, in both
+     * directions: a payment arriving and a cost going out are equally their
+     * business, and a system that only announces good news is a system nobody
+     * trusts about the rest.
+     */
+    await tellOwners({
+      kind: INCOME_TYPES.includes(input.type) ? 'payment_received' : 'expense_recorded',
+      title: input.description || input.clientName,
+      body: formatMoney(input.amount.minor, input.amount.currency, 'en'),
+      link: '/finance',
+    })
+  }
 
   if (input.clientId) {
     await logActivity({

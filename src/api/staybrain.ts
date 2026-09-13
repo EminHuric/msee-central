@@ -15,11 +15,9 @@
  */
 
 import { logAudit } from './audit'
-import { notify } from './notifications'
+import { tellOwners } from './owners'
 import { saveReservation } from './reservations'
 import { actor, patch, readAll, readOne, readWhere, today, where, write } from './store'
-import { getDb } from '@/lib/firebase'
-import { collection, getDocs, query, where as fsWhere } from 'firebase/firestore'
 import { blankTransaction, saveTransaction } from './finance'
 import { fetchServices } from './operations'
 import { blankSale, saveSale } from './sales'
@@ -205,29 +203,6 @@ export const stayBrainServiceId = async (): Promise<string | null> =>
  * rate changed.
  */
 /**
- * Who hears that a booking arrived: the owners, and nobody else.
- *
- * NOT THE WHOLE COMPANY, which is what this did first and was wrong. A booking
- * coming in is not news an employee can act on — it is already done, the
- * commission is already earned, and telling everybody turns the bell into
- * something people learn to ignore. It is news for whoever is answerable for the
- * money.
- *
- * The owner flag is read from the same access documents the rules use, so this
- * cannot drift from who actually is one.
- */
-async function audienceFor(): Promise<string[]> {
-  const me = actor()
-  const snap = await getDocs(
-    query(collection(getDb(), 'userPermissions'), fsWhere('isCeo', '==', true)),
-  )
-
-  return snap.docs
-    .map((d) => d.id)
-    .filter((uid) => uid && uid !== me.uid)
-}
-
-/**
  * Say that bookings arrived, once, however many there were.
  *
  * ONE MESSAGE AND NOT ONE PER BOOKING. Six bookings picked up in one go is one
@@ -241,25 +216,12 @@ async function announce(
 ): Promise<void> {
   if (added <= 0) return
 
-  const uids = await audienceFor()
-
-  /*
-   * The bell renders the title as written and translates the KIND beside it, so
-   * the text here is data and not a sentence: a property, a count, and a figure
-   * with its currency. It reads the same in either language because there is
-   * nothing in it to translate.
-   */
-  const amount = formatMoney(earnedBaseMinor, listing.currency, 'en')
-
-  for (const uid of uids) {
-    await notify(uid, {
-      kind: 'sale_new',
-      priority: 'normal',
-      title: `${listing.name} · ${added}`,
-      body: amount,
-      link: `/staybrain/${listing.id}`,
-    })
-  }
+  await tellOwners({
+    kind: 'sale_new',
+    title: `${listing.name} · ${added}`,
+    body: formatMoney(earnedBaseMinor, listing.currency, 'en'),
+    link: `/staybrain/${listing.id}`,
+  })
 }
 
 export async function importMarkedBookings(
