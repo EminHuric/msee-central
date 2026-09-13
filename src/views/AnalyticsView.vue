@@ -477,7 +477,6 @@ onMounted(load)
                 <th>{{ t('analytics.service') }}</th>
                 <th class="num">{{ t('sales.sold') }}</th>
                 <th class="num">{{ t('sales.count') }}</th>
-                <th class="num">{{ t('analytics.perDay') }}</th>
                 <th class="num">{{ t('analytics.direction') }}</th>
               </tr>
             </thead>
@@ -490,9 +489,6 @@ onMounted(load)
                 </td>
                 <td class="num strong">{{ money(row.value) }}</td>
                 <td class="num">{{ row.count }}</td>
-                <td class="num" :title="t('analytics.perDayHint')">
-                  {{ money(Math.round(row.perDay)) }}
-                </td>
                 <td class="num" :class="row.daily !== null ? (row.daily >= 0 ? 'up' : 'down') : ''">
                   {{ row.daily === null ? '—' : `${row.daily > 0 ? '+' : ''}${row.daily}%` }}
                 </td>
