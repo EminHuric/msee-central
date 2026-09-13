@@ -274,10 +274,25 @@ const moneyCards = computed<Card[]>(() =>
         {
           key: 'income',
           label: t('finance.income'),
-          value: money(figures.value.incomeBaseMinor),
-          delta: trend(figures.value.incomeBaseMinor, before.value.incomeBaseMinor),
+          /*
+           * REVENUE IS WHAT WENT THROUGH THE SYSTEM, NOT WHAT CLEARED THE BANK.
+           *
+           * This showed collected money, so a sale recorded today and invoiced
+           * next month left the headline at zero — which reads as a day when
+           * nothing happened, on a day something did. Work agreed is revenue
+           * earned; that is how the business is actually run and how the owner
+           * thinks about it.
+           *
+           * Collected is not lost, it moved to the line underneath. The two are
+           * still different facts and the gap between them is the outstanding
+           * tile beside this one — it just is not the headline any more.
+           */
+          value: money(figures.value.soldBaseMinor),
+          delta: trend(figures.value.soldBaseMinor, before.value.soldBaseMinor),
           link: '/finance',
-          hint: lastYearHint(figures.value.incomeBaseMinor, yearAgo.value.incomeBaseMinor),
+          hint: t('dashboard.collectedOf', {
+            amount: money(figures.value.incomeBaseMinor),
+          }),
         },
         {
           key: 'expense',

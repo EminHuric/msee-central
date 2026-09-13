@@ -274,3 +274,33 @@
 @media (min-width: 2400px) {
   :root { --content-max: 2160px; }
 }
+
+/* ---- A television ----------------------------------------------------- *
+ *
+ * A 4K monitor at arm's length and a 4K television across a room are the same
+ * pixels and completely different screens. Widening the page does nothing for
+ * the second: the text is still 14 physical pixels tall and unreadable from a
+ * sofa.
+ *
+ * So the ROOT grows, and because every size in this system is in `rem` — type,
+ * spacing, radii, icon boxes — the whole interface grows with it in proportion.
+ * Nothing is re-laid-out and no breakpoint has to be re-tested; it is the same
+ * design, further away.
+ *
+ * Held back until 2600px so it cannot catch a large desktop, where the default
+ * is right and bigger would be shouting.
+ */
+
+@media (min-width: 2600px) {
+  :root {
+    font-size: 20px;
+    --content-max: 2400px;
+  }
+}
+
+@media (min-width: 3400px) {
+  :root {
+    font-size: 24px;
+    --content-max: 3000px;
+  }
+}

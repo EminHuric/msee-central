@@ -16,9 +16,10 @@
 
 import { logAudit } from './audit'
 import { notify } from './notifications'
-import { fetchEmployees } from './employees'
 import { saveReservation } from './reservations'
 import { actor, patch, readAll, readWhere, today, where, write } from './store'
+import { getDb } from '@/lib/firebase'
+import { collection, getDocs, query, where as fsWhere } from 'firebase/firestore'
 import { blankTransaction, saveTransaction } from './finance'
 import { fetchServices } from './operations'
 import { blankSale, saveSale } from './sales'
@@ -204,23 +205,26 @@ export const stayBrainServiceId = async (): Promise<string | null> =>
  * rate changed.
  */
 /**
- * Everybody who should hear that a booking arrived.
+ * Who hears that a booking arrived: the owners, and nobody else.
  *
- * Staff, minus whoever triggered the import — they are looking at the screen that
- * just told them. The point of a notification is the people who are not.
+ * NOT THE WHOLE COMPANY, which is what this did first and was wrong. A booking
+ * coming in is not news an employee can act on — it is already done, the
+ * commission is already earned, and telling everybody turns the bell into
+ * something people learn to ignore. It is news for whoever is answerable for the
+ * money.
  *
- * Not filtered by permission, and that is deliberate: the recipients are the
- * company's own employees, the message carries a guest's first name and a figure
- * they are already trusted with, and reading `userPermissions` for everybody to
- * filter a greeting would be a heavier read than the thing it protects. What a
- * person may actually OPEN is decided by the rules when they click the link.
+ * The owner flag is read from the same access documents the rules use, so this
+ * cannot drift from who actually is one.
  */
 async function audienceFor(): Promise<string[]> {
   const me = actor()
-  const staff = await fetchEmployees().catch(() => [])
-  return staff
-    .filter((row) => row.uid && row.uid !== me.uid && row.status === 'active')
-    .map((row) => row.uid)
+  const snap = await getDocs(
+    query(collection(getDb(), 'userPermissions'), fsWhere('isCeo', '==', true)),
+  )
+
+  return snap.docs
+    .map((d) => d.id)
+    .filter((uid) => uid && uid !== me.uid)
 }
 
 /**

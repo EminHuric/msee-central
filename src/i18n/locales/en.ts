@@ -429,6 +429,7 @@ export default {
   },
 
   dashboard: {
+    collectedOf: '{amount} collected so far',
     madeForClients: 'Made for clients',
     madeForClientsHint: '{today} today · {total} since the start. Their money, never ours.',
     vsLastYear: '{change}% against the same period last year',

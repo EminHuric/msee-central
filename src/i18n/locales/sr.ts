@@ -428,6 +428,7 @@ export default {
   },
 
   dashboard: {
+    collectedOf: 'naplaćeno {amount} do sada',
     madeForClients: 'Napravili klijentima',
     madeForClientsHint: '{today} danas · {total} od početka. Njihov novac, nikad naš.',
     vsLastYear: '{change}% u odnosu na isti period prošle godine',

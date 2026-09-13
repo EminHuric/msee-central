@@ -161,6 +161,15 @@ const byChannel = computed(() =>
  * spans at once: the chosen period, today, and everything. One period never
  * answers it — a month says little and the running total is the argument.
  */
+/** What was agreed in each span. Revenue as the business means it. */
+const sold = computed(() => {
+  const sum = (rows: Snapshot['sales']) => rows.reduce((n, row) => n + row.value.baseMinor, 0)
+  return {
+    period: sum(current.value.sales),
+    before: sum(earlier.value.sales),
+  }
+})
+
 const madeForClients = computed(() => {
   const sum = (rows: Snapshot['sales']) =>
     rows.reduce((n, row) => n + (row.basisValue?.baseMinor ?? 0), 0)
@@ -176,8 +185,10 @@ const headline = computed(() => [
   {
     key: 'income',
     label: t('finance.income'),
-    value: money(totals.value.incomeBaseMinor),
-    delta: trend(totals.value.incomeBaseMinor, before.value.incomeBaseMinor),
+    /* Agreed, not collected — see the note on the dashboard tile. */
+    value: money(sold.value.period),
+    delta: trend(sold.value.period, sold.value.before),
+    hint: t('dashboard.collectedOf', { amount: money(totals.value.incomeBaseMinor) }),
   },
   {
     key: 'expense',
