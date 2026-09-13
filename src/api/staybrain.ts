@@ -177,6 +177,59 @@ export async function invoicedFor(
 export const stayBrainServiceId = async (): Promise<string | null> =>
   (await stayBrainService())?.id ?? null
 
+/**
+ * Pick up bookings from every linked property, without anybody asking.
+ *
+ * WHY THIS EXISTS. Importing only when a property is opened means a week of not
+ * opening it is a week of not knowing what was earned — the money was made and
+ * the system stayed quiet. Selling is not an excuse to go and check a screen.
+ *
+ * IT IS DELIBERATELY QUIET AND DELIBERATELY CHEAP.
+ *
+ *   It does nothing at all unless the browser already holds a password for the
+ *   property, or a session is already open. It never asks for a login: a
+ *   background task must not interrupt somebody to demand credentials.
+ *
+ *   It writes nothing when nothing changed, because the import compares before
+ *   it writes. The usual run costs a read and no writes.
+ *
+ *   Every failure is swallowed. A property whose password has changed, or a
+ *   reservation system that is down, must not stop a dashboard from drawing.
+ *
+ * Returns how many arrived, so a screen can say so once rather than per property.
+ */
+export async function syncAllListings(): Promise<number> {
+  const { rmsConnectAs } = await import('@/lib/rms')
+  const { fetchBookings } = await import('./rms')
+
+  let added = 0
+
+  try {
+    const listings = (await fetchListings()).filter(
+      (row) => row.active && row.rmsWorkspaceId && row.rmsAccountEmail,
+    )
+
+    for (const listing of listings) {
+      try {
+        const result = await rmsConnectAs(listing.rmsAccountEmail)
+        /* No remembered password: leave it for when somebody opens the property. */
+        if (result.state !== 'ready') continue
+
+        const bookings = await fetchBookings(listing.rmsWorkspaceId)
+        const mine = await fetchReservationsForListing(listing.id)
+        const picked = await importMarkedBookings(listing, bookings, mine)
+        added += picked.added
+      } catch {
+        /* One property being unreachable says nothing about the next. */
+      }
+    }
+  } catch {
+    /* No listings, or no access to them. Either way: nothing to do. */
+  }
+
+  return added
+}
+
 /* ------------------------------------------------------------------ *
  * Picking up what was marked in the RMS
  * ------------------------------------------------------------------ */

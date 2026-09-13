@@ -429,6 +429,10 @@ export default {
   },
 
   dashboard: {
+    earnedFrom: 'What the money came from',
+    earnedFromHint: 'Newest first. A total is only trustworthy when you can see what is behind it.',
+    earnedNothing: 'Nothing recorded yet',
+    earnedNothingHint: 'Sales appear here the moment they are agreed, paid or not.',
     collectedOf: '{amount} collected so far',
     madeForClients: 'Made for clients',
     madeForClientsHint: '{today} today · {total} since the start. Their money, never ours.',

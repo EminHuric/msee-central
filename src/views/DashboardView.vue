@@ -48,9 +48,10 @@ import {
   type Snapshot,
 } from '@/api/metrics'
 import { balanceOf } from '@/types/revenue'
-import { formatRelative } from '@/i18n'
+import { formatDate, formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { syncAllListings } from '@/api/staybrain'
 import { OPEN_STAGES } from '@/types/business'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
 import { PERMISSIONS, type Permission } from '@/types/permissions'
@@ -122,6 +123,24 @@ const dayFigures = computed(() => companyFigures(slice(snap.value, periodOf('tod
  * of it is the argument for the next client.
  */
 const everFigures = computed(() => companyFigures(snap.value, snap.value))
+
+/**
+ * What the money came from, newest first.
+ *
+ * THE FIGURES SAY HOW MUCH; THIS SAYS FROM WHAT. A total is only trustworthy when
+ * the things behind it can be seen, and "I earned 1,200 this month" becomes real
+ * the moment it is eleven lines with a client and a date on each. It is also the
+ * fastest way to spot something wrong — a figure nobody recognises is obvious in
+ * a list and invisible in a sum.
+ *
+ * Sales rather than payments, because a sale is the work: it appears the moment
+ * the deal is agreed, which is the same moment the headline above counts it.
+ */
+const earnedFrom = computed(() =>
+  [...snap.value.sales]
+    .sort((a, b) => b.saleDate.localeCompare(a.saleDate))
+    .slice(0, 12),
+)
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -545,7 +564,31 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(load)
+/**
+ * Collect anything new from the reservation systems, in the background.
+ *
+ * NOT AWAITED, ON PURPOSE. The dashboard draws from our own database and must
+ * not wait on somebody else's; if a reservation system is slow or down, this page
+ * appears at its usual speed and simply has nothing new to add. When bookings do
+ * arrive the figures are reloaded and the page updates underneath, which is the
+ * right way round: the news finds you rather than you going to look for it.
+ */
+function collectInBackground(): void {
+  void syncAllListings()
+    .then(async (added) => {
+      if (added <= 0) return
+      ui.notify('ok', t('staybrain.picked', { n: added }))
+      snap.value = await loadSnapshot()
+    })
+    .catch(() => {
+      /* Already swallowed inside; this is the belt to that pair of braces. */
+    })
+}
+
+onMounted(async () => {
+  await load()
+  collectInBackground()
+})
 </script>
 
 <template>
@@ -804,6 +847,35 @@ onMounted(load)
         <!-- StayBrain -------------------------------------------------- -->
         <StayBrainWidget v-if="shows('staybrain')" />
 
+        <!-- What the money came from ----------------------------------- -->
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">{{ t('dashboard.earnedFrom') }}</h2>
+              <p class="field-hint">{{ t('dashboard.earnedFromHint') }}</p>
+            </div>
+            <RouterLink to="/sales" class="btn btn-ghost btn-sm">
+              {{ t('dashboard.seeAll') }}
+            </RouterLink>
+          </div>
+
+          <div v-if="!earnedFrom.length" class="empty">
+            <p class="empty-title">{{ t('dashboard.earnedNothing') }}</p>
+            <p class="empty-text">{{ t('dashboard.earnedNothingHint') }}</p>
+          </div>
+
+          <ul v-else class="earned">
+            <li v-for="sale in earnedFrom" :key="sale.id" class="earned-row">
+              <span class="earned-what">
+                {{ sale.title || sale.clientName }}
+                <span v-if="sale.serviceName" class="tertiary">· {{ sale.serviceName }}</span>
+              </span>
+              <span class="earned-when tertiary">{{ formatDate(sale.saleDate) }}</span>
+              <span class="earned-amount">{{ money(sale.value.baseMinor) }}</span>
+            </li>
+          </ul>
+        </section>
+
         <!-- Goals + activity ------------------------------------------- -->
         <div class="pair">
           <section v-if="shows('goals')" class="card">
@@ -887,6 +959,49 @@ onMounted(load)
 </template>
 
 <style scoped>
+.earned {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.earned-row {
+  align-items: baseline;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: var(--space-2) var(--space-4);
+}
+
+.earned-row + .earned-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.earned-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.earned-when {
+  font-size: var(--text-xs);
+}
+
+.earned-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .earned-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .earned-when {
+    grid-column: 1;
+  }
+}
+
 .section-title { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
 
 .picker { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

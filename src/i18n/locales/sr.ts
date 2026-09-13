@@ -428,6 +428,10 @@ export default {
   },
 
   dashboard: {
+    earnedFrom: 'Od čega je novac',
+    earnedFromHint: 'Najnovije prvo. Zbir je pouzdan tek kad se vidi šta stoji iza njega.',
+    earnedNothing: 'Još ništa nije zabeleženo',
+    earnedNothingHint: 'Prodaje se pojavljuju čim su dogovorene, plaćene ili ne.',
     collectedOf: 'naplaćeno {amount} do sada',
     madeForClients: 'Napravili klijentima',
     madeForClientsHint: '{today} danas · {total} od početka. Njihov novac, nikad naš.',
