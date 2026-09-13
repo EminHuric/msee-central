@@ -3350,6 +3350,17 @@ export default {
     whatItCanDo: 'Ovo se prijavljuje na RMS kao agencijski račun. Može da čita račune i da kreira ili otkazuje rezervacije označene kao naše — ništa drugo. Lozinka se ne čuva ovde.',
   },
 
+  report: {
+    title: 'Izveštaj',
+    subtitle: 'Period na jednoj strani, spreman za štampu ili čuvanje kao PDF.',
+    heading: 'Poslovni izveštaj',
+    print: 'Štampaj ili sačuvaj kao PDF',
+    printedOn: 'Napravljeno {date}',
+    byClient: 'Po klijentu',
+    byService: 'Po usluzi',
+    theirMoney: 'Njihov novac, ne naš.',
+    nothing: 'U ovom periodu nije zabeleženo ništa.',
+  },
   reservations: {
     title: 'Rezervacije koje smo doneli',
     subtitle: 'Unose se ovde, RMS ih preuzima. Ova lista je ono što smo im doneli.',

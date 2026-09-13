@@ -171,6 +171,13 @@ const sections = computed<NavSection[]>(() => {
           internalOnly: true,
         },
         {
+          to: '/report',
+          labelKey: 'report.title',
+          icon: 'contract',
+          permission: PERMISSIONS.FINANCE_VIEW,
+          internalOnly: true,
+        },
+        {
           to: '/analytics',
           labelKey: 'modules.analytics',
           icon: 'chart',

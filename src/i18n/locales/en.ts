@@ -3351,6 +3351,17 @@ export default {
     whatItCanDo: 'This signs in to the RMS as the agency account. It can read the accounts and create or cancel bookings marked as ours — nothing else. The password is not stored here.',
   },
 
+  report: {
+    title: 'Report',
+    subtitle: 'A period on one page, ready to print or save as a PDF.',
+    heading: 'Business report',
+    print: 'Print or save as PDF',
+    printedOn: 'Prepared {date}',
+    byClient: 'By client',
+    byService: 'By service',
+    theirMoney: 'Their money, not ours.',
+    nothing: 'Nothing was recorded in this period.',
+  },
   reservations: {
     title: 'Bookings we brought',
     subtitle: 'Entered here, collected by the RMS. This list is what we brought them.',

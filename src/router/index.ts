@@ -185,6 +185,12 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.CALENDAR_VIEW, titleKey: 'calendar.title' },
       },
       {
+        path: 'report',
+        name: 'report',
+        component: () => import('@/views/ReportView.vue'),
+        meta: { permission: PERMISSIONS.FINANCE_VIEW, titleKey: 'report.title' },
+      },
+      {
         path: 'analytics',
         name: 'analytics',
         component: () => import('@/views/AnalyticsView.vue'),
