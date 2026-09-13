@@ -3060,6 +3060,8 @@ export default {
     needAmount: 'Upiši koliko dobija.',
   },
   staybrain: {
+    clientCount: 'Klijenata',
+    pricePerClient: 'Cena po klijentu — vidi svaki smeštaj.',
     broughtBy: 'doneo {name}',
     invoice: 'Fakturiši mesec',
     invoiceMonth: 'Mesec',

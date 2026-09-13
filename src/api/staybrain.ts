@@ -238,8 +238,14 @@ export async function importMarkedBookings(
       updatedAt: '',
     })
 
-    /* And as a sale, so it reaches the dashboard and the service by itself. */
-    await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service)
+    /*
+     * And as a sale — unless it arrives already cancelled, which happens when a
+     * booking is marked as ours and called off before anybody opened this screen.
+     * A cancelled booking was never a sale.
+     */
+    if (booking.status !== 'cancelled') {
+      await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service)
+    }
 
     added += 1
   }
@@ -344,6 +350,24 @@ async function recordFeeSale(listing: StayBrainListing, id: string): Promise<voi
  * Only the facts the RMS owns — the guest, the dates, the money the guest pays,
  * and whether it still stands. Our earning and our own ids are left alone.
  */
+/**
+ * A cancelled booking stops being a sale.
+ *
+ * The sale was written when the booking counted; when it stops counting the sale
+ * has to go with it, or the service keeps reporting a sale that did not happen.
+ * Moved to the recycle bin rather than destroyed — it did exist, and the record
+ * of a booking that was made and then called off is worth keeping.
+ */
+async function dropSale(reservationId: string): Promise<void> {
+  await patch('sales', `sb_${reservationId}`, {
+    deletedAt: new Date().toISOString(),
+    deletedBy: actor().uid,
+    deletedByName: actor().name,
+  }).catch(() => {
+    /* No sale to drop — a booking that never earned anything never had one. */
+  })
+}
+
 async function refresh(
   mine: Reservation,
   booking: RmsBooking,
@@ -361,6 +385,18 @@ async function refresh(
 
   /* Nothing moved: no write, so opening a property costs nothing. */
   if (same) return
+
+  /*
+   * Cancelled here means cancelled everywhere it was counted.
+   *
+   * And the reverse: a booking that was cancelled and then reinstated in the
+   * reservation system becomes a sale again, because it is one again.
+   */
+  if (status === 'cancelled' && mine.status !== 'cancelled') {
+    await dropSale(mine.id)
+  } else if (status !== 'cancelled' && mine.status === 'cancelled') {
+    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, mine.earning, await stayBrainService())
+  }
 
   await patch('reservations', mine.id, {
     guestName: booking.guestName,

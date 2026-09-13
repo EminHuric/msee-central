@@ -19,6 +19,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CustomFields from '@/components/CustomFields.vue'
 import { fetchSales } from '@/api/sales'
+import { fetchListings } from '@/api/staybrain'
 import {
   blankService,
   blankTerms,
@@ -80,6 +81,18 @@ const pendingDelete = ref<Service | null>(null)
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.SERVICES_MANAGE))
 const canStayBrain = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW))
 
+/*
+ * StayBrain's clients, counted for its card.
+ *
+ * WHY THIS CARD COUNTS DIFFERENTLY. Every other service sells one thing at one
+ * price, so "sales" and "sold" say everything. StayBrain sells a place in the
+ * service to a client and then earns commission on their bookings, so a raw count
+ * of sales would read as hundreds — one per guest — and answer a question nobody
+ * asked. What somebody wants to know here is how many clients are in it. The
+ * money still counts everything, because every euro of it was earned.
+ */
+const stayBrainClients = ref(0)
+
 /**
  * Is this the accommodation service?
  *
@@ -132,11 +145,13 @@ const visible = computed(() => {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [sv, sl, f] = await Promise.all([
+    const [sv, sl, f, listings] = await Promise.all([
       fetchServices(),
       fetchSales().catch(() => []),
       fetchFieldDefs().catch(() => []),
+      canStayBrain.value ? fetchListings().catch(() => []) : Promise.resolve([]),
     ])
+    stayBrainClients.value = listings.filter((row) => row.active).length
     services.value = sv
     terms.value = canSeePrice.value ? await fetchTermsFor(sv.map((s) => s.id)) : new Map()
     sales.value = sl
@@ -483,7 +498,18 @@ onMounted(load)
           figures, and the figures were never fetched — the read is refused by
           the database rather than filtered here.
         -->
-        <template v-if="terms.get(service.id)">
+        <!--
+          No list price for StayBrain.
+
+          One client joins at 997 and the next at 497, so a single figure on the
+          card would be wrong for everybody except whoever it was copied from. What
+          each client actually paid is on their own property.
+        -->
+        <p v-if="isStayBrain(service)" class="tertiary small">
+          {{ t('staybrain.pricePerClient') }}
+        </p>
+
+        <template v-else-if="terms.get(service.id)">
           <p class="service-price">
             {{
               money(
@@ -508,8 +534,10 @@ onMounted(load)
 
         <dl v-if="canSeeMoney" class="stats">
           <div>
-            <dt>{{ t('sales.count') }}</dt>
-            <dd>{{ performance.get(service.id)?.count ?? 0 }}</dd>
+            <dt>{{ isStayBrain(service) ? t('staybrain.clientCount') : t('sales.count') }}</dt>
+            <dd>
+              {{ isStayBrain(service) ? stayBrainClients : (performance.get(service.id)?.count ?? 0) }}
+            </dd>
           </div>
           <div>
             <dt>{{ t('sales.sold') }}</dt>

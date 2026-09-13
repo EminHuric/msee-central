@@ -3061,6 +3061,8 @@ export default {
     needAmount: 'Say how much they get.',
   },
   staybrain: {
+    clientCount: 'Clients',
+    pricePerClient: 'Priced per client — see each property.',
     broughtBy: 'brought by {name}',
     invoice: 'Invoice a month',
     invoiceMonth: 'Month',
