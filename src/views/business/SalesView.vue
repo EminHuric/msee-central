@@ -36,6 +36,7 @@ import {
 } from '@/api/sales'
 import { blankTransaction, fetchTransactions, saveTransaction } from '@/api/finance'
 import { formatDate } from '@/i18n'
+import { exportCsv } from '@/lib/csv'
 import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -133,6 +134,37 @@ const payAmount = ref(0)
 const payDate = ref('')
 
 const today = new Date().toISOString().slice(0, 10)
+
+const canExport = computed(() => auth.hasPermission(PERMISSIONS.SALES_EXPORT))
+
+/** Every column somebody would look for, in the order the table shows them. */
+function exportSales(): void {
+  exportCsv(t('sales.title'), visible.value, [
+    { header: t('sales.saleDate'), value: (row) => row.saleDate },
+    { header: t('sales.title'), value: (row) => row.title },
+    { header: t('clients.title'), value: (row) => row.clientName },
+    { header: t('table.service'), value: (row) => row.serviceName },
+    { header: t('table.value'), value: (row) => fromMinor(row.value.baseMinor) },
+    { header: t('finance.currency'), value: () => BASE_CURRENCY },
+    {
+      header: t('sales.asPercent'),
+      value: (row) => (row.commissionPercent ? `${row.commissionPercent}%` : ''),
+    },
+    {
+      header: t('sales.basisPlaceholder'),
+      value: (row) => (row.basisValue ? fromMinor(row.basisValue.baseMinor) : ''),
+    },
+    {
+      header: t('finance.outstanding'),
+      value: (row) => fromMinor(balanceMap.value.get(row.id)?.remainingBaseMinor ?? 0),
+    },
+    {
+      header: t('table.status'),
+      value: (row) => t(`saleBalance.${balanceMap.value.get(row.id)?.status ?? 'unpaid'}`),
+    },
+    { header: t('sales.owner'), value: (row) => row.ownerName },
+  ])
+}
 
 const canCreate = computed(() => auth.hasPermission(PERMISSIONS.SALES_CREATE))
 const canEdit = computed(() => auth.hasPermission(PERMISSIONS.SALES_EDIT))
@@ -456,9 +488,18 @@ onMounted(async () => {
         <h1 class="page-title">{{ t('sales.title') }}</h1>
         <p class="page-subtitle">{{ t('sales.subtitle') }}</p>
       </div>
-      <button v-if="canCreate && !draft" class="btn btn-primary" @click="startNew">
-        <AppIcon name="plus" :size="16" /> {{ t('sales.newSale') }}
-      </button>
+      <div class="head-actions">
+        <!--
+          The list as it stands, filters and all — the export somebody wants is
+          what they are looking at, not a different list the button decided on.
+        -->
+        <button v-if="canExport" class="btn btn-secondary" @click="exportSales">
+          <AppIcon name="copy" :size="16" /> {{ t('common.exportCsv') }}
+        </button>
+        <button v-if="canCreate && !draft" class="btn btn-primary" @click="startNew">
+          <AppIcon name="plus" :size="16" /> {{ t('sales.newSale') }}
+        </button>
+      </div>
     </header>
 
     <!-- Totals --------------------------------------------------------- -->
@@ -955,6 +996,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .basis {
   color: var(--text-tertiary);
   display: block;

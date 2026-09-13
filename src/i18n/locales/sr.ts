@@ -12,6 +12,7 @@ export default {
   },
 
   common: {
+    exportCsv: 'Izvezi',
     saved: 'Sačuvano.',
     apply: 'Primeni',
     open: 'Otvori',

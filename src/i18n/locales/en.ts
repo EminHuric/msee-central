@@ -13,6 +13,7 @@ export default {
   },
 
   common: {
+    exportCsv: 'Export',
     saved: 'Saved.',
     apply: 'Apply',
     open: 'Open',
