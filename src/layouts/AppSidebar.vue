@@ -179,12 +179,17 @@ const sections = computed<NavSection[]>(() => {
         },
       ],
     },
-    {
-      titleKey: 'modules.groupSystem',
-      items: [{ to: '/settings', labelKey: 'nav.settings', icon: 'settings' }],
-    },
   ]
 
+  /*
+   * Settings is not in this list, on purpose.
+   *
+   * It lives pinned at the foot of the sidebar, where a settings link belongs and
+   * where it stays reachable without scrolling past the work. It used to be in
+   * both places at once — a section of its own AND the foot — which is a menu
+   * telling somebody the same thing twice and making them wonder whether the two
+   * lead anywhere different.
+   */
   return raw
     .map((section) => ({
       ...section,

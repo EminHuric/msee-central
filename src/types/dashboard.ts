@@ -96,8 +96,35 @@ export interface DashboardLayout {
 }
 
 /** What somebody sees before they have chosen anything. */
+/**
+ * What a dashboard shows before anybody has chosen.
+ *
+ * NOT EVERYTHING, WHICH IS WHAT IT USED TO BE. Fifteen blocks on first sight is
+ * not a generous default, it is a page nobody reads: the eye stops at the third
+ * card and the rest may as well not be drawn. A first screen should answer the
+ * questions somebody actually arrives with — what needs attention, what came in,
+ * what the money looks like, what happened — and let them add the rest when they
+ * miss it.
+ *
+ * Everything else is one click away in the picker and keeps its place in the
+ * order, so turning something on puts it where it belongs rather than at the end.
+ */
+const FIRST_SIGHT = [
+  'alerts',
+  'today',
+  'money',
+  'staybrain',
+  'serviceTotals',
+  'activity',
+]
+
 export function defaultLayout(uid: string): DashboardLayout {
-  return { uid, visible: [...WIDGET_IDS], updatedAt: '' }
+  /* Ordered by WIDGET_IDS, so the default reads in the intended order. */
+  return {
+    uid,
+    visible: WIDGET_IDS.filter((id) => FIRST_SIGHT.includes(id)),
+    updatedAt: '',
+  }
 }
 
 /**
