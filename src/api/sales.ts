@@ -68,6 +68,8 @@ export function blankSale(ownerUid: string | null, ownerName: string): Sale {
     affiliateId: null,
     affiliateName: '',
     value: moneyOf(0, BASE_CURRENCY),
+    commissionPercent: 0,
+    basisValue: null,
     payment: { ...NO_STRUCTURE },
     saleDate: today(),
     channel: 'inbound',

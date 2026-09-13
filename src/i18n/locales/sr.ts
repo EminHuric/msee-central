@@ -1968,6 +1968,10 @@ export default {
   },
 
   sales: {
+    asAmount: 'Iznos',
+    asPercent: 'Procenat',
+    basisPlaceholder: 'Koliko je donelo klijentu',
+    percentResult: 'Vrednost prodaje: {amount}',
     sold: 'Prodato',
     count: 'Prodaja',
     saleDate: 'Datum prodaje',
@@ -3056,6 +3060,14 @@ export default {
     needAmount: 'Upiši koliko dobija.',
   },
   staybrain: {
+    broughtBy: 'doneo {name}',
+    invoice: 'Fakturiši mesec',
+    invoiceMonth: 'Mesec',
+    invoiceTotal: 'Za fakturisanje',
+    invoiceCount: 'iz {n} rezervacija tog meseca',
+    invoiceRaise: 'Izdaj fakturu',
+    invoiceDescription: 'StayBrain provizija · {name} · {month}',
+    invoiced: 'Faktura zabeležena, čeka naplatu.',
     alreadyLinked: 'već koristi {name}',
     accountTaken: 'Taj nalog je već povezan sa {name}. Jedan rezervacioni nalog pripada jednom smeštaju.',
     pickHint: 'Dostupno jer si prijavljen kao administrator rezervacione platforme.',

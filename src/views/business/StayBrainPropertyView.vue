@@ -33,7 +33,12 @@ import RmsPropertyLogin from '@/components/RmsPropertyLogin.vue'
 import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
 import CreditEmployeeDialog from '@/components/CreditEmployeeDialog.vue'
 import { fetchApartments, fetchBookings } from '@/api/rms'
-import { fetchReservationsForListing, importMarkedBookings, totalsOf } from '@/api/staybrain'
+import {
+  fetchReservationsForListing,
+  importMarkedBookings,
+  invoiceEarnings,
+  totalsOf,
+} from '@/api/staybrain'
 import { readOne } from '@/api/store'
 import { formatDate } from '@/i18n'
 import { rmsConnectAs, rmsReady, rmsSession } from '@/lib/rms'
@@ -256,6 +261,52 @@ function paymentOf(row: Reservation): { status: string; paid: number; total: num
  */
 const crediting = ref<Reservation | null>(null)
 
+/* ---- invoicing a month --------------------------------------------- */
+
+const invoiceOpen = ref(false)
+const invoiceMonth = ref(new Date().toISOString().slice(0, 7))
+const invoicing = ref(false)
+
+/** The bookings of that month, which is what is being billed. */
+const invoiceRows = computed(() =>
+  ours.value.filter((row) => row.checkIn.startsWith(invoiceMonth.value)),
+)
+
+const invoiceTotal = computed(() => totalsOf(invoiceRows.value).revenueBaseMinor)
+
+/**
+ * Bill a month's commission as one invoice.
+ *
+ * ONE LINE PER MONTH, NOT ONE PER BOOKING. Fifty euros is owed the moment a guest
+ * is booked, but it becomes money when it is billed, and billing is monthly —
+ * a transaction per booking would fill the ledger with fifty-euro lines that no
+ * invoice matches.
+ *
+ * It writes into the ordinary Finance model as income against the client, marked
+ * pending: raising it is not the same as being paid, and the difference is what
+ * the outstanding figure is made of.
+ */
+async function invoice(): Promise<void> {
+  const row = listing.value
+  if (!row || invoicing.value) return
+
+  invoicing.value = true
+  try {
+    await invoiceEarnings(
+      row,
+      invoiceRows.value,
+      invoiceMonth.value,
+      t('staybrain.invoiceDescription', { name: row.name, month: invoiceMonth.value }),
+    )
+    ui.notify('ok', t('staybrain.invoiced'))
+    invoiceOpen.value = false
+  } catch (error) {
+    ui.notify('danger', (error as Error).message || t('errors.generic'))
+  } finally {
+    invoicing.value = false
+  }
+}
+
 function percentOf(row: Reservation): number | null {
   const booking = rmsBookings.value.find((b) => b.id === row.rmsBookingId)
   return booking?.mseeCommissionPercent || null
@@ -411,6 +462,50 @@ onMounted(load)
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">{{ t('staybrain.ourBookings') }}</h2>
+          <button
+            v-if="canSeeRevenue && !invoiceOpen"
+            class="btn btn-secondary btn-sm"
+            @click="invoiceOpen = true"
+          >
+            <AppIcon name="contract" :size="14" />
+            {{ t('staybrain.invoice') }}
+          </button>
+        </div>
+
+        <!--
+          Billing a month.
+
+          The month decides which bookings are on the invoice, and the total is
+          shown before anything is written — an invoice raised for the wrong month
+          is a conversation with a client, not an undo.
+        -->
+        <div v-if="invoiceOpen" class="card-body invoice">
+          <div class="field">
+            <label class="field-label" for="sb-month">{{ t('staybrain.invoiceMonth') }}</label>
+            <input id="sb-month" v-model="invoiceMonth" class="input" type="month" />
+          </div>
+
+          <div class="field">
+            <span class="field-label">{{ t('staybrain.invoiceTotal') }}</span>
+            <p class="invoice-sum">{{ money(invoiceTotal) }}</p>
+            <p class="field-hint">
+              {{ t('staybrain.invoiceCount', { n: invoiceRows.length }) }}
+            </p>
+          </div>
+
+          <div class="invoice-actions">
+            <button class="btn btn-ghost btn-sm" @click="invoiceOpen = false">
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              class="btn btn-primary btn-sm"
+              :disabled="invoicing || invoiceTotal <= 0"
+              @click="invoice"
+            >
+              <span v-if="invoicing" class="spinner" />
+              {{ t('staybrain.invoiceRaise') }}
+            </button>
+          </div>
         </div>
 
         <div v-if="!ours.length" class="empty">
@@ -427,6 +522,9 @@ onMounted(load)
                 {{ formatDate(row.checkIn) }} – {{ formatDate(row.checkOut) }}
                 <span class="tertiary">·</span>
                 {{ t('staybrain.nightsCount', { n: row.nights }) }}
+              </span>
+              <span v-if="row.ownerName" class="booking-meta">
+                {{ t('staybrain.broughtBy', { name: row.ownerName }) }}
               </span>
               <span v-if="row.note" class="booking-meta desc">{{ row.note }}</span>
             </div>
@@ -587,6 +685,25 @@ onMounted(load)
   gap: var(--space-3);
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.1fr) auto;
   padding: var(--space-3) var(--space-4);
+}
+
+.invoice {
+  align-items: flex-end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.invoice-sum {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  margin: 0;
+}
+
+.invoice-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 .booking-pay {

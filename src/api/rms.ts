@@ -192,6 +192,7 @@ export async function fetchBookings(workspaceId: string): Promise<RmsBooking[]> 
             data.mseeCommissionPercent != null ? Number(data.mseeCommissionPercent) : undefined,
           mseeCommissionAmount:
             data.mseeCommissionAmount != null ? Number(data.mseeCommissionAmount) : undefined,
+          mseeBroughtBy: data.mseeBroughtBy ? String(data.mseeBroughtBy) : undefined,
         }
       })
       .sort((a, b) => b.checkIn.localeCompare(a.checkIn))

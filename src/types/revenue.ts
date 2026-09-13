@@ -143,6 +143,21 @@ export interface Sale extends SoftDeletable {
   affiliateName: string
 
   value: Money
+  /**
+   * How the value was arrived at, when it was a share of somebody else's money.
+   *
+   * A sale is worth what we earn. Sometimes that is a price we quoted, and
+   * sometimes it is a percentage of what the work brought the client — and then
+   * two numbers stand behind the one that matters. Keeping them means the figure
+   * can be explained a year later, and re-applied if the basis is corrected,
+   * instead of being a total nobody can account for.
+   *
+   * Zero percent means it was not a percentage sale, which is the ordinary case.
+   */
+  commissionPercent: number
+  /** What the percentage was taken of. Null unless `commissionPercent` is set. */
+  basisValue: Money | null
+
   payment: PaymentStructure
   saleDate: string
   channel: SaleChannel

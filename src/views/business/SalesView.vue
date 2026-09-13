@@ -11,7 +11,7 @@
  * text precisely because nobody could have designed a field for it.
  */
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -91,6 +91,31 @@ const sortKey = ref<'date' | 'value' | 'client'>('date')
 const draft = ref<Sale | null>(null)
 const draftValue = ref(0)
 const draftCurrency = ref<CurrencyCode>(BASE_CURRENCY)
+
+/*
+ * How this sale's value is arrived at.
+ *
+ * `amount` is a price we quoted. `percent` is a share of what the work brought
+ * the client — enter what it brought them and our cut, and the value follows.
+ *
+ * Not a separate kind of sale and not a separate screen: it is the same sale
+ * reached a different way, so it belongs in the same list, the same dashboard and
+ * the same service. A second section would agree with this one only as long as
+ * somebody kept them agreeing.
+ */
+const valueMode = ref<'amount' | 'percent'>('amount')
+const draftBasis = ref(0)
+const draftPercent = ref(0)
+
+/** The value, when it is a percentage. Computed, never typed. */
+const percentValue = computed(
+  () => Math.round(draftBasis.value * draftPercent.value) / 100,
+)
+
+/* Keep the stored value in step with whichever way is chosen. */
+watch([valueMode, percentValue], () => {
+  if (valueMode.value === 'percent') draftValue.value = percentValue.value
+})
 const draftAdvance = ref(0)
 
 const pendingDelete = ref<Sale | null>(null)
@@ -168,6 +193,9 @@ function startNew(): void {
   draft.value = blankSale(auth.uid, auth.displayName ?? '')
   draftValue.value = 0
   draftCurrency.value = BASE_CURRENCY
+  valueMode.value = 'amount'
+  draftBasis.value = 0
+  draftPercent.value = 0
   draftAdvance.value = 0
 }
 
@@ -175,6 +203,9 @@ function startEdit(sale: Sale): void {
   draft.value = { ...sale, analysis: { ...sale.analysis }, payment: { ...sale.payment } }
   draftValue.value = fromMinor(sale.value.minor, sale.value.currency)
   draftCurrency.value = sale.value.currency
+  valueMode.value = sale.commissionPercent > 0 ? 'percent' : 'amount'
+  draftPercent.value = sale.commissionPercent || 0
+  draftBasis.value = sale.basisValue ? fromMinor(sale.basisValue.minor, sale.basisValue.currency) : 0
   draftAdvance.value = fromMinor(sale.payment?.advanceBaseMinor ?? 0, BASE_CURRENCY)
 }
 
@@ -257,6 +288,11 @@ async function commit(): Promise<void> {
       ...d,
       title: d.title.trim(),
       value: moneyOf(draftValue.value, draftCurrency.value, 1, d.saleDate),
+      commissionPercent: valueMode.value === 'percent' ? draftPercent.value : 0,
+      basisValue:
+        valueMode.value === 'percent'
+          ? moneyOf(draftBasis.value, draftCurrency.value, 1, d.saleDate)
+          : null,
       payment: {
         ...d.payment,
         advanceBaseMinor: toMinor(draftAdvance.value, BASE_CURRENCY),
@@ -492,7 +528,52 @@ onMounted(async () => {
 
           <div class="field">
             <label class="field-label" for="s-value">{{ t('sales.value') }}</label>
-            <input id="s-value" v-model.number="draftValue" class="input" type="number" step="0.01" />
+
+            <!-- Two ways to reach one number. Only the chosen one is asked for. -->
+            <div class="value-modes">
+              <label class="value-mode" :class="{ on: valueMode === 'amount' }">
+                <input type="radio" value="amount" v-model="valueMode" />
+                <span>{{ t('sales.asAmount') }}</span>
+              </label>
+              <label class="value-mode" :class="{ on: valueMode === 'percent' }">
+                <input type="radio" value="percent" v-model="valueMode" />
+                <span>{{ t('sales.asPercent') }}</span>
+              </label>
+            </div>
+
+            <input
+              v-if="valueMode === 'amount'"
+              id="s-value"
+              v-model.number="draftValue"
+              class="input"
+              type="number"
+              step="0.01"
+            />
+
+            <template v-else>
+              <div class="percent-row">
+                <input
+                  id="s-value"
+                  v-model.number="draftBasis"
+                  class="input"
+                  type="number"
+                  step="0.01"
+                  :placeholder="t('sales.basisPlaceholder')"
+                />
+                <input
+                  v-model.number="draftPercent"
+                  class="input narrow"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                />
+                <span class="tertiary">%</span>
+              </div>
+              <p class="field-hint">
+                {{ t('sales.percentResult', { amount: percentValue.toFixed(2) }) }}
+              </p>
+            </template>
           </div>
 
           <div class="field">
@@ -843,6 +924,37 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.value-modes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.value-mode {
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--text-xs);
+  gap: 4px;
+  padding: 2px 8px;
+}
+
+.value-mode.on {
+  border-color: var(--brand-500);
+}
+
+.percent-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.percent-row .narrow {
+  max-width: 80px;
+}
+
 .editor { border-color: var(--accent-soft-border); }
 .search { position: relative; display: flex; align-items: center; }
 .search-icon { position: absolute; left: var(--space-3); color: var(--text-tertiary); pointer-events: none; }

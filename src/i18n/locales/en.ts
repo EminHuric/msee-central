@@ -1969,6 +1969,10 @@ export default {
   },
 
   sales: {
+    asAmount: 'Amount',
+    asPercent: 'Percentage',
+    basisPlaceholder: 'What it brought the client',
+    percentResult: 'Sale value: {amount}',
     sold: 'Sold',
     count: 'Sales',
     saleDate: 'Sale date',
@@ -3057,6 +3061,14 @@ export default {
     needAmount: 'Say how much they get.',
   },
   staybrain: {
+    broughtBy: 'brought by {name}',
+    invoice: 'Invoice a month',
+    invoiceMonth: 'Month',
+    invoiceTotal: 'To invoice',
+    invoiceCount: 'from {n} booking(s) that month',
+    invoiceRaise: 'Raise the invoice',
+    invoiceDescription: 'StayBrain commission · {name} · {month}',
+    invoiced: 'Invoice recorded, waiting to be paid.',
     alreadyLinked: 'already used by {name}',
     accountTaken: 'That account is already linked to {name}. One reservation account belongs to one property.',
     pickHint: 'Available because you are signed in as an administrator of the reservation platform.',

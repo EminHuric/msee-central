@@ -227,7 +227,9 @@ export async function importMarkedBookings(
       /* What was agreed on the booking, or the listing's standing terms. */
       earning,
       ownerUid: null,
-      ownerName: '',
+      /* Who brought it, as named in the reservation system. A name and not an
+       * account: the other system has no idea who our people are. */
+      ownerName: booking.mseeBroughtBy ?? '',
       deletedAt: null,
       deletedBy: null,
       deletedByName: '',

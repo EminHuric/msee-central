@@ -283,6 +283,8 @@ export interface RmsBooking {
    */
   mseeCommissionPercent?: number
   mseeCommissionAmount?: number
+  /** Which person at the agency brought it, as typed over there. */
+  mseeBroughtBy?: string
 }
 
 /** An RMS account, from its `users` collection. */
