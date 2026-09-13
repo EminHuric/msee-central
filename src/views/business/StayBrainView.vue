@@ -31,7 +31,7 @@ import {
 } from '@/api/staybrain'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { BASE_CURRENCY, formatMoney } from '@/types/money'
+import { BASE_CURRENCY, formatMoney, type CurrencyCode } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
 import { EMPTY_TOTALS, type StayBrainListing } from '@/types/staybrain'
 import type { Reservation } from '@/types/reservations'
@@ -51,7 +51,36 @@ const deleting = ref(false)
 const canManage = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_MANAGE))
 const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW_REVENUE))
 
-const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
+/**
+ * StayBrain money, in the currency it was actually agreed in.
+ *
+ * THIS WAS SHOWING €997 AS "997 RSD". Every amount here is entered against a
+ * property that prices in its own currency, and the whole app records amounts
+ * with a rate of 1 — so `baseMinor` equals `minor` and the number is still euros.
+ * Formatting it as the base currency put a Serbian label on a euro figure, which
+ * is not a rounding problem but a wrong answer.
+ *
+ * Until a real exchange rate is kept per day, the honest thing is to say which
+ * currency the number is in, and that is the property's.
+ */
+const moneyIn = (minor: number, currency: CurrencyCode) =>
+  formatMoney(minor, currency, locale.value)
+
+/**
+ * The currency the page-wide totals are shown in.
+ *
+ * Every property in practice prices in the same currency, and while that holds
+ * the totals are true. If two ever disagree there is no honest single total at a
+ * rate of 1, so it falls back to the company's base currency rather than
+ * inventing a conversion.
+ */
+const summaryCurrency = computed<CurrencyCode>(() => {
+  const used = new Set(listings.value.map((row) => row.currency))
+  const only = [...used]
+  return used.size === 1 && only[0] ? only[0] : BASE_CURRENCY
+})
+
+const money = (minor: number) => formatMoney(minor, summaryCurrency.value, locale.value)
 
 /**
  * What this property earns us, in words.
@@ -256,20 +285,20 @@ onMounted(load)
               </div>
               <div>
                 <dt>{{ t('staybrain.ourTurnover') }}</dt>
-                <dd>{{ money(valueOf(listing).turnoverBaseMinor) }}</dd>
+                <dd>{{ moneyIn(valueOf(listing).turnoverBaseMinor, listing.currency) }}</dd>
               </div>
               <template v-if="canSeeRevenue">
                 <div>
                   <dt>{{ t('staybrain.joinFeeShort') }}</dt>
-                  <dd>{{ money(valueOf(listing).feeBaseMinor) }}</dd>
+                  <dd>{{ moneyIn(valueOf(listing).feeBaseMinor, listing.currency) }}</dd>
                 </div>
                 <div>
                   <dt>{{ t('staybrain.commissionShort') }}</dt>
-                  <dd>{{ money(valueOf(listing).commissionBaseMinor) }}</dd>
+                  <dd>{{ moneyIn(valueOf(listing).commissionBaseMinor, listing.currency) }}</dd>
                 </div>
                 <div class="total">
                   <dt>{{ t('staybrain.earnedTotal') }}</dt>
-                  <dd class="brand">{{ money(valueOf(listing).totalBaseMinor) }}</dd>
+                  <dd class="brand">{{ moneyIn(valueOf(listing).totalBaseMinor, listing.currency) }}</dd>
                 </div>
               </template>
             </dl>

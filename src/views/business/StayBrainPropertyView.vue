@@ -38,7 +38,7 @@ import { formatDate } from '@/i18n'
 import { rmsConnectAs, rmsReady, rmsSession } from '@/lib/rms'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { BASE_CURRENCY, formatMoney } from '@/types/money'
+import { formatMoney } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
 import type { RmsApartment, RmsBooking, StayBrainListing } from '@/types/staybrain'
 import type { Reservation } from '@/types/reservations'
@@ -84,10 +84,14 @@ const connecting = ref(false)
 const loginProblem = ref('')
 const canSeeRevenue = computed(() => auth.hasPermission(PERMISSIONS.STAYBRAIN_VIEW_REVENUE))
 
-const money = (minor: number) => formatMoney(minor, BASE_CURRENCY, locale.value)
-const listingMoney = (minor: number) =>
-  formatMoney(minor, listing.value?.currency ?? 'EUR', locale.value)
-
+/*
+ * Everything on this screen is in the property's own currency.
+ *
+ * The bookings come from a system that prices in euros and are recorded at a rate
+ * of 1, so labelling them with the company's base currency was printing a euro
+ * figure as dinars.
+ */
+const money = (minor: number) => formatMoney(minor, listing.value?.currency ?? 'EUR', locale.value)
 const totals = computed(() => totalsOf(ours.value))
 
 /** The property's own bookings — not ours, and never counted as sales. */
@@ -376,7 +380,7 @@ onMounted(load)
               <span class="unit-meta">{{ t('staybrain.sleeps', { n: unit.maxGuests }) }}</span>
               <span class="unit-meta">
                 <template v-if="unit.pricePerNight > 0">
-                  {{ listingMoney(Math.round(unit.pricePerNight * 100)) }}
+                  {{ money(Math.round(unit.pricePerNight * 100)) }}
                   {{ t('staybrain.perNight') }}
                 </template>
               </span>
@@ -432,9 +436,9 @@ onMounted(load)
               <span v-if="paymentOf(row)" class="paid" :class="`paid-${paymentOf(row)?.status}`">
                 {{ t(`paymentState.${paymentOf(row)?.status}`) }}
                 <span class="tertiary">
-                  {{ listingMoney(Math.round((paymentOf(row)?.paid ?? 0) * 100)) }}
+                  {{ money(Math.round((paymentOf(row)?.paid ?? 0) * 100)) }}
                   /
-                  {{ listingMoney(Math.round((paymentOf(row)?.total ?? 0) * 100)) }}
+                  {{ money(Math.round((paymentOf(row)?.total ?? 0) * 100)) }}
                 </span>
               </span>
               <span v-if="row.rmsReservationId" class="tertiary small">
