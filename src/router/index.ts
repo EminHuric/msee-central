@@ -297,3 +297,46 @@ export const router = createRouter({
   routes,
   scrollBehavior: () => ({ top: 0 }),
 })
+
+/**
+ * A page left open across a deployment, opening a screen it has not loaded yet.
+ *
+ * THIS IS WHY SOME PAGES CAME UP BLANK. Every screen is loaded on demand, and the
+ * file names carry a hash of their contents. A tab opened before a deployment
+ * holds the old list of names; the moment somebody visits a screen that tab has
+ * not loaded yet, it asks for a file that no longer exists, the import fails, and
+ * the router renders nothing. Screens already loaded keep working, which is
+ * exactly what makes it look like one particular page is broken.
+ *
+ * The cure is to fetch the page again, which is also what a person would do by
+ * hand if they knew. Guarded by a marker so a genuine, repeatable failure cannot
+ * turn into a reload loop: the second time, it gives up and lets the error show.
+ */
+const RELOAD_MARK = 'msee.stale-reload'
+
+router.onError((error: Error, to) => {
+  const stale =
+    /dynamically imported module|Importing a module script failed|Failed to fetch/i.test(
+      error.message,
+    )
+
+  if (!stale) return
+
+  try {
+    if (sessionStorage.getItem(RELOAD_MARK)) return
+    sessionStorage.setItem(RELOAD_MARK, '1')
+  } catch {
+    /* No storage: reload anyway. One extra reload beats a blank page. */
+  }
+
+  window.location.assign(to.fullPath)
+})
+
+/* A navigation that worked means the app is current again. */
+router.afterEach(() => {
+  try {
+    sessionStorage.removeItem(RELOAD_MARK)
+  } catch {
+    /* Nothing to clear, nothing to do. */
+  }
+})
