@@ -159,13 +159,21 @@ export function totalsByListing(rows: Reservation[]): Map<string, ListingTotals>
 export async function invoicedFor(
   clientId: string,
   serviceId: string | null,
-): Promise<{ invoicedBaseMinor: number; paidBaseMinor: number }> {
+): Promise<{ invoicedBaseMinor: number; paidBaseMinor: number; payments: Transaction[] }> {
   const rows = await readWhere<Transaction>('transactions', where('clientId', '==', clientId))
   const mine = rows.filter(
     (row) => row.type === 'income' && (!serviceId || row.serviceId === serviceId),
   )
 
   return {
+    /*
+     * The payments themselves, newest first.
+     *
+     * Returned alongside the totals because a total nobody can open is a total
+     * nobody can correct: a mistyped payment is only fixable if the thing that
+     * was mistyped can be found.
+     */
+    payments: [...mine].sort((a, b) => b.date.localeCompare(a.date)),
     invoicedBaseMinor: mine.reduce((n, row) => n + row.amount.baseMinor, 0),
     paidBaseMinor: mine
       .filter((row) => row.status === 'paid')

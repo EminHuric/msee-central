@@ -3108,6 +3108,7 @@ export default {
     needAmount: 'Say how much they get.',
   },
   staybrain: {
+    paymentRemoved: 'Payment removed. What is owed has been recalculated.',
     collect: 'Collecting from the owner',
     collectHint: 'What the bookings earned, what has arrived, and what is still owed.',
     recordPayment: 'Record a payment',

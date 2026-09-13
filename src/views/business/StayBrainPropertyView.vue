@@ -52,6 +52,8 @@ import { formatMoney } from '@/types/money'
 import { PERMISSIONS } from '@/types/permissions'
 import type { RmsApartment, RmsBooking, StayBrainListing } from '@/types/staybrain'
 import type { Reservation } from '@/types/reservations'
+import type { Transaction } from '@/types/revenue'
+import { deleteTransaction } from '@/api/finance'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -112,7 +114,11 @@ const totals = computed(() => totalsOf(ours.value))
  * Showing only the first would flatter the company and only the last would hide
  * what it has earned.
  */
-const billed = ref({ invoicedBaseMinor: 0, paidBaseMinor: 0 })
+const billed = ref<{ invoicedBaseMinor: number; paidBaseMinor: number; payments: Transaction[] }>({
+  invoicedBaseMinor: 0,
+  paidBaseMinor: 0,
+  payments: [],
+})
 
 /* ---- collecting from the owner --------------------------------------- */
 
@@ -168,12 +174,34 @@ async function commitPayment(): Promise<void> {
   }
 }
 
+/**
+ * Remove a payment that was recorded wrongly.
+ *
+ * To the recycle bin, like every other record, so a wrong figure is one click to
+ * undo rather than a second payment invented to cancel the first. The outstanding
+ * amount corrects itself because it was never stored — it is earned minus
+ * arrived, and this changes what arrived.
+ */
+async function removePayment(row: Transaction): Promise<void> {
+  busyId.value = row.id
+  try {
+    await deleteTransaction(row)
+    ui.notify('ok', t('staybrain.paymentRemoved'))
+    await loadBilling()
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    busyId.value = ''
+  }
+}
+
 async function loadBilling(): Promise<void> {
   const row = listing.value
   if (!row) return
   billed.value = await invoicedFor(row.clientId, await stayBrainServiceId()).catch(() => ({
     invoicedBaseMinor: 0,
     paidBaseMinor: 0,
+    payments: [],
   }))
 }
 
@@ -511,6 +539,23 @@ onMounted(load)
           </div>
         </div>
 
+        <!-- Each payment as it arrived, so a mistake can be found and undone. -->
+        <ul v-if="billed.payments.length" class="payments">
+          <li v-for="row in billed.payments" :key="row.id" class="payment">
+            <span>{{ formatDate(row.date) }}</span>
+            <span class="tertiary">{{ row.description }}</span>
+            <span class="payment-amount">{{ money(row.amount.baseMinor) }}</span>
+            <button
+              class="btn btn-ghost btn-sm danger"
+              :disabled="busyId === row.id"
+              :title="t('common.delete')"
+              @click="removePayment(row)"
+            >
+              <AppIcon name="trash" :size="13" />
+            </button>
+          </li>
+        </ul>
+
         <div v-if="payOpen" class="card-body pay-form">
           <div class="field">
             <label class="field-label" for="pay-amount">{{ t('staybrain.paidAmount') }}</label>
@@ -758,6 +803,30 @@ onMounted(load)
 
 .owing {
   color: var(--warn-500);
+}
+
+.payments {
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.payment {
+  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: var(--space-2) var(--space-4);
+}
+
+.payment + .payment {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.payment-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .pay-form {

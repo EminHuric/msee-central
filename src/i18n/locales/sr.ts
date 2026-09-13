@@ -3107,6 +3107,7 @@ export default {
     needAmount: 'Upiši koliko dobija.',
   },
   staybrain: {
+    paymentRemoved: 'Uplata uklonjena. Dug je ponovo izračunat.',
     collect: 'Naplata od vlasnika',
     collectHint: 'Koliko su rezervacije donele, koliko je stiglo, i koliko još duguje.',
     recordPayment: 'Zabeleži uplatu',
