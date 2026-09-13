@@ -1188,21 +1188,7 @@ service cloud.firestore {
      * ------------------------------------------------------------------ */
 
     match /companySettings/{key} {
-      /*
-       * Ordinary settings are everybody's; the notification relay is not.
-       *
-       * That one document holds a Telegram bot token, and a token in a document
-       * staff can read is a token in every member of staff's browser. Anyone
-       * could take it from the console and post as the company's bot. Confining
-       * it to owners is what makes "it does not leak" true rather than hoped for.
-       *
-       * The cost is stated where it is felt: a notification is sent by the
-       * browser that caused it, so an owner's actions reach Telegram and an
-       * employee's do not. For a company where the owner is the one being
-       * notified, that is the whole of the need — and the alternative, handing
-       * the token to everyone so that everyone can send, is exactly the leak.
-       */
-      allow read: if key == 'telegram' ? isOwner() : isInternal();
+      allow read: if isInternal();
       allow write: if can('company_settings.edit');
     }
 
