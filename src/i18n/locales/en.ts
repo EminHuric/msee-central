@@ -2880,6 +2880,7 @@ export default {
   },
 
   widget: {
+    serviceTotals: 'Totals by service',
     staybrain: 'StayBrain',
     customise: 'Customise',
     hint: 'Choose what appears on your dashboard, and in what order. You can only add what you are allowed to see.',

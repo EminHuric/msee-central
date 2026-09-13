@@ -873,7 +873,7 @@ onMounted(async () => {
         <StayBrainWidget v-if="shows('staybrain')" />
 
         <!-- Which service it came from --------------------------------- -->
-        <section v-if="serviceTotals.length" class="card">
+        <section v-if="shows('serviceTotals') && canMoney && serviceTotals.length" class="card">
           <div class="card-header">
             <div>
               <h2 class="card-title">{{ t('dashboard.byService') }}</h2>

@@ -55,6 +55,20 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'overview', labelKey: 'widget.overview', permission: PERMISSIONS.FINANCE_VIEW, wide: true },
   { id: 'moneyChart', labelKey: 'widget.moneyChart', permission: PERMISSIONS.FINANCE_VIEW },
   { id: 'byService', labelKey: 'widget.byService', permission: PERMISSIONS.FINANCE_VIEW },
+  /*
+   * The same question as the chart above, answered in figures.
+   *
+   * Both exist because they are read differently: a chart shows which service is
+   * biggest at a glance, a list gives the exact amount and the number of sales.
+   * Either can be switched off, which is the point of this file — somebody who
+   * wants one of them should not be given both.
+   */
+  {
+    id: 'serviceTotals',
+    labelKey: 'widget.serviceTotals',
+    permission: PERMISSIONS.FINANCE_VIEW,
+    wide: true,
+  },
   { id: 'bySource', labelKey: 'widget.bySource', permission: PERMISSIONS.FINANCE_VIEW },
 
   /* ---- StayBrain ----------------------------------------------------- */

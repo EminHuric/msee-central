@@ -2879,6 +2879,7 @@ export default {
   },
 
   widget: {
+    serviceTotals: 'Zbir po uslugama',
     staybrain: 'StayBrain',
     customise: 'Prilagodi',
     hint: 'Izaberi šta se pojavljuje na tvojoj tabli i kojim redom. Možeš dodati samo ono što smeš da vidiš.',
