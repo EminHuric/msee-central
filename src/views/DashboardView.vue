@@ -18,7 +18,7 @@
  * implementation to keep in step.
  */
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -648,9 +648,37 @@ function collectInBackground(): void {
   })
 }
 
+/**
+ * Bring the page back up to date when somebody returns to it.
+ *
+ * WHY THIS WAS MISSING AND FELT BROKEN. A phone keeps a page alive for days: open
+ * the app on Monday, glance at it on Wednesday, and the figures are Monday's
+ * because nothing asked for them again. It looks exactly like a system that does
+ * not work, and it was the honest complaint behind "the numbers do not change".
+ *
+ * Coming back is the signal — it is the moment somebody wants to know, and it is
+ * free to notice. Throttled to a minute so flicking between two apps does not
+ * re-read the database each time.
+ */
+let lastSeen = Date.now()
+
+async function onReturn(): Promise<void> {
+  if (document.visibilityState !== 'visible') return
+  if (Date.now() - lastSeen < 60_000) return
+
+  lastSeen = Date.now()
+  snap.value = await loadSnapshot()
+  collectInBackground()
+}
+
 onMounted(async () => {
   await load()
   collectInBackground()
+  document.addEventListener('visibilitychange', onReturn)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onReturn)
 })
 </script>
 

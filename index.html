@@ -6,6 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="noindex, nofollow" />
+
+    <!--
+      Installable on a phone: a real icon, a real name, and no browser chrome.
+
+      There is deliberately NO service worker. One would let the app open without
+      a connection, and what it would open is a copy of yesterday's figures — a
+      business system that shows stale money while looking perfectly normal is
+      worse than one that says it needs a connection. Every load comes from the
+      server, so what is on screen is what is in the database.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MsEe" />
+    <meta name="theme-color" content="#0f1115" />
     <title>MsEe Central</title>
     <script>
       // Applied before first paint so the app never flashes the wrong theme.
