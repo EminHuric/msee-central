@@ -2390,6 +2390,16 @@ export default {
   },
 
   analytics: {
+    serviceTable: 'Svaka usluga, i da li raste',
+    serviceTableHint: 'Prodato u izabranom periodu. Rang kaže koja najviše donosi; poslednje dve kolone kažu koja raste.',
+    service: 'Usluga',
+    share: 'Udeo',
+    vsPrev: 'vs prethodno',
+    vsYear: 'vs prošla godina',
+    best: 'najprodavanije',
+    noService: 'Bez usluge',
+    pace: 'Ovim tempom mesec se završava oko {amount}',
+    paceBasis: '{amount} prodato do {day}. dana od {days} — računica, ne prognoza',
     soldOverTime: 'Prodato kroz vreme',
     byAffiliate: 'Po partneru',
     title: 'Analitika',
@@ -2407,7 +2417,6 @@ export default {
     noData: 'Još nema dovoljno podataka',
     noDataHint: 'Grafikoni se popunjavaju kako se upisuju rad i novac.',
     unattributed: 'Nepripisano',
-    share: 'Udeo',
   },
 
   notificationKind: {

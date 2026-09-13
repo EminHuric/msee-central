@@ -2391,6 +2391,16 @@ export default {
   },
 
   analytics: {
+    serviceTable: 'Every service, and whether it is growing',
+    serviceTableHint: 'Sold in the chosen period. A ranking says which earns most; the last two columns say which is rising.',
+    service: 'Service',
+    share: 'Share',
+    vsPrev: 'vs before',
+    vsYear: 'vs last year',
+    best: 'best seller',
+    noService: 'No service',
+    pace: 'At this rate the month ends near {amount}',
+    paceBasis: '{amount} sold by day {day} of {days} — arithmetic, not a forecast',
     soldOverTime: 'Sold over time',
     byAffiliate: 'By partner',
     title: 'Analytics',
@@ -2408,7 +2418,6 @@ export default {
     noData: 'Not enough data yet',
     noDataHint: 'Charts fill in as work and money are recorded.',
     unattributed: 'Unattributed',
-    share: 'Share',
   },
 
   notificationKind: {

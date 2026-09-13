@@ -29,6 +29,7 @@ import {
   loadSnapshot,
   periodOf,
   previousPeriod,
+  sameSpanLastYear,
   seriesOver,
   slice,
   soldByChannel,
@@ -51,6 +52,88 @@ const earlier = computed(() => slice(all.value, previousPeriod(period.value)))
 
 const figures = computed(() => companyFigures(current.value, all.value))
 const before = computed(() => companyFigures(earlier.value, all.value))
+
+/**
+ * Every service, with what it earned and whether that is growing.
+ *
+ * THE TABLE EXISTS BECAUSE A RANKING IS NOT AN ANSWER. Which service earns most
+ * is worth knowing once; what somebody actually decides on is whether each one is
+ * rising or falling, and against what. So each row carries three facts that a
+ * bar chart cannot: the share of the company it accounts for, how it compares
+ * with the period before, and how it compares with the same stretch a year ago.
+ *
+ * Sold rather than collected, deliberately. This answers "what is selling", and
+ * a service that sells well but is billed slowly is still selling well — the
+ * money question is answered by the finance figures above.
+ */
+const serviceRows = computed(() => {
+  const total = (rows: typeof current.value.sales) =>
+    rows.reduce((sum, row) => sum + row.value.baseMinor, 0)
+
+  const group = (rows: typeof current.value.sales) => {
+    const map = new Map<string, { name: string; value: number; count: number }>()
+    rows.forEach((row) => {
+      const key = row.serviceId ?? 'none'
+      const entry = map.get(key) ?? {
+        name: row.serviceName || t('analytics.noService'),
+        value: 0,
+        count: 0,
+      }
+      entry.value += row.value.baseMinor
+      entry.count += 1
+      map.set(key, entry)
+    })
+    return map
+  }
+
+  const now = group(current.value.sales)
+  const prev = group(earlier.value.sales)
+  const year = group(slice(all.value, sameSpanLastYear(period.value)).sales)
+  const whole = total(current.value.sales)
+
+  return [...now.entries()]
+    .map(([id, row]) => ({
+      id,
+      name: row.name,
+      value: row.value,
+      count: row.count,
+      /* What portion of everything sold this period came from this service. */
+      share: whole > 0 ? Math.round((row.value / whole) * 100) : 0,
+      vsPrev: change(row.value, prev.get(id)?.value ?? 0),
+      vsYear: change(row.value, year.get(id)?.value ?? 0),
+    }))
+    .sort((a, b) => b.value - a.value)
+})
+
+/** Percentage change, or null when there is nothing to compare against. */
+function change(now: number, then: number): number | null {
+  if (then <= 0) return null
+  return Math.round(((now - then) / then) * 100)
+}
+
+/**
+ * Where this month lands if the rest of it goes like the part already gone.
+ *
+ * A PACE, NOT A PREDICTION, and the label says so. It is this month's sales
+ * divided by the days elapsed, times the days in the month — arithmetic anybody
+ * can check, with no model and no confidence anybody has to take on trust.
+ *
+ * A real forecast needs seasons to learn from, and a company with a few months of
+ * history has none: it would produce a convincing line drawn from noise, which is
+ * worse than no line. When there is a year to compare with, this is the place it
+ * belongs.
+ */
+const pace = computed(() => {
+  const now = new Date()
+  const month = slice(all.value, periodOf('month'))
+  const sold = month.sales.reduce((sum, row) => sum + row.value.baseMinor, 0)
+
+  const day = now.getUTCDate()
+  const days = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
+  if (day < 3 || sold <= 0) return null
+
+  return { sold, projected: Math.round((sold / day) * days), day, days }
+})
 
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
@@ -317,11 +400,101 @@ onMounted(load)
           </div>
         </section>
       </div>
+
+      <!--
+        Every service, side by side.
+
+        A ranking says which earns most; this says whether each is rising, and
+        against what. Those are the two different questions, and only the second
+        one changes what anybody does next.
+      -->
+      <section v-if="serviceRows.length" class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">{{ t('analytics.serviceTable') }}</h2>
+            <p class="field-hint">{{ t('analytics.serviceTableHint') }}</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('analytics.service') }}</th>
+                <th class="num">{{ t('sales.sold') }}</th>
+                <th class="num">{{ t('sales.count') }}</th>
+                <th class="num">{{ t('analytics.share') }}</th>
+                <th class="num">{{ t('analytics.vsPrev') }}</th>
+                <th class="num">{{ t('analytics.vsYear') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in serviceRows" :key="row.id">
+                <td>
+                  {{ row.name }}
+                  <!-- The best seller, said once rather than left to be counted. -->
+                  <span v-if="i === 0" class="best">{{ t('analytics.best') }}</span>
+                </td>
+                <td class="num strong">{{ money(row.value) }}</td>
+                <td class="num">{{ row.count }}</td>
+                <td class="num">{{ row.share }}%</td>
+                <td class="num" :class="row.vsPrev !== null ? (row.vsPrev >= 0 ? 'up' : 'down') : ''">
+                  {{ row.vsPrev === null ? '—' : `${row.vsPrev > 0 ? '+' : ''}${row.vsPrev}%` }}
+                </td>
+                <td class="num" :class="row.vsYear !== null ? (row.vsYear >= 0 ? 'up' : 'down') : ''">
+                  {{ row.vsYear === null ? '—' : `${row.vsYear > 0 ? '+' : ''}${row.vsYear}%` }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!--
+          Where the month lands at this rate. Arithmetic, not a forecast, and it
+          says so — a model trained on a few months would draw a convincing line
+          through noise.
+        -->
+        <div v-if="pace" class="card-body pace">
+          <span>{{ t('analytics.pace', { amount: money(pace.projected) }) }}</span>
+          <span class="tertiary">
+            {{ t('analytics.paceBasis', { amount: money(pace.sold), day: pace.day, days: pace.days }) }}
+          </span>
+        </div>
+      </section>
     </template>
   </div>
 </template>
 
 <style scoped>
+.table-wrap {
+  overflow-x: auto;
+}
+
+.best {
+  background: var(--accent-soft-bg);
+  border-radius: var(--radius-full);
+  color: var(--brand-700);
+  font-size: var(--text-xs);
+  margin-left: 6px;
+  padding: 1px 7px;
+}
+
+.up {
+  color: var(--ok-500);
+}
+
+.down {
+  color: var(--danger-500);
+}
+
+.pace {
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-sm);
+  gap: 2px;
+}
+
 .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
