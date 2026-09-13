@@ -60,6 +60,20 @@ const sections = computed<NavSection[]>(() => {
    * Settings, because they are configured once and then left alone. Beside
    * the daily work they only made this list longer.
    */
+  /*
+   * Two modules are deliberately absent from this menu.
+   *
+   * The affiliate programme and bonus programmes are built and work, and this
+   * company uses neither — no affiliate, no award ever made. A menu that offers
+   * five modules of which two are always empty reads as a system half finished,
+   * and every one of them is a place something can break in a product nobody is
+   * exercising.
+   *
+   * Their routes and screens are untouched, so putting either back is deleting a
+   * comment and adding an entry here. Rewarding somebody is not what was lost
+   * with the bonus programmes: that lives on the employee, where a person is
+   * looking when they decide to do it.
+   */
   const raw: NavSection[] = [
     {
       titleKey: 'modules.groupMain',
@@ -105,7 +119,6 @@ const sections = computed<NavSection[]>(() => {
           permission: PERMISSIONS.SERVICES_VIEW,
           internalOnly: true,
         },
-        { to: '/affiliates', labelKey: 'modules.affiliateProgram', icon: 'gift' },
         {
           to: '/finance',
           labelKey: 'modules.finance',
@@ -130,13 +143,6 @@ const sections = computed<NavSection[]>(() => {
           labelKey: 'modules.goals',
           icon: 'flag',
           permission: PERMISSIONS.GOALS_VIEW,
-          internalOnly: true,
-        },
-        {
-          to: '/bonuses',
-          labelKey: 'modules.bonuses',
-          icon: 'gift',
-          permission: PERMISSIONS.BONUSES_VIEW,
           internalOnly: true,
         },
         {
