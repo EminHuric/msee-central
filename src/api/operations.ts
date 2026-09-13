@@ -13,6 +13,7 @@
  */
 
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { BASE_CURRENCY } from '@/types/money'
 
 import { getDb } from '@/lib/firebase'
 import { logAudit } from './audit'
@@ -424,7 +425,7 @@ const termsRef = (serviceId: string) =>
 export function blankTerms(serviceId: string): ServiceTerms {
   return {
     serviceId,
-    defaultPrice: moneyOf(0, 'RSD'),
+    defaultPrice: moneyOf(0, BASE_CURRENCY),
     payment: { ...NO_STRUCTURE },
     commissionPercent: 0,
     updatedAt: '',

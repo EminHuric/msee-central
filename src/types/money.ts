@@ -14,11 +14,23 @@
  *    morning. What something was worth when it happened does not change.
  */
 
-export const CURRENCIES = ['RSD', 'EUR'] as const
+export const CURRENCIES = ['EUR', 'RSD'] as const
 export type CurrencyCode = (typeof CURRENCIES)[number]
 
-/** What every total is expressed in. Company-wide. */
-export const BASE_CURRENCY: CurrencyCode = 'RSD'
+/**
+ * What every total is expressed in. Company-wide.
+ *
+ * EURO, because that is what this company actually trades in: the properties
+ * price in euros, the commissions are agreed in euros, and the clients pay in
+ * euros. It was dinars, and with every amount recorded at a rate of 1 that meant
+ * euro figures wearing a dinar label — €997 reading as "997 RSD".
+ *
+ * Dinars remain available per amount for the occasional local invoice. Such an
+ * amount needs a real rate on its own date to join a company total honestly; at
+ * a rate of 1 it is counted as though one dinar were one euro, which is only
+ * acceptable while nobody is recording dinars.
+ */
+export const BASE_CURRENCY: CurrencyCode = 'EUR'
 
 export const CURRENCY_INFO: Record<CurrencyCode, { symbol: string; minorUnits: number }> = {
   RSD: { symbol: 'RSD', minorUnits: 2 },

@@ -19,7 +19,7 @@ import { notify } from './notifications'
 import { actor, readAll, readOne, readWhere, today, where, write } from './store'
 import { addEntry } from './wallet'
 
-import { toMinor, type CurrencyCode, type Money } from '@/types/money'
+import { BASE_CURRENCY, toMinor, type CurrencyCode, type Money } from '@/types/money'
 import {
   EMPTY_ANALYSIS,
   NO_STRUCTURE,
@@ -67,7 +67,7 @@ export function blankSale(ownerUid: string | null, ownerName: string): Sale {
     ownerName,
     affiliateId: null,
     affiliateName: '',
-    value: moneyOf(0, 'RSD'),
+    value: moneyOf(0, BASE_CURRENCY),
     payment: { ...NO_STRUCTURE },
     saleDate: today(),
     channel: 'inbound',

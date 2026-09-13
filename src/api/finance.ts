@@ -14,6 +14,7 @@
  */
 
 import { logAudit } from './audit'
+import { BASE_CURRENCY } from '@/types/money'
 import { logActivity, remove } from './records'
 import { notify } from './notifications'
 import {
@@ -56,7 +57,7 @@ export function blankTransaction(type: TransactionType = 'income'): Transaction 
     type,
     category: type === 'income' ? 'service_payment' : 'other',
     description: '',
-    amount: moneyOf(0, 'RSD'),
+    amount: moneyOf(0, BASE_CURRENCY),
     date: today(),
     dueDate: null,
     status: 'paid',

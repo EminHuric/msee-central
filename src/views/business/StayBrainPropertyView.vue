@@ -31,6 +31,7 @@ import { useRoute } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import RmsPropertyLogin from '@/components/RmsPropertyLogin.vue'
 import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
+import CreditEmployeeDialog from '@/components/CreditEmployeeDialog.vue'
 import { fetchApartments, fetchBookings } from '@/api/rms'
 import { fetchReservationsForListing, importMarkedBookings, totalsOf } from '@/api/staybrain'
 import { readOne } from '@/api/store'
@@ -246,6 +247,15 @@ function paymentOf(row: Reservation): { status: string; paid: number; total: num
 }
 
 /** The percentage typed on the booking in the RMS, when there was one. */
+/*
+ * Paying somebody for a booking they brought.
+ *
+ * Held here rather than on the row so only one dialog exists at a time, and so
+ * closing it cannot leave a half-filled form attached to a reservation that has
+ * since been refreshed out from under it.
+ */
+const crediting = ref<Reservation | null>(null)
+
 function percentOf(row: Reservation): number | null {
   const booking = rmsBookings.value.find((b) => b.id === row.rmsBookingId)
   return booking?.mseeCommissionPercent || null
@@ -445,10 +455,37 @@ onMounted(load)
                 {{ row.rmsReservationId }}
               </span>
             </div>
+
+            <!--
+              Who gets paid for it.
+
+              Beside the booking, because that is where somebody is looking when
+              they decide — not on a separate screen where the guest's name and
+              what it earned would have to be remembered.
+            -->
+            <div class="booking-pay">
+              <button
+                v-if="canSeeRevenue && (row.earning?.baseMinor ?? 0) > 0"
+                class="btn btn-ghost btn-sm"
+                @click="crediting = row"
+              >
+                <AppIcon name="wallet" :size="14" />
+                {{ t('credit.give') }}
+              </button>
+            </div>
           </li>
         </ul>
       </section>
     </template>
+
+    <CreditEmployeeDialog
+      :open="crediting !== null"
+      :commission-base-minor="crediting?.earning?.baseMinor ?? 0"
+      :label="`${crediting?.guestName ?? ''} · ${listing?.name ?? ''}`"
+      :sale-id="crediting ? `sb_${crediting.id}` : null"
+      @done="crediting = null"
+      @close="crediting = null"
+    />
   </div>
 </template>
 
@@ -548,8 +585,13 @@ onMounted(load)
   align-items: center;
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.1fr) auto;
   padding: var(--space-3) var(--space-4);
+}
+
+.booking-pay {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .booking-main,
