@@ -51,6 +51,7 @@ import { balanceOf } from '@/types/revenue'
 import { formatDate, formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { remindAboutMoney } from '@/api/reminders'
 import { syncAllListings } from '@/api/staybrain'
 import { OPEN_STAGES } from '@/types/business'
 import { BASE_CURRENCY, formatMoney, formatMoneyShort } from '@/types/money'
@@ -583,6 +584,18 @@ function collectInBackground(): void {
     .catch(() => {
       /* Already swallowed inside; this is the belt to that pair of braces. */
     })
+
+  /*
+   * And look ahead, over the snapshot already in hand.
+   *
+   * Every other notification reports something that has happened; this is the
+   * one that can still change the outcome — an invoice a month unpaid, a payment
+   * due in three days. It costs no reads, because the figures above were loaded
+   * from the same snapshot.
+   */
+  void remindAboutMoney(snap.value).catch(() => {
+    /* A reminder that fails must never be visible as a broken dashboard. */
+  })
 }
 
 onMounted(async () => {
