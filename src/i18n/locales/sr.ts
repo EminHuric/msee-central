@@ -1968,6 +1968,8 @@ export default {
   },
 
   sales: {
+    paidOn: 'Plaćeno dana',
+    paidOnHint: 'Dan kad je novac stigao, a to nije uvek danas.',
     asAmount: 'Iznos',
     asPercent: 'Procenat',
     basisPlaceholder: 'Koliko je donelo klijentu',
@@ -3060,6 +3062,10 @@ export default {
     needAmount: 'Upiši koliko dobija.',
   },
   staybrain: {
+    removeReservation: 'Ukloni iz MsEe Central-a',
+    removeReservationTitle: 'Ukloniti ovu rezervaciju?',
+    removeReservationMessage: 'Rezervacija za {guest} ostaje u rezervacionom sistemu tačno kakva jeste. Ovo uklanja naš zapis da smo je doneli, i prodaju uz nju.',
+    reservationRemoved: 'Uklonjeno. Sama rezervacija je netaknuta.',
     invoicedLabel: 'Fakturisano',
     paidSoFar: 'naplaćeno {amount}',
     allPaid: 'sve naplaćeno',

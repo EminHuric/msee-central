@@ -29,19 +29,19 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RmsPropertyLogin from '@/components/RmsPropertyLogin.vue'
 import StayBrainCalendar from '@/components/StayBrainCalendar.vue'
-import CreditEmployeeDialog from '@/components/CreditEmployeeDialog.vue'
 import { fetchApartments, fetchBookings } from '@/api/rms'
 import {
   fetchReservationsForListing,
   importMarkedBookings,
-  invoiceEarnings,
   invoicedFor,
   stayBrainServiceId,
   totalsOf,
 } from '@/api/staybrain'
-import { readOne } from '@/api/store'
+import { patch, readOne } from '@/api/store'
+import { deleteReservation } from '@/api/reservations'
 import { formatDate } from '@/i18n'
 import { rmsConnectAs, rmsReady, rmsSession } from '@/lib/rms'
 import { useAuthStore } from '@/stores/auth'
@@ -281,55 +281,54 @@ function paymentOf(row: Reservation): { status: string; paid: number; total: num
  * closing it cannot leave a half-filled form attached to a reservation that has
  * since been refreshed out from under it.
  */
-const crediting = ref<Reservation | null>(null)
+/* ---- removing one ---------------------------------------------------- */
 
-/* ---- invoicing a month --------------------------------------------- */
-
-const invoiceOpen = ref(false)
-const invoiceMonth = ref(new Date().toISOString().slice(0, 7))
-const invoicing = ref(false)
-
-/** The bookings of that month, which is what is being billed. */
-const invoiceRows = computed(() =>
-  ours.value.filter((row) => row.checkIn.startsWith(invoiceMonth.value)),
-)
-
-const invoiceTotal = computed(() => totalsOf(invoiceRows.value).revenueBaseMinor)
+const pendingDelete = ref<Reservation | null>(null)
+const busyId = ref('')
 
 /**
- * Bill a month's commission as one invoice.
+ * Take a reservation out of MsEe Central.
  *
- * ONE LINE PER MONTH, NOT ONE PER BOOKING. Fifty euros is owed the moment a guest
- * is booked, but it becomes money when it is billed, and billing is monthly —
- * a transaction per booking would fill the ledger with fifty-euro lines that no
- * invoice matches.
+ * IT DOES NOT TOUCH THE RESERVATION SYSTEM. The booking there is the property's
+ * and stays exactly as it is; this removes our record of having brought it, and
+ * with it the sale — which is the point, because the rows worth removing are the
+ * ones that were never really ours.
  *
- * It writes into the ordinary Finance model as income against the client, marked
- * pending: raising it is not the same as being paid, and the difference is what
- * the outstanding figure is made of.
+ * To the recycle bin, so a mistake is one click back. Re-marking the booking over
+ * there would bring it in again, which is the right way to undo it properly.
  */
-async function invoice(): Promise<void> {
-  const row = listing.value
-  if (!row || invoicing.value) return
+async function removeReservation(): Promise<void> {
+  const row = pendingDelete.value
+  if (!row) return
 
-  invoicing.value = true
+  busyId.value = row.id
   try {
-    await invoiceEarnings(
-      row,
-      invoiceRows.value,
-      invoiceMonth.value,
-      t('staybrain.invoiceDescription', { name: row.name, month: invoiceMonth.value }),
-    )
-    ui.notify('ok', t('staybrain.invoiced'))
-    invoiceOpen.value = false
-    await loadBilling()
-  } catch (error) {
-    ui.notify('danger', (error as Error).message || t('errors.generic'))
+    await deleteReservation(row)
+    await patch('sales', `sb_${row.id}`, {
+      deletedAt: new Date().toISOString(),
+      deletedBy: '',
+      deletedByName: '',
+    }).catch(() => {})
+
+    ui.notify('ok', t('staybrain.reservationRemoved'))
+    pendingDelete.value = null
+    ours.value = await fetchReservationsForListing(listingId.value)
+  } catch {
+    ui.notify('danger', t('errors.generic'))
   } finally {
-    invoicing.value = false
+    busyId.value = ''
   }
 }
 
+/** The percentage typed on the booking in the RMS, when there was one. */
+/*
+ * Paying somebody for a booking they brought.
+ *
+ * Held here rather than on the row so only one dialog exists at a time, and so
+ * closing it cannot leave a half-filled form attached to a reservation that has
+ * since been refreshed out from under it.
+ */
+/** The percentage typed on the booking in the reservation system, if any. */
 function percentOf(row: Reservation): number | null {
   const booking = rmsBookings.value.find((b) => b.id === row.rmsBookingId)
   return booking?.mseeCommissionPercent || null
@@ -500,50 +499,6 @@ onMounted(load)
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">{{ t('staybrain.ourBookings') }}</h2>
-          <button
-            v-if="canSeeRevenue && !invoiceOpen"
-            class="btn btn-secondary btn-sm"
-            @click="invoiceOpen = true"
-          >
-            <AppIcon name="contract" :size="14" />
-            {{ t('staybrain.invoice') }}
-          </button>
-        </div>
-
-        <!--
-          Billing a month.
-
-          The month decides which bookings are on the invoice, and the total is
-          shown before anything is written — an invoice raised for the wrong month
-          is a conversation with a client, not an undo.
-        -->
-        <div v-if="invoiceOpen" class="card-body invoice">
-          <div class="field">
-            <label class="field-label" for="sb-month">{{ t('staybrain.invoiceMonth') }}</label>
-            <input id="sb-month" v-model="invoiceMonth" class="input" type="month" />
-          </div>
-
-          <div class="field">
-            <span class="field-label">{{ t('staybrain.invoiceTotal') }}</span>
-            <p class="invoice-sum">{{ money(invoiceTotal) }}</p>
-            <p class="field-hint">
-              {{ t('staybrain.invoiceCount', { n: invoiceRows.length }) }}
-            </p>
-          </div>
-
-          <div class="invoice-actions">
-            <button class="btn btn-ghost btn-sm" @click="invoiceOpen = false">
-              {{ t('common.cancel') }}
-            </button>
-            <button
-              class="btn btn-primary btn-sm"
-              :disabled="invoicing || invoiceTotal <= 0"
-              @click="invoice"
-            >
-              <span v-if="invoicing" class="spinner" />
-              {{ t('staybrain.invoiceRaise') }}
-            </button>
-          </div>
         </div>
 
         <div v-if="!ours.length" class="empty">
@@ -601,12 +556,12 @@ onMounted(load)
             -->
             <div class="booking-pay">
               <button
-                v-if="canSeeRevenue && (row.earning?.baseMinor ?? 0) > 0"
-                class="btn btn-ghost btn-sm"
-                @click="crediting = row"
+                class="btn btn-ghost btn-sm danger"
+                :disabled="busyId === row.id"
+                :title="t('staybrain.removeReservation')"
+                @click="pendingDelete = row"
               >
-                <AppIcon name="wallet" :size="14" />
-                {{ t('credit.give') }}
+                <AppIcon name="trash" :size="14" />
               </button>
             </div>
           </li>
@@ -614,13 +569,14 @@ onMounted(load)
       </section>
     </template>
 
-    <CreditEmployeeDialog
-      :open="crediting !== null"
-      :commission-base-minor="crediting?.earning?.baseMinor ?? 0"
-      :label="`${crediting?.guestName ?? ''} · ${listing?.name ?? ''}`"
-      :sale-id="crediting ? `sb_${crediting.id}` : null"
-      @done="crediting = null"
-      @close="crediting = null"
+    <ConfirmDialog
+      :open="pendingDelete !== null"
+      :title="t('staybrain.removeReservationTitle')"
+      :message="t('staybrain.removeReservationMessage', { guest: pendingDelete?.guestName ?? '' })"
+      danger
+      :busy="busyId !== ''"
+      @confirm="removeReservation"
+      @cancel="pendingDelete = null"
     />
   </div>
 </template>

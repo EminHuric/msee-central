@@ -1969,6 +1969,8 @@ export default {
   },
 
   sales: {
+    paidOn: 'Paid on',
+    paidOnHint: 'The day the money arrived, which is not always today.',
     asAmount: 'Amount',
     asPercent: 'Percentage',
     basisPlaceholder: 'What it brought the client',
@@ -3061,6 +3063,10 @@ export default {
     needAmount: 'Say how much they get.',
   },
   staybrain: {
+    removeReservation: 'Remove from MsEe Central',
+    removeReservationTitle: 'Remove this reservation?',
+    removeReservationMessage: 'The booking for {guest} stays in the reservation system exactly as it is. This removes our record of having brought it, and the sale with it.',
+    reservationRemoved: 'Removed. The booking itself is untouched.',
     invoicedLabel: 'Invoiced',
     paidSoFar: '{amount} paid so far',
     allPaid: 'all paid',

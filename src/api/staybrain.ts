@@ -420,11 +420,27 @@ async function refresh(
   const status = booking.status === 'cancelled' ? 'cancelled' : mine.status
   const value = moneyOf(booking.totalPrice, listing.currency, listing.rate, booking.checkIn)
 
+  /*
+   * The commission follows the booking, including when it is changed there.
+   *
+   * IT USED TO BE FROZEN, and the reasoning was that an agreement should not be
+   * rewritten by a later change of terms. That is right for the listing's
+   * standing terms and wrong for this: the figure typed on the booking IS the
+   * agreement for that booking, so correcting it there is correcting the
+   * agreement, and refusing to follow it left MsEe Central quietly reporting a
+   * number nobody had agreed to any more.
+   */
+  const earning = earningOf(listing.earning, value, booking.mseeCommissionAmount)
+
   const same =
     mine.guestName === booking.guestName &&
+    mine.guestContact === booking.phone &&
     mine.checkIn === booking.checkIn &&
     mine.checkOut === booking.checkOut &&
+    mine.note === booking.notes &&
+    mine.ownerName === (booking.mseeBroughtBy ?? '') &&
     mine.value.minor === value.minor &&
+    (mine.earning?.minor ?? 0) === earning.minor &&
     mine.status === status
 
   /* Nothing moved: no write, so opening a property costs nothing. */
@@ -439,7 +455,7 @@ async function refresh(
   if (status === 'cancelled' && mine.status !== 'cancelled') {
     await dropSale(mine.id)
   } else if (status !== 'cancelled' && mine.status === 'cancelled') {
-    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, mine.earning, await stayBrainService())
+    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService())
   }
 
   await patch('reservations', mine.id, {
@@ -449,9 +465,20 @@ async function refresh(
     checkOut: booking.checkOut,
     nights: booking.days || nightsOf(booking.checkIn, booking.checkOut),
     value,
+    earning,
+    note: booking.notes,
+    ownerName: booking.mseeBroughtBy ?? '',
     status,
     rmsReservationId: booking.reservationId,
   })
+
+  /*
+   * And the sale with it, so the dashboard is not left quoting the old figure.
+   * Rewritten by the same derived id rather than added to.
+   */
+  if (status !== 'cancelled') {
+    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService())
+  }
 }
 
 /** Nights between two dates, when the RMS did not store a count. */

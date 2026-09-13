@@ -122,6 +122,16 @@ const pendingDelete = ref<Sale | null>(null)
 const paying = ref<Sale | null>(null)
 const payAmount = ref(0)
 
+/**
+ * When the money arrived, which is not always today.
+ *
+ * A payment recorded on the day it is entered puts last month's income in this
+ * month, and every figure that reads by period is then wrong for both. The date
+ * defaults to today because that is usually right, and it is a field because
+ * usually is not always.
+ */
+const payDate = ref('')
+
 const today = new Date().toISOString().slice(0, 10)
 
 const canCreate = computed(() => auth.hasPermission(PERMISSIONS.SALES_CREATE))
@@ -322,6 +332,7 @@ function startPayment(sale: Sale): void {
     ? balance.advanceBaseMinor - balance.paidBaseMinor
     : (balance?.remainingBaseMinor ?? 0)
   payAmount.value = fromMinor(Math.max(0, suggested), BASE_CURRENCY)
+  payDate.value = today
 }
 
 async function commitPayment(): Promise<void> {
@@ -338,8 +349,8 @@ async function commitPayment(): Promise<void> {
         ...blankTransaction('income'),
         category: balance?.advanceDue ? 'advance' : 'service_payment',
         description: sale.title,
-        amount: moneyOf(payAmount.value, BASE_CURRENCY, 1, today),
-        date: today,
+        amount: moneyOf(payAmount.value, BASE_CURRENCY, 1, payDate.value),
+        date: payDate.value,
         status: 'paid',
         clientId: sale.clientId,
         clientName: sale.clientName,
@@ -896,6 +907,12 @@ onMounted(async () => {
           <div class="field">
             <label class="field-label" for="pay-amount">{{ t('finance.amount') }}</label>
             <input id="pay-amount" v-model.number="payAmount" class="input" type="number" step="0.01" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="pay-date">{{ t('sales.paidOn') }}</label>
+            <input id="pay-date" v-model="payDate" class="input" type="date" />
+            <p class="field-hint">{{ t('sales.paidOnHint') }}</p>
             <p v-if="balanceMap.get(paying.id)?.advanceDue" class="field-hint warn">
               {{ t('sales.advanceHint') }}
             </p>
