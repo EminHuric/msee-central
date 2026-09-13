@@ -20,7 +20,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { fetchClients } from '@/api/clients'
 import { fetchRmsAccounts } from '@/api/rms'
-import { saveListing } from '@/api/staybrain'
+import { fetchListings, saveListing } from '@/api/staybrain'
 import { moneyOf } from '@/api/sales'
 import { rmsConnectAs, rmsSession } from '@/lib/rms'
 import { remembersRmsLogin } from '@/lib/rmsAccounts'
@@ -72,6 +72,22 @@ const linkProblem = ref('')
 const accounts = ref<RmsAccount[]>([])
 const lookingUp = ref(false)
 
+/*
+ * Accounts already used by another property.
+ *
+ * Two properties pointing at one reservation account would import the same
+ * bookings under two owners, and each import would claim them back from the
+ * other — the rows would flip between properties for ever. An account can belong
+ * to one property, so a taken one is shown as taken and cannot be chosen.
+ *
+ * Not all accounts on the platform belong here in the first place: some clients
+ * buy only the reservation system. A property exists here because somebody added
+ * it, never because an account exists over there.
+ */
+const takenWorkspaces = ref<Map<string, string>>(new Map())
+
+const takenBy = (id: string) => takenWorkspaces.value.get(id) ?? ''
+
 const linked = computed(() => Boolean(draft.value.rmsWorkspaceId))
 const canPick = computed(() => rmsSession.value !== null && accounts.value.length > 0)
 const alreadyRemembered = computed(
@@ -93,6 +109,14 @@ watch(
     clients.value = await fetchClients().catch(() => [])
 
     /* Offer the list when it can be had; say nothing when it cannot. */
+    /* Which accounts are spoken for, so one cannot be linked twice. */
+    const existing = await fetchListings().catch(() => [])
+    takenWorkspaces.value = new Map(
+      existing
+        .filter((row) => row.rmsWorkspaceId && row.id !== draft.value.id)
+        .map((row) => [row.rmsWorkspaceId, row.name || row.clientName]),
+    )
+
     if (rmsSession.value) {
       lookingUp.value = true
       accounts.value = await fetchRmsAccounts().catch(() => [])
@@ -105,6 +129,13 @@ watch(
 function chooseAccount(id: string): void {
   const account = accounts.value.find((a) => a.id === id)
   if (!account) return
+
+  const owner = takenBy(id)
+  if (owner) {
+    linkProblem.value = t('staybrain.accountTaken', { name: owner })
+    return
+  }
+
   draft.value.rmsWorkspaceId = account.id
   draft.value.rmsAccountEmail = account.email
   linkProblem.value = ''
@@ -132,6 +163,12 @@ async function linkAccount(): Promise<void> {
     const result = await rmsConnectAs(email, rmsPassword.value)
 
     if (result.state === 'ready') {
+      const owner = takenBy(result.session.uid)
+      if (owner) {
+        linkProblem.value = t('staybrain.accountTaken', { name: owner })
+        return
+      }
+
       /* The account's own id is its workspace id over there. */
       draft.value.rmsWorkspaceId = result.session.uid
       draft.value.rmsAccountEmail = result.session.email || email
@@ -268,8 +305,14 @@ async function commit(): Promise<void> {
               @change="chooseAccount(($event.target as HTMLSelectElement).value)"
             >
               <option value="">{{ t('staybrain.pickAccount') }}</option>
-              <option v-for="a in accounts" :key="a.id" :value="a.id">
+              <option
+                v-for="a in accounts"
+                :key="a.id"
+                :value="a.id"
+                :disabled="Boolean(takenBy(a.id))"
+              >
                 {{ a.username || a.email }} — {{ t('staybrain.unitCount', { n: a.apartmentCount }) }}
+                <template v-if="takenBy(a.id)">· {{ t('staybrain.alreadyLinked', { name: takenBy(a.id) }) }}</template>
               </option>
             </select>
             <p class="field-hint">{{ t('staybrain.pickHint') }}</p>

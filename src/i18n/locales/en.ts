@@ -3043,6 +3043,8 @@ export default {
     now: 'Today',
   },
   staybrain: {
+    alreadyLinked: 'already used by {name}',
+    accountTaken: 'That account is already linked to {name}. One reservation account belongs to one property.',
     pickHint: 'Available because you are signed in as an administrator of the reservation platform.',
     orSignIn: 'Or sign in as this property’s own account:',
     joinFee: 'What this client paid to join',

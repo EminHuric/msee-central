@@ -3042,6 +3042,8 @@ export default {
     now: 'Danas',
   },
   staybrain: {
+    alreadyLinked: 'već koristi {name}',
+    accountTaken: 'Taj nalog je već povezan sa {name}. Jedan rezervacioni nalog pripada jednom smeštaju.',
     pickHint: 'Dostupno jer si prijavljen kao administrator rezervacione platforme.',
     orSignIn: 'Ili se prijavi kao nalog samog smeštaja:',
     joinFee: 'Koliko je ovaj klijent platio za ulaz',
