@@ -2391,12 +2391,11 @@ export default {
   },
 
   analytics: {
+    perDay: 'A day',
+    direction: 'Up or down',
+    serviceChartHint: 'Each service over time, and whether its daily average is climbing or sliding against the period before.',
     serviceTable: 'Every service, and whether it is growing',
-    serviceTableHint: 'Sold in the chosen period. A ranking says which earns most; the last two columns say which is rising.',
     service: 'Service',
-    share: 'Share',
-    vsPrev: 'vs before',
-    vsYear: 'vs last year',
     best: 'best seller',
     noService: 'No service',
     pace: 'At this rate the month ends near {amount}',

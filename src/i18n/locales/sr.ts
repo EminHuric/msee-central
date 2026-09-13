@@ -2390,12 +2390,11 @@ export default {
   },
 
   analytics: {
+    perDay: 'Dnevno',
+    direction: 'Rast ili pad',
+    serviceChartHint: 'Svaka usluga kroz vreme, i da li joj dnevni prosek raste ili pada u odnosu na prethodni period.',
     serviceTable: 'Svaka usluga, i da li raste',
-    serviceTableHint: 'Prodato u izabranom periodu. Rang kaže koja najviše donosi; poslednje dve kolone kažu koja raste.',
     service: 'Usluga',
-    share: 'Udeo',
-    vsPrev: 'vs prethodno',
-    vsYear: 'vs prošla godina',
     best: 'najprodavanije',
     noService: 'Bez usluge',
     pace: 'Ovim tempom mesec se završava oko {amount}',

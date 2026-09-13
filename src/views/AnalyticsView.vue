@@ -29,7 +29,6 @@ import {
   loadSnapshot,
   periodOf,
   previousPeriod,
-  sameSpanLastYear,
   seriesOver,
   slice,
   soldByChannel,
@@ -54,22 +53,18 @@ const figures = computed(() => companyFigures(current.value, all.value))
 const before = computed(() => companyFigures(earlier.value, all.value))
 
 /**
- * Every service, with what it earned and whether that is growing.
+ * Every service: what it sold, and whether it is climbing or sliding.
  *
- * THE TABLE EXISTS BECAUSE A RANKING IS NOT AN ANSWER. Which service earns most
- * is worth knowing once; what somebody actually decides on is whether each one is
- * rising or falling, and against what. So each row carries three facts that a
- * bar chart cannot: the share of the company it accounts for, how it compares
- * with the period before, and how it compares with the same stretch a year ago.
+ * ONE NUMBER FOR DIRECTION, NOT THREE FOR CONTEXT. A share of the total says how
+ * big a service is, which is visible from the amount beside it; a year-on-year
+ * figure needs a year. What is actually being asked is simpler — are we up or
+ * down, and by how much a day.
  *
- * Sold rather than collected, deliberately. This answers "what is selling", and
- * a service that sells well but is billed slowly is still selling well — the
- * money question is answered by the finance figures above.
+ * So the figure is the daily average of this period against the daily average of
+ * the one before. Daily averages rather than totals, because comparing a
+ * fortnight with a month would call every service a collapse.
  */
 const serviceRows = computed(() => {
-  const total = (rows: typeof current.value.sales) =>
-    rows.reduce((sum, row) => sum + row.value.baseMinor, 0)
-
   const group = (rows: typeof current.value.sales) => {
     const map = new Map<string, { name: string; value: number; count: number }>()
     rows.forEach((row) => {
@@ -86,30 +81,78 @@ const serviceRows = computed(() => {
     return map
   }
 
+  const daysIn = (p: Period) =>
+    Math.max(1, Math.round((Date.parse(p.to) - Date.parse(p.from)) / 86_400_000) + 1)
+
   const now = group(current.value.sales)
   const prev = group(earlier.value.sales)
-  const year = group(slice(all.value, sameSpanLastYear(period.value)).sales)
-  const whole = total(current.value.sales)
+  const nowDays = daysIn(period.value)
+  const prevDays = daysIn(previousPeriod(period.value))
 
   return [...now.entries()]
-    .map(([id, row]) => ({
-      id,
-      name: row.name,
-      value: row.value,
-      count: row.count,
-      /* What portion of everything sold this period came from this service. */
-      share: whole > 0 ? Math.round((row.value / whole) * 100) : 0,
-      vsPrev: change(row.value, prev.get(id)?.value ?? 0),
-      vsYear: change(row.value, year.get(id)?.value ?? 0),
-    }))
+    .map(([id, row]) => {
+      const perDay = row.value / nowDays
+      const wasPerDay = (prev.get(id)?.value ?? 0) / prevDays
+
+      return {
+        id,
+        name: row.name,
+        value: row.value,
+        count: row.count,
+        perDay,
+        /* Null when there is nothing before it: new is not the same as flat. */
+        daily: wasPerDay > 0 ? Math.round(((perDay - wasPerDay) / wasPerDay) * 100) : null,
+      }
+    })
     .sort((a, b) => b.value - a.value)
 })
 
-/** Percentage change, or null when there is nothing to compare against. */
-function change(now: number, then: number): number | null {
-  if (then <= 0) return null
-  return Math.round(((now - then) / then) * 100)
-}
+/**
+ * One line per service over time — the whole business on one chart.
+ *
+ * The same buckets the money chart above uses, so two charts on this screen can
+ * never be showing different days. Capped at the six biggest: a line per service
+ * is readable at six and a thicket at twenty, and the rest are in the table
+ * underneath where they can be read exactly.
+ */
+const serviceChart = computed(() => {
+  const from = Date.parse(period.value.from)
+  const to = Date.parse(period.value.to)
+  const days = Math.round((to - from) / 86_400_000) + 1
+
+  /*
+   * Days for a short stretch, months for a long one — the same rule the money
+   * chart follows, so the two are never showing different buckets. Three hundred
+   * daily points is a smear; twelve monthly ones is a trend.
+   */
+  const byDay = days <= 62
+  const keys: string[] = []
+
+  if (byDay) {
+    for (let i = 0; i < days; i += 1) {
+      keys.push(new Date(from + i * 86_400_000).toISOString().slice(0, 10))
+    }
+  } else {
+    const cursor = new Date(from)
+    cursor.setUTCDate(1)
+    while (cursor.getTime() <= to) {
+      keys.push(cursor.toISOString().slice(0, 7))
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1)
+    }
+  }
+
+  const series = serviceRows.value.slice(0, 6).map((row) => ({
+    key: row.id,
+    label: row.name,
+    values: keys.map((key) =>
+      current.value.sales
+        .filter((sale) => (sale.serviceId ?? 'none') === row.id && sale.saleDate.startsWith(key))
+        .reduce((sum, sale) => sum + sale.value.baseMinor, 0),
+    ),
+  }))
+
+  return { labels: keys.map((key) => (byDay ? key.slice(5) : key)), series }
+})
 
 /**
  * Where this month lands if the rest of it goes like the part already gone.
@@ -412,8 +455,19 @@ onMounted(load)
         <div class="card-header">
           <div>
             <h2 class="card-title">{{ t('analytics.serviceTable') }}</h2>
-            <p class="field-hint">{{ t('analytics.serviceTableHint') }}</p>
+            <p class="field-hint">{{ t('analytics.serviceChartHint') }}</p>
           </div>
+        </div>
+
+        <!-- Every service over time, one line each. -->
+        <div v-if="serviceChart.series.length" class="card-body">
+          <TimeChart
+            :labels="serviceChart.labels"
+            :series="serviceChart.series"
+            :format="money"
+            :height="230"
+            :area="false"
+          />
         </div>
 
         <div class="table-wrap">
@@ -423,9 +477,8 @@ onMounted(load)
                 <th>{{ t('analytics.service') }}</th>
                 <th class="num">{{ t('sales.sold') }}</th>
                 <th class="num">{{ t('sales.count') }}</th>
-                <th class="num">{{ t('analytics.share') }}</th>
-                <th class="num">{{ t('analytics.vsPrev') }}</th>
-                <th class="num">{{ t('analytics.vsYear') }}</th>
+                <th class="num">{{ t('analytics.perDay') }}</th>
+                <th class="num">{{ t('analytics.direction') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -437,12 +490,9 @@ onMounted(load)
                 </td>
                 <td class="num strong">{{ money(row.value) }}</td>
                 <td class="num">{{ row.count }}</td>
-                <td class="num">{{ row.share }}%</td>
-                <td class="num" :class="row.vsPrev !== null ? (row.vsPrev >= 0 ? 'up' : 'down') : ''">
-                  {{ row.vsPrev === null ? '—' : `${row.vsPrev > 0 ? '+' : ''}${row.vsPrev}%` }}
-                </td>
-                <td class="num" :class="row.vsYear !== null ? (row.vsYear >= 0 ? 'up' : 'down') : ''">
-                  {{ row.vsYear === null ? '—' : `${row.vsYear > 0 ? '+' : ''}${row.vsYear}%` }}
+                <td class="num">{{ money(Math.round(row.perDay)) }}</td>
+                <td class="num" :class="row.daily !== null ? (row.daily >= 0 ? 'up' : 'down') : ''">
+                  {{ row.daily === null ? '—' : `${row.daily > 0 ? '+' : ''}${row.daily}%` }}
                 </td>
               </tr>
             </tbody>
