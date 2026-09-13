@@ -313,11 +313,34 @@ export async function importMarkedBookings(
   }
 
   for (const row of existing) {
-    if (haveSale.has(`sb_${row.id}`)) continue
     if (row.status === 'cancelled') continue
     if ((row.earning?.baseMinor ?? 0) <= 0) continue
 
-    await recordSale(listing, row.id, row.guestName, row.checkIn, row.earning, service, row.value)
+    /*
+     * When this was earned: the day it entered this system, not the day the
+     * guest arrives.
+     *
+     * A booking taken in September for a stay in October is September's income —
+     * the work was done and the commission was owed then, and dating it by the
+     * stay put it in a month that had not happened yet. `takenAt` is when we
+     * picked it up, which is the closest thing we hold to when it was agreed.
+     */
+    const earnedDate = (row.takenAt ?? row.createdAt ?? '').slice(0, 10) || today()
+    const sale = sales.find((one) => one.id === `sb_${row.id}`)
+
+    /* Missing entirely — the gap this repair exists for. */
+    if (!sale) {
+      await recordSale(listing, row.id, row.guestName, earnedDate, row.earning, service, row.value)
+      continue
+    }
+
+    /*
+     * Or present and dated by the stay, from before this was understood. Corrected
+     * once and then left alone, so this costs nothing on every later run.
+     */
+    if (sale.saleDate !== earnedDate) {
+      await patch('sales', sale.id, { saleDate: earnedDate })
+    }
   }
 
   for (const booking of ours) {
