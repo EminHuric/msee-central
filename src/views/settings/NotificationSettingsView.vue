@@ -22,13 +22,6 @@ import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { ANNOUNCEMENT_AUDIENCES, NOTIFICATION_KINDS, type NotificationKind } from '@/types/company'
-import {
-  fetchTelegramSettings,
-  forgetTelegramCache,
-  saveTelegramSettings,
-  sendToTelegram,
-  type TelegramSettings,
-} from '@/api/telegram'
 import { PERMISSIONS } from '@/types/permissions'
 import type { Department, EmployeePublic } from '@/types/domain'
 
@@ -50,53 +43,6 @@ const title = ref('')
 const body = ref('')
 
 const canAnnounce = computed(() => auth.hasPermission(PERMISSIONS.ANNOUNCEMENTS_SEND))
-
-/* Where notifications are sent is a company setting, not a personal one. */
-const canManage = computed(() => auth.hasPermission(PERMISSIONS.SETTINGS_EDIT))
-
-const telegram = ref<TelegramSettings>({ botToken: '', chatId: '', relayUrl: '', enabled: false })
-const tgBusy = ref(false)
-const tgResult = ref('')
-const tgOk = ref(false)
-
-async function saveTelegram(): Promise<void> {
-  tgBusy.value = true
-  tgResult.value = ''
-  try {
-    await saveTelegramSettings(telegram.value)
-    /* The cache would otherwise keep sending to the old address. */
-    forgetTelegramCache()
-    ui.notify('ok', t('common.saved'))
-  } catch {
-    ui.notify('danger', t('errors.generic'))
-  } finally {
-    tgBusy.value = false
-  }
-}
-
-/**
- * Send one message now and say exactly what came back.
- *
- * The relay's own words rather than "could not send": "chat not found" and "not
- * your project" point at two different settings, and collapsing them would leave
- * somebody guessing which of five steps went wrong.
- */
-async function testTelegram(): Promise<void> {
-  tgBusy.value = true
-  tgResult.value = ''
-  try {
-    await saveTelegramSettings(telegram.value)
-    forgetTelegramCache()
-
-    const result = await sendToTelegram(t('telegram.testMessage'), telegram.value)
-    tgOk.value = result.ok
-    tgResult.value = result.ok
-      ? t('telegram.testSent')
-      : t('telegram.testFailed', { reason: result.error ?? '' })
-  } finally {
-    tgBusy.value = false
-  }
-}
 
 const recipients = computed(() => {
   if (audience.value === 'everyone') return people.value
@@ -189,105 +135,12 @@ async function send(): Promise<void> {
   }
 }
 
-onMounted(async () => {
-  await load()
-  if (canManage.value) telegram.value = await fetchTelegramSettings()
-})
+onMounted(load)
 </script>
 
 <template>
   <div class="stack">
     <!-- Preferences ---------------------------------------------------- -->
-    <!--
-      Notifications that leave the browser.
-
-      A bell inside a web page rings only for somebody who has the page open,
-      which is nobody most of the day. This is the setting that makes a
-      notification reach a phone — see worker/README.md for what sits between and
-      why anything has to.
-    -->
-    <section v-if="canManage" class="card">
-      <div class="card-header">
-        <div>
-          <h2 class="card-title">{{ t('telegram.title') }}</h2>
-          <p class="field-hint">{{ t('telegram.subtitle') }}</p>
-        </div>
-      </div>
-
-      <div class="card-body stack">
-        <!--
-          The two fields anybody can fill in three minutes, from two Telegram
-          bots. The harder, safer route is below and folded away, because
-          offering both at the same size means choosing between them before
-          understanding either.
-        -->
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="tg-token">{{ t('telegram.botToken') }}</label>
-            <input id="tg-token" v-model="telegram.botToken" class="input" autocomplete="off" />
-            <p class="field-hint">{{ t('telegram.botTokenHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="tg-chat">{{ t('telegram.chatId') }}</label>
-            <input id="tg-chat" v-model="telegram.chatId" class="input" autocomplete="off" />
-            <p class="field-hint">{{ t('telegram.chatIdHint') }}</p>
-          </div>
-        </div>
-
-        <!--
-          The steps, here rather than in a file nobody opens.
-
-          Four of them, each naming exactly what to tap and what to copy. A
-          feature that needs a document read alongside it is a feature most people
-          abandon at step two.
-        -->
-        <ol class="steps">
-          <li>{{ t('telegram.step1') }}</li>
-          <li>{{ t('telegram.step2') }}</li>
-          <li>{{ t('telegram.step3') }}</li>
-          <li>{{ t('telegram.step4') }}</li>
-        </ol>
-
-        <p class="field-hint safe">
-          <AppIcon name="lock" :size="13" />
-          {{ t('telegram.whoCanRead') }}
-        </p>
-
-        <details class="advanced">
-          <summary>{{ t('telegram.advanced') }}</summary>
-          <div class="field">
-            <label class="field-label" for="tg-url">{{ t('telegram.relayUrl') }}</label>
-            <input
-              id="tg-url"
-              v-model="telegram.relayUrl"
-              class="input"
-              type="url"
-              placeholder="https://something.workers.dev"
-            />
-            <p class="field-hint">{{ t('telegram.relayHint') }}</p>
-          </div>
-        </details>
-
-        <label class="check">
-          <input v-model="telegram.enabled" type="checkbox" />
-          <span>{{ t('telegram.enabled') }}</span>
-        </label>
-
-        <p v-if="tgResult" class="field-hint" :class="tgOk ? 'ok' : 'warn'">{{ tgResult }}</p>
-
-        <div class="row end">
-          <button class="btn btn-secondary" :disabled="tgBusy" @click="testTelegram">
-            <span v-if="tgBusy" class="spinner" />
-            {{ t('telegram.test') }}
-          </button>
-          <button class="btn btn-primary" :disabled="tgBusy" @click="saveTelegram">
-            {{ t('common.save') }}
-          </button>
-        </div>
-      </div>
-    </section>
-
     <section class="card">
       <div class="card-header">
         <div>
@@ -379,37 +232,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.steps {
-  color: var(--text-secondary);
-  display: grid;
-  font-size: var(--text-sm);
-  gap: 4px;
-  margin: 0;
-  padding-left: 1.2rem;
-}
-
-.safe {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-}
-
-.field-grid {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.advanced summary {
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
-
-.advanced[open] summary {
-  margin-bottom: var(--space-3);
-}
-
 .kinds { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
 .picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 200px; overflow-y: auto; }
 .spacer { flex: 1; }
