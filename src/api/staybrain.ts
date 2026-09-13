@@ -16,6 +16,10 @@
 
 import { logAudit } from './audit'
 import { tellOwners } from './owners'
+
+/* A neutral marker rather than a sentence: the message carries data, and the
+ * bell translates the kind beside it. */
+const t_cancelled = '✕'
 import { saveReservation } from './reservations'
 import { actor, patch, readAll, readOne, readWhere, today, where, write } from './store'
 import { blankTransaction, saveTransaction } from './finance'
@@ -683,6 +687,21 @@ async function refresh(
    */
   if (status === 'cancelled' && mine.status !== 'cancelled') {
     await dropSale(mine.id)
+
+    /*
+     * Worth hearing about precisely because it is bad news.
+     *
+     * A booking cancelling is money that was counted and is not coming, and a
+     * system that announces every arrival and no departure gives a rosier account
+     * of the week than the week deserves.
+     */
+    await tellOwners({
+      kind: 'sale_new',
+      priority: 'normal',
+      title: `${listing.name} · ${mine.guestName}`,
+      body: `${t_cancelled} -${formatMoney(mine.earning?.baseMinor ?? 0, listing.currency, 'en')}`,
+      link: `/staybrain/${listing.id}`,
+    })
   } else if (status !== 'cancelled' && mine.status === 'cancelled') {
     await recordSale(listing, mine.id, booking.guestName, earnedOn(booking), earning, await stayBrainService(), value)
   }

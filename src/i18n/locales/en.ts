@@ -1295,6 +1295,11 @@ export default {
     huge: 'Largest — press to go back to normal',
   },
   telegram: {
+    step1: 'In Telegram, message @BotFather and send /newbot. Copy the long token it replies with into the first field.',
+    step2: 'Message @userinfobot. Copy the number it replies with into the second field.',
+    step3: 'Open your own new bot and send it /start — Telegram will not let a bot write to somebody who has never written to it.',
+    step4: 'Tick the box, press Test. A message should arrive within a second.',
+    whoCanRead: 'The token is stored where only an owner can read it — never in the code, never in a repository, and not in any employee’s browser.',
     botToken: 'Bot token',
     botTokenHint: 'From @BotFather in Telegram: send /newbot and copy what it replies.',
     chatId: 'Your chat id',

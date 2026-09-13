@@ -1294,6 +1294,11 @@ export default {
     huge: 'Najveće — pritisni za povratak na normalno',
   },
   telegram: {
+    step1: 'U Telegramu piši @BotFather i pošalji /newbot. Dugi token koji odgovori nalepi u prvo polje.',
+    step2: 'Piši @userinfobot. Broj koji odgovori nalepi u drugo polje.',
+    step3: 'Otvori svog novog bota i pošalji mu /start — Telegram ne da botu da piše nekome ko mu se nikad nije javio.',
+    step4: 'Štikliraj kvačicu i pritisni Probu. Poruka treba da stigne za sekundu.',
+    whoCanRead: 'Token se čuva tamo gde ga sme čitati samo vlasnik — nikad u kodu, nikad u repozitorijumu, i ni u jednom browseru zaposlenog.',
     botToken: 'Token bota',
     botTokenHint: 'Od @BotFather u Telegramu: pošalji /newbot i kopiraj šta odgovori.',
     chatId: 'Tvoj chat id',

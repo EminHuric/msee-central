@@ -235,7 +235,24 @@ onMounted(async () => {
           </div>
         </div>
 
-        <p class="field-hint">{{ t('telegram.steps') }}</p>
+        <!--
+          The steps, here rather than in a file nobody opens.
+
+          Four of them, each naming exactly what to tap and what to copy. A
+          feature that needs a document read alongside it is a feature most people
+          abandon at step two.
+        -->
+        <ol class="steps">
+          <li>{{ t('telegram.step1') }}</li>
+          <li>{{ t('telegram.step2') }}</li>
+          <li>{{ t('telegram.step3') }}</li>
+          <li>{{ t('telegram.step4') }}</li>
+        </ol>
+
+        <p class="field-hint safe">
+          <AppIcon name="lock" :size="13" />
+          {{ t('telegram.whoCanRead') }}
+        </p>
 
         <details class="advanced">
           <summary>{{ t('telegram.advanced') }}</summary>
@@ -362,6 +379,21 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.steps {
+  color: var(--text-secondary);
+  display: grid;
+  font-size: var(--text-sm);
+  gap: 4px;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.safe {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
 .field-grid {
   display: grid;
   gap: var(--space-3);
