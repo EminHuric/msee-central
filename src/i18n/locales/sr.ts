@@ -12,6 +12,7 @@ export default {
   },
 
   common: {
+    saved: 'Sačuvano.',
     apply: 'Primeni',
     open: 'Otvori',
     sort: 'Sortiraj',
@@ -1290,6 +1291,17 @@ export default {
     normal: 'Normalna veličina — pritisni za veći ekran',
     big: 'Veliko — za ekran preko sobe',
     huge: 'Najveće — pritisni za povratak na normalno',
+  },
+  telegram: {
+    title: 'Telegram',
+    subtitle: 'Obaveštenja na telefon, gde god da si. Besplatno, i zvoni.',
+    relayUrl: 'Adresa relea',
+    relayHint: 'Cloudflare Worker koji drži token bota. Podešava se jednom, oko deset minuta — vidi worker/README.md.',
+    enabled: 'Šalji obaveštenja na Telegram',
+    test: 'Pošalji probu',
+    testMessage: 'MsEe Central je povezan.',
+    testSent: 'Poslato. Trebalo bi da je na telefonu.',
+    testFailed: 'Nije poslato: {reason}',
   },
   theme: {
     label: 'Tema',

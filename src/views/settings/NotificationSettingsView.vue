@@ -22,6 +22,13 @@ import { LIMITS } from '@/lib/validation'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { ANNOUNCEMENT_AUDIENCES, NOTIFICATION_KINDS, type NotificationKind } from '@/types/company'
+import {
+  fetchTelegramSettings,
+  forgetTelegramCache,
+  saveTelegramSettings,
+  sendToTelegram,
+  type TelegramSettings,
+} from '@/api/telegram'
 import { PERMISSIONS } from '@/types/permissions'
 import type { Department, EmployeePublic } from '@/types/domain'
 
@@ -43,6 +50,53 @@ const title = ref('')
 const body = ref('')
 
 const canAnnounce = computed(() => auth.hasPermission(PERMISSIONS.ANNOUNCEMENTS_SEND))
+
+/* Where notifications are sent is a company setting, not a personal one. */
+const canManage = computed(() => auth.hasPermission(PERMISSIONS.SETTINGS_EDIT))
+
+const telegram = ref<TelegramSettings>({ relayUrl: '', enabled: false })
+const tgBusy = ref(false)
+const tgResult = ref('')
+const tgOk = ref(false)
+
+async function saveTelegram(): Promise<void> {
+  tgBusy.value = true
+  tgResult.value = ''
+  try {
+    await saveTelegramSettings(telegram.value)
+    /* The cache would otherwise keep sending to the old address. */
+    forgetTelegramCache()
+    ui.notify('ok', t('common.saved'))
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    tgBusy.value = false
+  }
+}
+
+/**
+ * Send one message now and say exactly what came back.
+ *
+ * The relay's own words rather than "could not send": "chat not found" and "not
+ * your project" point at two different settings, and collapsing them would leave
+ * somebody guessing which of five steps went wrong.
+ */
+async function testTelegram(): Promise<void> {
+  tgBusy.value = true
+  tgResult.value = ''
+  try {
+    await saveTelegramSettings(telegram.value)
+    forgetTelegramCache()
+
+    const result = await sendToTelegram(t('telegram.testMessage'), telegram.value)
+    tgOk.value = result.ok
+    tgResult.value = result.ok
+      ? t('telegram.testSent')
+      : t('telegram.testFailed', { reason: result.error ?? '' })
+  } finally {
+    tgBusy.value = false
+  }
+}
 
 const recipients = computed(() => {
   if (audience.value === 'everyone') return people.value
@@ -135,12 +189,63 @@ async function send(): Promise<void> {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+  if (canManage.value) telegram.value = await fetchTelegramSettings()
+})
 </script>
 
 <template>
   <div class="stack">
     <!-- Preferences ---------------------------------------------------- -->
+    <!--
+      Notifications that leave the browser.
+
+      A bell inside a web page rings only for somebody who has the page open,
+      which is nobody most of the day. This is the setting that makes a
+      notification reach a phone — see worker/README.md for what sits between and
+      why anything has to.
+    -->
+    <section v-if="canManage" class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">{{ t('telegram.title') }}</h2>
+          <p class="field-hint">{{ t('telegram.subtitle') }}</p>
+        </div>
+      </div>
+
+      <div class="card-body stack">
+        <div class="field">
+          <label class="field-label" for="tg-url">{{ t('telegram.relayUrl') }}</label>
+          <input
+            id="tg-url"
+            v-model="telegram.relayUrl"
+            class="input"
+            type="url"
+            placeholder="https://something.workers.dev"
+          />
+          <p class="field-hint">{{ t('telegram.relayHint') }}</p>
+        </div>
+
+        <label class="check">
+          <input v-model="telegram.enabled" type="checkbox" />
+          <span>{{ t('telegram.enabled') }}</span>
+        </label>
+
+        <p v-if="tgResult" class="field-hint" :class="tgOk ? 'ok' : 'warn'">{{ tgResult }}</p>
+
+        <div class="row end">
+          <button class="btn btn-secondary" :disabled="tgBusy" @click="testTelegram">
+            <span v-if="tgBusy" class="spinner" />
+            {{ t('telegram.test') }}
+          </button>
+          <button class="btn btn-primary" :disabled="tgBusy" @click="saveTelegram">
+            {{ t('common.save') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-header">
         <div>

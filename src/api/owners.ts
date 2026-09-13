@@ -21,6 +21,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
 
 import { notify } from './notifications'
+import { sendToTelegram } from './telegram'
 import { actor } from './store'
 import { getDb } from '@/lib/firebase'
 import type { NotificationKind, NotificationPriority } from '@/types/company'
@@ -64,6 +65,17 @@ export interface OwnerNews {
  */
 export async function tellOwners(news: OwnerNews): Promise<void> {
   try {
+    /*
+     * The phone first, because that is the half that actually reaches somebody.
+     *
+     * A bell inside a web page rings only for whoever has the page open. The same
+     * sentence on Telegram arrives wherever they are, which is the entire point
+     * of having it — so it is sent even when nobody is looking at the app.
+     */
+    void sendToTelegram(
+      [news.title, news.body].filter(Boolean).join(' · '),
+    )
+
     const uids = await owners()
 
     for (const uid of uids) {

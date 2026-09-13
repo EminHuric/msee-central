@@ -13,6 +13,7 @@ export default {
   },
 
   common: {
+    saved: 'Saved.',
     apply: 'Apply',
     open: 'Open',
     sort: 'Sort',
@@ -1291,6 +1292,17 @@ export default {
     normal: 'Normal size — press for a bigger screen',
     big: 'Large — for a screen across the room',
     huge: 'Largest — press to go back to normal',
+  },
+  telegram: {
+    title: 'Telegram',
+    subtitle: 'Notifications on your phone, wherever you are. Free, and it rings.',
+    relayUrl: 'Relay address',
+    relayHint: 'The Cloudflare Worker that holds the bot token. Setting it up takes about ten minutes, once — see worker/README.md.',
+    enabled: 'Send notifications to Telegram',
+    test: 'Send a test',
+    testMessage: 'MsEe Central is connected.',
+    testSent: 'Sent. It should be on your phone.',
+    testFailed: 'Not sent: {reason}',
   },
   theme: {
     label: 'Theme',
