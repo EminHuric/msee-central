@@ -2391,7 +2391,8 @@ export default {
   },
 
   analytics: {
-    perDay: 'A day',
+    perDayHint: 'Sold in this period divided by its days — an average, not today.',
+    perDay: 'Daily average',
     direction: 'Up or down',
     serviceChartHint: 'Each service over time, and whether its daily average is climbing or sliding against the period before.',
     serviceTable: 'Every service, and whether it is growing',

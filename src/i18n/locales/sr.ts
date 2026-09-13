@@ -2390,7 +2390,8 @@ export default {
   },
 
   analytics: {
-    perDay: 'Dnevno',
+    perDayHint: 'Prodato u ovom periodu podeljeno brojem dana — prosek, ne današnji dan.',
+    perDay: 'Dnevni prosek',
     direction: 'Rast ili pad',
     serviceChartHint: 'Svaka usluga kroz vreme, i da li joj dnevni prosek raste ili pada u odnosu na prethodni period.',
     serviceTable: 'Svaka usluga, i da li raste',

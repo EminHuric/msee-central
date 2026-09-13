@@ -490,7 +490,9 @@ onMounted(load)
                 </td>
                 <td class="num strong">{{ money(row.value) }}</td>
                 <td class="num">{{ row.count }}</td>
-                <td class="num">{{ money(Math.round(row.perDay)) }}</td>
+                <td class="num" :title="t('analytics.perDayHint')">
+                  {{ money(Math.round(row.perDay)) }}
+                </td>
                 <td class="num" :class="row.daily !== null ? (row.daily >= 0 ? 'up' : 'down') : ''">
                   {{ row.daily === null ? '—' : `${row.daily > 0 ? '+' : ''}${row.daily}%` }}
                 </td>
