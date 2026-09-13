@@ -1950,8 +1950,11 @@ export default {
   },
 
   period: {
+    yesterday: 'Yesterday',
+    last7: 'Last 7 days',
+    last30: 'Last 30 days',
+    prev_month: 'Last month',
     today: 'Today',
-    week: 'This week',
     month: 'This month',
     quarter: 'This quarter',
     year: 'This year',

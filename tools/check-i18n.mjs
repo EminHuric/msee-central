@@ -57,6 +57,7 @@ import {
   PROGRAMME_STATUSES,
   PROJECT_STATUSES,
   RECOVERABLE,
+  PERIOD_KEYS,
   SALE_BALANCE_STATES,
   RESERVATION_STATUSES,
   REWARD_TYPES,
@@ -200,6 +201,8 @@ const DYNAMIC_KEYS = {
   announceAudience: ANNOUNCEMENT_AUDIENCES,
   auditAction: AUDIT_ACTIONS,
   scale: ['normal', 'big', 'huge'],
+  /* Every period the picker offers, so a new one cannot ship unlabelled. */
+  period: PERIOD_KEYS,
   paymentState: RMS_PAYMENT_STATES,
   saleBalance: SALE_BALANCE_STATES,
   earningModel: EARNING_MODELS,
@@ -261,7 +264,7 @@ const DYNAMIC_KEYS = {
 const FREEFORM_PREFIXES = new Set([
   'tabs',
   'status',
-  'period',
+  
   'dossier',
   'permission',
   /* Four labels describing where a permission came from. */

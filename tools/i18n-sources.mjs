@@ -78,3 +78,5 @@ export { RESERVATION_STATUSES, SYNC_STATES } from '../src/types/reservations.ts'
 export { EARNING_MODELS, RMS_PAYMENT_STATES } from '../src/types/staybrain.ts'
 
 export { SALE_BALANCE_STATES } from '../src/types/revenue.ts'
+
+export { PERIOD_KEYS } from '../src/types/periods.ts'

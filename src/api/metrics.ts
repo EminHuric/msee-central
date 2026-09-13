@@ -129,17 +129,9 @@ export async function loadSnapshot(): Promise<Snapshot> {
  * Periods
  * ------------------------------------------------------------------ */
 
-export type PeriodKey =
-  | 'today'
-  | 'yesterday'
-  | 'last7'
-  | 'last30'
-  | 'month'
-  | 'prev_month'
-  | 'quarter'
-  | 'year'
-  | 'all'
-  | 'custom'
+export type { PeriodKey } from '@/types/periods'
+import type { PeriodKey } from '@/types/periods'
+export { PERIOD_KEYS } from '@/types/periods'
 
 export interface Period {
   from: string

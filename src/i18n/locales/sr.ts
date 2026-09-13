@@ -1949,8 +1949,11 @@ export default {
   },
 
   period: {
+    yesterday: 'Juče',
+    last7: 'Poslednjih 7 dana',
+    last30: 'Poslednjih 30 dana',
+    prev_month: 'Prošli mesec',
     today: 'Danas',
-    week: 'Ove nedelje',
     month: 'Ovog meseca',
     quarter: 'Ovog kvartala',
     year: 'Ove godine',

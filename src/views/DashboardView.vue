@@ -281,8 +281,19 @@ const todayCards = computed<Card[]>(() =>
         {
           key: 'today-income',
           label: t('dashboard.todayIncome'),
-          value: money(dayFigures.value.incomeBaseMinor),
+          /*
+           * Agreed today, matching the figures below.
+           *
+           * This showed money collected today while the block underneath showed
+           * work agreed, so a day with a sale and no payment read as nought here
+           * and as a good day there — the same page disagreeing with itself. Work
+           * agreed is revenue earned, and both halves of the page now say so.
+           */
+          value: money(dayFigures.value.soldBaseMinor),
           delta: null,
+          hint: t('dashboard.collectedOf', {
+            amount: money(dayFigures.value.incomeBaseMinor),
+          }),
         },
         {
           key: 'today-expense',
@@ -293,7 +304,8 @@ const todayCards = computed<Card[]>(() =>
         {
           key: 'today-profit',
           label: t('dashboard.todayProfit'),
-          value: money(dayFigures.value.profitBaseMinor),
+          /* Agreed minus spent, so the three cards add up to each other. */
+          value: money(dayFigures.value.soldBaseMinor - dayFigures.value.expenseBaseMinor),
           delta: null,
         },
       ]
