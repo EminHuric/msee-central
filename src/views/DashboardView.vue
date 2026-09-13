@@ -306,6 +306,17 @@ const workCards = computed<Card[]>(() => [
     link: '/sales',
   },
   {
+    key: 'madeFor',
+    label: t('dashboard.madeForClients'),
+    value: short(figures.value.madeForClientsBaseMinor),
+    delta: trend(
+      figures.value.madeForClientsBaseMinor,
+      before.value.madeForClientsBaseMinor,
+    ),
+    link: '/sales',
+    hint: t('dashboard.madeForClientsHint'),
+  },
+  {
     key: 'sales',
     label: t('sales.count'),
     value: String(figures.value.salesCount),

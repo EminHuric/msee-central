@@ -288,7 +288,7 @@ export async function importMarkedBookings(
      * A cancelled booking was never a sale.
      */
     if (booking.status !== 'cancelled') {
-      await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service)
+      await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service, value)
     }
 
     added += 1
@@ -339,6 +339,8 @@ async function recordSale(
   date: string,
   earning: Money,
   service: { id: string; name: string } | null,
+  /** What the guest pays. Ours is a cut of it, and the two are never one figure. */
+  basis?: Money,
 ): Promise<void> {
   /* Nothing earned, nothing sold. A booking nobody priced is not a sale. */
   if (earning.minor <= 0) return
@@ -352,6 +354,17 @@ async function recordSale(
     serviceId: service?.id ?? null,
     serviceName: service?.name ?? 'StayBrain',
     value: earning,
+    /*
+     * What the booking was worth to the owner, kept beside what it was worth to
+     * us. The company earned the commission; the client earned the booking, and
+     * "how much have we made for our clients" is a question only this field can
+     * answer.
+     */
+    basisValue: basis ?? null,
+    commissionPercent:
+      basis && basis.baseMinor > 0
+        ? Math.round((earning.baseMinor / basis.baseMinor) * 1000) / 10
+        : 0,
     saleDate: date,
     notes: 'StayBrain',
   })
@@ -455,7 +468,7 @@ async function refresh(
   if (status === 'cancelled' && mine.status !== 'cancelled') {
     await dropSale(mine.id)
   } else if (status !== 'cancelled' && mine.status === 'cancelled') {
-    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService())
+    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService(), value)
   }
 
   await patch('reservations', mine.id, {
@@ -477,7 +490,7 @@ async function refresh(
    * Rewritten by the same derived id rather than added to.
    */
   if (status !== 'cancelled') {
-    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService())
+    await recordSale(listing, mine.id, booking.guestName, booking.checkIn, earning, await stayBrainService(), value)
   }
 }
 

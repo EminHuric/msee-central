@@ -428,6 +428,8 @@ export default {
   },
 
   dashboard: {
+    madeForClients: 'Napravili klijentima',
+    madeForClientsHint: 'Koliko je naš rad vredeo njima. Njihov novac, nikad naš.',
     vsLastYear: '{change}% u odnosu na isti period prošle godine',
     today: 'Danas',
     todayHint: 'Novac koji je stigao danas.',
@@ -1972,6 +1974,7 @@ export default {
   },
 
   sales: {
+    ofBasis: '{percent}% od {amount}',
     paidOn: 'Plaćeno dana',
     paidOnHint: 'Dan kad je novac stigao, a to nije uvek danas.',
     asAmount: 'Iznos',

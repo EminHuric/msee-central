@@ -823,7 +823,21 @@ onMounted(async () => {
               <td :data-label="t('table.service')" class="hide-md muted">{{ sale.serviceName || '—' }}</td>
               <td :data-label="t('sales.channel')" class="hide-md muted">{{ t(`saleChannel.${sale.channel}`) }}</td>
               <td :data-label="t('sales.saleDate')" class="hide-sm muted nowrap">{{ formatDate(sale.saleDate) }}</td>
-              <td :data-label="t('table.value')" class="num strong">{{ money(sale.value.baseMinor) }}</td>
+              <td :data-label="t('table.value')" class="num strong">
+                {{ money(sale.value.baseMinor) }}
+                <!--
+                  What the deal itself was worth, when ours was a cut of it. The
+                  two are never one number: a flat sold for 100,000 earns us
+                  5,000, and reading only one of them misstates the business
+                  either way.
+                -->
+                <span v-if="sale.basisValue" class="basis">
+                  {{ t('sales.ofBasis', {
+                    amount: money(sale.basisValue.baseMinor),
+                    percent: sale.commissionPercent,
+                  }) }}
+                </span>
+              </td>
               <td :data-label="t('finance.outstanding')" class="num hide-sm" :class="{ neg: (balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) > 0 }">
                 {{ money(balanceMap.get(sale.id)?.remainingBaseMinor ?? 0) }}
               </td>
@@ -941,6 +955,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.basis {
+  color: var(--text-tertiary);
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
 .value-modes {
   display: flex;
   gap: 4px;

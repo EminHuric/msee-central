@@ -259,6 +259,18 @@ export interface CompanyFigures {
   profitBaseMinor: number
   /** What was agreed in the period — sold, not collected. */
   soldBaseMinor: number
+  /**
+   * What we made for our clients — and it is not our money.
+   *
+   * On a sale that is a cut of somebody else's deal, the deal itself is the
+   * client's: a flat sold for 100,000 earns us 5,000, and the 100,000 is theirs.
+   * Summed here because "how much have we made for the people we work for" is a
+   * real question about this company's worth, and it has no answer anywhere else.
+   *
+   * Never added to revenue. A company that counts its clients' turnover as its
+   * own income is measuring the size of other people's businesses.
+   */
+  madeForClientsBaseMinor: number
   salesCount: number
   /** Owed across every sale, whenever it was made. */
   outstandingBaseMinor: number
@@ -302,6 +314,10 @@ export function companyFigures(snap: Snapshot, all: Snapshot = snap): CompanyFig
     expenseBaseMinor: expense,
     profitBaseMinor: income - expense,
     soldBaseMinor: snap.sales.reduce((n, s) => n + s.value.baseMinor, 0),
+    madeForClientsBaseMinor: snap.sales.reduce(
+      (n, s) => n + (s.basisValue?.baseMinor ?? 0),
+      0,
+    ),
     salesCount: snap.sales.length,
     outstandingBaseMinor: allBalances.reduce((n, b) => n + b.remainingBaseMinor, 0),
     overdueBaseMinor: all.transactions

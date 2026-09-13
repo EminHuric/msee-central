@@ -429,6 +429,8 @@ export default {
   },
 
   dashboard: {
+    madeForClients: 'Made for clients',
+    madeForClientsHint: 'What our work was worth to them. Their money, never ours.',
     vsLastYear: '{change}% against the same period last year',
     today: 'Today',
     todayHint: 'Money that arrived today.',
@@ -1973,6 +1975,7 @@ export default {
   },
 
   sales: {
+    ofBasis: '{percent}% of {amount}',
     paidOn: 'Paid on',
     paidOnHint: 'The day the money arrived, which is not always today.',
     asAmount: 'Amount',
