@@ -772,6 +772,7 @@ export default {
   },
 
   clients: {
+    duplicateWarning: '{name} već postoji. Pritisni Sačuvaj ponovo ako ipak želiš i ovog.',
     description: 'Opis',
     descriptionHint: 'Jedna linija: čime se bave.',
     responsible: 'Zadužen',

@@ -133,6 +133,7 @@ async function load(): Promise<void> {
 }
 
 function startNew(): void {
+  confirmedDuplicate.value = false
   const me = people.value.find((p) => p.uid === auth.uid)
   draft.value = {
     ...blankClient(),
@@ -142,6 +143,7 @@ function startNew(): void {
 }
 
 function startEdit(client: Client): void {
+  confirmedDuplicate.value = false
   draft.value = {
     ...client,
     tags: [...(client.tags ?? [])],
@@ -171,11 +173,40 @@ function onResponsibleChange(uid: string): void {
   draft.value.responsibleName = person ? `${person.firstName} ${person.lastName}` : ''
 }
 
+/*
+ * Set when the warning has been shown, so pressing Save again means "yes, I know".
+ * Cleared whenever a different record is opened, so one confirmation cannot carry
+ * over to the next client by accident.
+ */
+const confirmedDuplicate = ref(false)
+
 async function commit(): Promise<void> {
   const d = draft.value
   if (!d || saving.value) return
   if (!d.name.trim()) {
     ui.notify('danger', t('clients.nameRequired'))
+    return
+  }
+
+  /*
+   * The same client, twice.
+   *
+   * WHY A WARNING AND NOT A REFUSAL. Two companies really can share a name, and a
+   * system that refuses the second one makes somebody invent "Sunways 2" to get
+   * past it — which is a worse record than the duplicate would have been. So it
+   * asks once, and takes yes for an answer.
+   *
+   * Compared loosely, because "Sunways Apartments" and "sunways  apartments" are
+   * the same client to everybody except a string comparison.
+   */
+  const same = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ')
+  const twin = clients.value.find(
+    (row) => row.id !== d.id && same(row.name) === same(d.name),
+  )
+
+  if (twin && !confirmedDuplicate.value) {
+    confirmedDuplicate.value = true
+    ui.notify('warn', t('clients.duplicateWarning', { name: twin.name }))
     return
   }
 

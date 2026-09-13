@@ -773,6 +773,7 @@ export default {
   },
 
   clients: {
+    duplicateWarning: '{name} already exists. Press Save again to add this one anyway.',
     description: 'Description',
     descriptionHint: 'One line: what they do.',
     responsible: 'Responsible',

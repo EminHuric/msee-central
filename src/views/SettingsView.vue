@@ -43,6 +43,7 @@ const groups = computed<Group[]>(() =>
       sections: [
         { to: '/settings', labelKey: 'settingsHub.general', icon: 'settings' },
         { to: '/settings/notifications', labelKey: 'notifications.title', icon: 'bell' },
+        { to: '/settings/telegram', labelKey: 'telegram.title', icon: 'send' },
         { to: '/profile', labelKey: 'nav.profile', icon: 'user' },
       ],
     },

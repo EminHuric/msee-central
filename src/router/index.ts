@@ -230,6 +230,12 @@ const routes: RouteRecordRaw[] = [
             meta: { titleKey: 'notifications.title' },
           },
           {
+            path: 'telegram',
+            name: 'settings-telegram',
+            component: () => import('@/views/settings/TelegramSettingsView.vue'),
+            meta: { permission: PERMISSIONS.SETTINGS_EDIT, titleKey: 'telegram.title' },
+          },
+          {
             path: 'organization',
             name: 'settings-organization',
             component: () => import('@/views/admin/OrganizationView.vue'),
