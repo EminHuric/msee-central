@@ -430,7 +430,7 @@ export default {
 
   dashboard: {
     madeForClients: 'Made for clients',
-    madeForClientsHint: 'What our work was worth to them. Their money, never ours.',
+    madeForClientsHint: '{today} today · {total} since the start. Their money, never ours.',
     vsLastYear: '{change}% against the same period last year',
     today: 'Today',
     todayHint: 'Money that arrived today.',

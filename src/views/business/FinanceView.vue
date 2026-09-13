@@ -154,6 +154,24 @@ const byChannel = computed(() =>
   soldByChannel(current.value).map((r) => ({ ...r, label: t(`saleChannel.${r.key}`) })),
 )
 
+/**
+ * What this company's work was worth to its clients.
+ *
+ * Summed from the sales that were a share of somebody else's deal, over three
+ * spans at once: the chosen period, today, and everything. One period never
+ * answers it — a month says little and the running total is the argument.
+ */
+const madeForClients = computed(() => {
+  const sum = (rows: Snapshot['sales']) =>
+    rows.reduce((n, row) => n + (row.basisValue?.baseMinor ?? 0), 0)
+
+  return {
+    period: sum(current.value.sales),
+    today: sum(slice(snapshot.value, periodOf('today')).sales),
+    ever: sum(snapshot.value.sales),
+  }
+})
+
 const headline = computed(() => [
   {
     key: 'income',
@@ -173,6 +191,24 @@ const headline = computed(() => [
     value: money(totals.value.profitBaseMinor),
     delta: trend(totals.value.profitBaseMinor, before.value.profitBaseMinor),
     accent: true,
+  },
+  {
+    /*
+     * Their money, sitting in the company's own accounts screen.
+     *
+     * Here because this is where somebody asks what the work was worth, and the
+     * honest answer has two halves: what we earned, and what we earned for them.
+     * It is never added to income — the three figures above are this company's
+     * money and this one is not.
+     */
+    key: 'madeFor',
+    label: t('dashboard.madeForClients'),
+    value: money(madeForClients.value.period),
+    delta: null,
+    hint: t('dashboard.madeForClientsHint', {
+      today: money(madeForClients.value.today),
+      total: money(madeForClients.value.ever),
+    }),
   },
   {
     key: 'pending',

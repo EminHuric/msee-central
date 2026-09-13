@@ -15,6 +15,8 @@
  */
 
 import { logAudit } from './audit'
+import { notify } from './notifications'
+import { fetchEmployees } from './employees'
 import { saveReservation } from './reservations'
 import { actor, patch, readAll, readWhere, today, where, write } from './store'
 import { blankTransaction, saveTransaction } from './finance'
@@ -22,7 +24,7 @@ import { fetchServices } from './operations'
 import { blankSale, saveSale } from './sales'
 import { moneyOf } from './sales'
 import { remove } from './records'
-import { BASE_CURRENCY, type Money } from '@/types/money'
+import { BASE_CURRENCY, formatMoney, type Money } from '@/types/money'
 import {
   EMPTY_TOTALS,
   MSEE_SOURCE,
@@ -201,6 +203,61 @@ export const stayBrainServiceId = async (): Promise<string | null> =>
  * the terms on the day, and recomputing it would rewrite last season every time a
  * rate changed.
  */
+/**
+ * Everybody who should hear that a booking arrived.
+ *
+ * Staff, minus whoever triggered the import — they are looking at the screen that
+ * just told them. The point of a notification is the people who are not.
+ *
+ * Not filtered by permission, and that is deliberate: the recipients are the
+ * company's own employees, the message carries a guest's first name and a figure
+ * they are already trusted with, and reading `userPermissions` for everybody to
+ * filter a greeting would be a heavier read than the thing it protects. What a
+ * person may actually OPEN is decided by the rules when they click the link.
+ */
+async function audienceFor(): Promise<string[]> {
+  const me = actor()
+  const staff = await fetchEmployees().catch(() => [])
+  return staff
+    .filter((row) => row.uid && row.uid !== me.uid && row.status === 'active')
+    .map((row) => row.uid)
+}
+
+/**
+ * Say that bookings arrived, once, however many there were.
+ *
+ * ONE MESSAGE AND NOT ONE PER BOOKING. Six bookings picked up in one go is one
+ * piece of news; six notifications is a system that has to be silenced, and a
+ * silenced system tells nobody anything.
+ */
+async function announce(
+  listing: StayBrainListing,
+  added: number,
+  earnedBaseMinor: number,
+): Promise<void> {
+  if (added <= 0) return
+
+  const uids = await audienceFor()
+
+  /*
+   * The bell renders the title as written and translates the KIND beside it, so
+   * the text here is data and not a sentence: a property, a count, and a figure
+   * with its currency. It reads the same in either language because there is
+   * nothing in it to translate.
+   */
+  const amount = formatMoney(earnedBaseMinor, listing.currency, 'en')
+
+  for (const uid of uids) {
+    await notify(uid, {
+      kind: 'sale_new',
+      priority: 'normal',
+      title: `${listing.name} · ${added}`,
+      body: amount,
+      link: `/staybrain/${listing.id}`,
+    })
+  }
+}
+
 export async function importMarkedBookings(
   listing: StayBrainListing,
   bookings: RmsBooking[],
@@ -213,6 +270,7 @@ export async function importMarkedBookings(
   const service = await stayBrainService()
   let added = 0
   let updated = 0
+  let earned = 0
 
   for (const booking of ours) {
     /*
@@ -292,7 +350,11 @@ export async function importMarkedBookings(
     }
 
     added += 1
+    earned += earning.baseMinor
   }
+
+  /* News, not a receipt: sent once for the batch, and never to whoever ran it. */
+  await announce(listing, added, earned)
 
   return { added, updated }
 }

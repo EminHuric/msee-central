@@ -114,6 +114,15 @@ function lastYearHint(now: number, then: number): string | undefined {
  * the CEO wants without changing a filter. */
 const dayFigures = computed(() => companyFigures(slice(snap.value, periodOf('today')), snap.value))
 
+/**
+ * Everything, from the beginning.
+ *
+ * Some figures only mean something as a running total — what this company has
+ * made for the people it works for is one. A month of it says little; the whole
+ * of it is the argument for the next client.
+ */
+const everFigures = computed(() => companyFigures(snap.value, snap.value))
+
 function money(minor: number): string {
   return formatMoney(minor, BASE_CURRENCY, locale.value)
 }
@@ -286,6 +295,21 @@ const moneyCards = computed<Card[]>(() =>
           hint: lastYearHint(figures.value.profitBaseMinor, yearAgo.value.profitBaseMinor),
         },
         {
+          key: 'madeFor',
+          label: t('dashboard.madeForClients'),
+          value: money(figures.value.madeForClientsBaseMinor),
+          delta: trend(
+            figures.value.madeForClientsBaseMinor,
+            before.value.madeForClientsBaseMinor,
+          ),
+          link: '/sales',
+          /* Today and since the beginning, because one period never answers it. */
+          hint: t('dashboard.madeForClientsHint', {
+            today: money(dayFigures.value.madeForClientsBaseMinor),
+            total: money(everFigures.value.madeForClientsBaseMinor),
+          }),
+        },
+        {
           key: 'outstanding',
           label: t('finance.outstanding'),
           value: money(figures.value.outstandingBaseMinor),
@@ -304,17 +328,6 @@ const workCards = computed<Card[]>(() => [
     value: short(figures.value.soldBaseMinor),
     delta: trend(figures.value.soldBaseMinor, before.value.soldBaseMinor),
     link: '/sales',
-  },
-  {
-    key: 'madeFor',
-    label: t('dashboard.madeForClients'),
-    value: short(figures.value.madeForClientsBaseMinor),
-    delta: trend(
-      figures.value.madeForClientsBaseMinor,
-      before.value.madeForClientsBaseMinor,
-    ),
-    link: '/sales',
-    hint: t('dashboard.madeForClientsHint'),
   },
   {
     key: 'sales',

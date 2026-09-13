@@ -429,7 +429,7 @@ export default {
 
   dashboard: {
     madeForClients: 'Napravili klijentima',
-    madeForClientsHint: 'Koliko je naš rad vredeo njima. Njihov novac, nikad naš.',
+    madeForClientsHint: '{today} danas · {total} od početka. Njihov novac, nikad naš.',
     vsLastYear: '{change}% u odnosu na isti period prošle godine',
     today: 'Danas',
     todayHint: 'Novac koji je stigao danas.',
