@@ -16,8 +16,10 @@
 
 import { logAudit } from './audit'
 import { saveReservation } from './reservations'
-import { actor, patch, readAll, readWhere, where, write } from './store'
+import { actor, patch, readAll, readWhere, today, where, write } from './store'
 import { blankTransaction, saveTransaction } from './finance'
+import { fetchServices } from './operations'
+import { blankSale, saveSale } from './sales'
 import { moneyOf } from './sales'
 import { remove } from './records'
 import { BASE_CURRENCY, type Money } from '@/types/money'
@@ -64,6 +66,9 @@ export async function saveListing(input: StayBrainListing): Promise<string> {
       active: input.active,
     },
   })
+
+  /* The fee is revenue for the service, so it is recorded as a sale. */
+  await recordFeeSale(input, id)
 
   return id
 }
@@ -161,6 +166,7 @@ export async function importMarkedBookings(
   if (!ours.length) return { added: 0, updated: 0 }
 
   const byRmsId = new Map(existing.map((r) => [r.rmsBookingId, r]))
+  const service = await stayBrainService()
   let added = 0
   let updated = 0
 
@@ -190,6 +196,8 @@ export async function importMarkedBookings(
      */
     const id = `rms_${booking.id}`
     const value = moneyOf(booking.totalPrice, listing.currency, listing.rate, booking.checkIn)
+    /* What was agreed on the booking, or the listing's standing terms. */
+    const earning = earningOf(listing.earning, value, booking.mseeCommissionAmount)
 
     await saveReservation({
       id,
@@ -217,7 +225,7 @@ export async function importMarkedBookings(
       apartmentId: booking.apartmentId,
       apartmentName: '',
       /* What was agreed on the booking, or the listing's standing terms. */
-      earning: earningOf(listing.earning, value, booking.mseeCommissionAmount),
+      earning,
       ownerUid: null,
       ownerName: '',
       deletedAt: null,
@@ -228,10 +236,104 @@ export async function importMarkedBookings(
       updatedAt: '',
     })
 
+    /* And as a sale, so it reaches the dashboard and the service by itself. */
+    await recordSale(listing, id, booking.guestName, booking.checkIn, earning, service)
+
     added += 1
   }
 
   return { added, updated }
+}
+
+/**
+ * The StayBrain service, found once per import.
+ *
+ * By name, the same way the services screen decides which card opens a property.
+ * `null` when there is no such service, and then no sale is written — inventing
+ * a service to hang revenue on would put a row in the company's sales that
+ * matches nothing anybody sold.
+ */
+async function stayBrainService(): Promise<{ id: string; name: string } | null> {
+  const services = await fetchServices().catch(() => [])
+  const match = services.find(
+    (row) => row.name.toLowerCase().replace(/[^a-z]/g, '') === 'staybrain',
+  )
+  return match ? { id: match.id, name: match.name } : null
+}
+
+/**
+ * Record a commission as what it is: a sale.
+ *
+ * WHY A SALE AND NOT A FIGURE OF ITS OWN. Bringing a booking and earning a
+ * commission on it is selling — the same act as any other sale this company
+ * makes, with a client, a service and a value. Writing it into `sales` means the
+ * dashboard, the service's own performance, the client's totals and every report
+ * that already reads sales pick it up without knowing StayBrain exists. The
+ * alternative was a parallel set of figures that would agree with the first only
+ * as long as somebody kept them agreeing.
+ *
+ * THE VALUE IS OUR COMMISSION, NOT THE GUEST'S BILL. A €500 booking that earns us
+ * €50 is a €50 sale. The €500 is the property owner's money; counting it as
+ * revenue would multiply this company's income by the size of other people's
+ * businesses.
+ *
+ * The id is derived from the reservation, so re-importing rewrites the same sale
+ * instead of adding another.
+ */
+async function recordSale(
+  listing: StayBrainListing,
+  reservationId: string,
+  guestName: string,
+  date: string,
+  earning: Money,
+  service: { id: string; name: string } | null,
+): Promise<void> {
+  /* Nothing earned, nothing sold. A booking nobody priced is not a sale. */
+  if (earning.minor <= 0) return
+
+  await saveSale({
+    ...blankSale(null, ''),
+    id: `sb_${reservationId}`,
+    title: `${listing.name} · ${guestName}`,
+    clientId: listing.clientId,
+    clientName: listing.clientName,
+    serviceId: service?.id ?? null,
+    serviceName: service?.name ?? 'StayBrain',
+    value: earning,
+    saleDate: date,
+    notes: 'StayBrain',
+  })
+}
+
+/**
+ * The joining fee, recorded as the sale of the service itself.
+ *
+ * Selling StayBrain to a client is a sale like any other: a client, a service, a
+ * value. In `sales` it reaches the dashboard and the service's own card with no
+ * second set of figures to keep in step.
+ *
+ * One per listing, by a derived id, so correcting the fee corrects that sale
+ * rather than adding another. A fee of zero writes nothing — that means the
+ * amount has not been agreed yet, not that the client paid nothing.
+ */
+async function recordFeeSale(listing: StayBrainListing, id: string): Promise<void> {
+  if ((listing.joinFee?.minor ?? 0) <= 0) return
+
+  const service = await stayBrainService()
+  const me = actor()
+
+  await saveSale({
+    ...blankSale(me.uid, me.name),
+    id: `sb_fee_${id}`,
+    title: `StayBrain · ${listing.name}`,
+    clientId: listing.clientId,
+    clientName: listing.clientName,
+    serviceId: service?.id ?? null,
+    serviceName: service?.name ?? 'StayBrain',
+    value: listing.joinFee,
+    saleDate: listing.createdAt ? listing.createdAt.slice(0, 10) : today(),
+    notes: listing.joinFeeNote || 'StayBrain',
+  })
 }
 
 /**
