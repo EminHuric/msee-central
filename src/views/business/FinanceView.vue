@@ -65,6 +65,7 @@ import {
   type Sale,
   type Transaction,
   type TransactionType,
+  balanceOf,
 } from '@/types/revenue'
 import {
   BASE_CURRENCY,
@@ -169,6 +170,52 @@ const sold = computed(() => {
     before: sum(earlier.value.sales),
   }
 })
+
+/**
+ * Who owes the company money, how much, and for how long.
+ *
+ * WHY THE AGE IS THE POINT. An amount outstanding is a fact; an amount
+ * outstanding for ninety days is a decision waiting to be made. Sorted oldest
+ * first, because the oldest debt is the one least likely to arrive and the one
+ * nobody remembers to chase.
+ *
+ * Grouped by client rather than by sale: money is chased from a person, and
+ * four invoices to one client is one phone call.
+ */
+const debtors = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  const byClient = new Map<
+    string,
+    { name: string; owed: number; count: number; oldest: string }
+  >()
+
+  snapshot.value.sales.forEach((sale) => {
+    const balance = balanceOf(sale, snapshot.value.transactions)
+    if (balance.remainingBaseMinor <= 0) return
+
+    const key = sale.clientId || sale.clientName || 'unknown'
+    const row = byClient.get(key) ?? {
+      name: sale.clientName || t('finance.noClient'),
+      owed: 0,
+      count: 0,
+      oldest: sale.saleDate,
+    }
+
+    row.owed += balance.remainingBaseMinor
+    row.count += 1
+    if (sale.saleDate < row.oldest) row.oldest = sale.saleDate
+    byClient.set(key, row)
+  })
+
+  const days = (from: string) =>
+    Math.max(0, Math.round((Date.parse(today) - Date.parse(from)) / 86_400_000))
+
+  return [...byClient.values()]
+    .map((row) => ({ ...row, days: days(row.oldest) }))
+    .sort((a, b) => b.days - a.days)
+})
+
+const owedTotal = computed(() => debtors.value.reduce((n, row) => n + row.owed, 0))
 
 const madeForClients = computed(() => {
   const sum = (rows: Snapshot['sales']) =>
@@ -475,6 +522,38 @@ onMounted(async () => {
 
       <!-- Overview ---------------------------------------------------- -->
       <template v-if="tab === 'overview'">
+        <!--
+          Who owes the company money.
+
+          First on the page, above the charts, because it is the only thing here
+          somebody can act on this morning. A chart explains what happened; this
+          says who to ring.
+        -->
+        <section v-if="debtors.length" class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">{{ t('finance.owedTitle') }}</h2>
+              <p class="field-hint">{{ t('finance.owedHint') }}</p>
+            </div>
+            <span class="owed-total">{{ money(owedTotal) }}</span>
+          </div>
+
+          <ul class="debtors">
+            <li v-for="row in debtors" :key="row.name" class="debtor">
+              <span class="debtor-name">{{ row.name }}</span>
+              <span class="debtor-meta">
+                {{ t('finance.owedFor', { n: row.count }) }}
+                <span class="tertiary">·</span>
+                <!-- Age, coloured once it is old enough to be a problem. -->
+                <span :class="row.days >= 60 ? 'late' : row.days >= 30 ? 'ageing' : ''">
+                  {{ t('finance.owedDays', { n: row.days }) }}
+                </span>
+              </span>
+              <span class="debtor-amount">{{ money(row.owed) }}</span>
+            </li>
+          </ul>
+        </section>
+
         <section class="card">
           <div class="card-header">
             <h2 class="card-title">{{ t('finance.overTime') }}</h2>
@@ -820,6 +899,56 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.owed-total {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.debtors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.debtor {
+  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+.debtor + .debtor {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.debtor-name {
+  font-weight: 600;
+}
+
+.debtor-meta {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  grid-column: 1;
+}
+
+.debtor-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.ageing {
+  color: var(--warn-500);
+}
+
+.late {
+  color: var(--danger-500);
+  font-weight: 600;
+}
+
 .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
 .tab { padding: var(--space-3) var(--space-4); border-bottom: 2px solid transparent; font-size: var(--text-base); font-weight: 550; color: var(--text-secondary); }

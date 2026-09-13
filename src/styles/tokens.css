@@ -275,6 +275,17 @@
   :root { --content-max: 2160px; }
 }
 
+/* ---- Chosen size ------------------------------------------------------ *
+ *
+ * The switch a person flips when the screen is across a room. It sits before the
+ * width rules below so those can still raise it further on a genuinely huge
+ * display, and it wins over nothing else: only the root changes, and every size
+ * in this system follows it because they are all in `rem`.
+ */
+
+:root[data-scale='big'] { font-size: 20px; }
+:root[data-scale='huge'] { font-size: 26px; }
+
 /* ---- A television ----------------------------------------------------- *
  *
  * A 4K monitor at arm's length and a 4K television across a room are the same

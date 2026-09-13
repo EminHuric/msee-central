@@ -1198,6 +1198,11 @@ export default {
   },
 
   finance: {
+    owedTitle: 'Who owes us',
+    owedHint: 'Oldest first — the oldest debt is the one least likely to arrive.',
+    owedFor: '{n} unpaid sale(s)',
+    owedDays: 'oldest {n} days',
+    noClient: 'No client',
     income: 'Income',
     expenses: 'Expenses',
     profit: 'Profit',
@@ -1275,6 +1280,11 @@ export default {
     closeMenu: 'Close menu',
   },
 
+  scale: {
+    normal: 'Normal size — press for a bigger screen',
+    big: 'Large — for a screen across the room',
+    huge: 'Largest — press to go back to normal',
+  },
   theme: {
     label: 'Theme',
     dark: 'Dark',

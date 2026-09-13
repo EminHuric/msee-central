@@ -199,6 +199,7 @@ const DYNAMIC_KEYS = {
   affiliateType: AFFILIATE_TYPES,
   announceAudience: ANNOUNCEMENT_AUDIENCES,
   auditAction: AUDIT_ACTIONS,
+  scale: ['normal', 'big', 'huge'],
   paymentState: RMS_PAYMENT_STATES,
   saleBalance: SALE_BALANCE_STATES,
   earningModel: EARNING_MODELS,

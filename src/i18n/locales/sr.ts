@@ -1197,6 +1197,11 @@ export default {
   },
 
   finance: {
+    owedTitle: 'Ko nam duguje',
+    owedHint: 'Najstarije prvo — najstariji dug najmanje verovatno stiže.',
+    owedFor: '{n} nenaplaćenih prodaja',
+    owedDays: 'najstarije {n} dana',
+    noClient: 'Bez klijenta',
     income: 'Prihod',
     expenses: 'Troškovi',
     profit: 'Profit',
@@ -1274,6 +1279,11 @@ export default {
     closeMenu: 'Zatvori meni',
   },
 
+  scale: {
+    normal: 'Normalna veličina — pritisni za veći ekran',
+    big: 'Veliko — za ekran preko sobe',
+    huge: 'Najveće — pritisni za povratak na normalno',
+  },
   theme: {
     label: 'Tema',
     dark: 'Tamna',

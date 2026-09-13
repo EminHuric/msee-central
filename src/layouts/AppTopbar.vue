@@ -79,6 +79,24 @@ async function handleSignOut(): Promise<void> {
         <AppIcon :name="ui.theme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
 
+      <!--
+        How big everything is drawn.
+
+        A control and not a breakpoint: a television and a monitor can report the
+        same width, and what decides the right size is how far away somebody is
+        sitting. No media query knows that; the person does.
+      -->
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon"
+        :class="{ 'is-on': ui.scale !== 'normal' }"
+        :aria-label="t(`scale.${ui.scale}`)"
+        :title="t(`scale.${ui.scale}`)"
+        @click="ui.cycleScale()"
+      >
+        <AppIcon name="display" :size="18" />
+      </button>
+
       <div ref="menuRoot" class="user-menu">
         <button
           type="button"
@@ -131,6 +149,10 @@ async function handleSignOut(): Promise<void> {
 </template>
 
 <style scoped>
+.is-on {
+  color: var(--brand-500);
+}
+
 .topbar {
   display: flex;
   align-items: center;
