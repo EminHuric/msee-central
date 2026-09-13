@@ -428,6 +428,7 @@ export default {
   },
 
   dashboard: {
+    vsLastYear: '{change}% u odnosu na isti period prošle godine',
     today: 'Danas',
     todayHint: 'Novac koji je stigao danas.',
     todaySold: 'stiglo danas · {amount} dogovoreno danas',

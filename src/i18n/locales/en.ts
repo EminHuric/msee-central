@@ -429,6 +429,7 @@ export default {
   },
 
   dashboard: {
+    vsLastYear: '{change}% against the same period last year',
     today: 'Today',
     todayHint: 'Money that arrived today.',
     todaySold: 'arrived today · {amount} agreed today',

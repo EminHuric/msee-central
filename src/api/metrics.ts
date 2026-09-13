@@ -210,6 +210,28 @@ export function previousPeriod(period: Period): Period {
   }
 }
 
+/**
+ * The same stretch of days, a year earlier.
+ *
+ * WHY BESIDE THE PREVIOUS PERIOD AND NOT INSTEAD OF IT. They answer different
+ * questions. Against last month tells you whether this month is going well;
+ * against last year tells you whether the business is growing, which a seasonal
+ * trade cannot learn any other way — for a company selling stays, August beats
+ * February every single year and says nothing at all.
+ *
+ * Shifted by calendar year rather than by 365 days, so "this month" lands on the
+ * same month and not four days into the one before.
+ */
+export function sameSpanLastYear(period: Period): Period {
+  const back = (date: string) => {
+    const d = new Date(date)
+    d.setUTCFullYear(d.getUTCFullYear() - 1)
+    return iso(d)
+  }
+
+  return { from: back(period.from), to: back(period.to), key: 'custom' }
+}
+
 const within = (date: string | null | undefined, p: Period) =>
   !!date && date >= p.from && date <= p.to
 

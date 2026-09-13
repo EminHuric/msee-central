@@ -39,6 +39,7 @@ import {
   loadSnapshot,
   periodOf,
   previousPeriod,
+  sameSpanLastYear,
   seriesOver,
   slice,
   soldByChannel,
@@ -46,7 +47,7 @@ import {
   type Period,
   type Snapshot,
 } from '@/api/metrics'
-import { INCOME_TYPES, balanceOf } from '@/types/revenue'
+import { balanceOf } from '@/types/revenue'
 import { formatRelative } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -82,32 +83,32 @@ const earlier = computed(() => slice(snap.value, previousPeriod(period.value)))
 
 const figures = computed(() => companyFigures(current.value, snap.value))
 
-/**
- * What arrived today, whatever period the rest of the page is showing.
- *
- * WHY IT IS ITS OWN FIGURE. Every other tile follows the period picker, which is
- * right for judging a month and useless for the question somebody actually opens
- * this page with: did anything come in today. Reading it off a monthly total is
- * not possible, so it is counted directly.
- *
- * Money that ARRIVED, not money agreed: a sale signed today is on the sold tile,
- * and this one is the bank.
- */
-const todayIncome = computed(() => {
-  const day = new Date().toISOString().slice(0, 10)
-  return snap.value.transactions
-    .filter((row) => row.date === day && row.status === 'paid' && INCOME_TYPES.includes(row.type))
-    .reduce((sum, row) => sum + row.amount.baseMinor, 0)
-})
-
-/** Agreed today. Not the same thing, and worth seeing beside it. */
-const todaySold = computed(() => {
-  const day = new Date().toISOString().slice(0, 10)
-  return snap.value.sales
-    .filter((row) => row.saleDate === day)
-    .reduce((sum, row) => sum + row.value.baseMinor, 0)
-})
 const before = computed(() => companyFigures(earlier.value, snap.value))
+
+/**
+ * The same stretch a year ago.
+ *
+ * BESIDE THE PREVIOUS PERIOD, NOT INSTEAD OF IT, because they answer different
+ * questions. Against last month tells you how this month is going; against last
+ * year tells you whether the business is growing — which a seasonal trade cannot
+ * learn any other way, since August beats February every year and says nothing.
+ */
+const yearAgo = computed(() =>
+  companyFigures(slice(snap.value, sameSpanLastYear(period.value)), snap.value),
+)
+
+/** Growth against the same stretch last year, as a percentage. Null if it is new. */
+function versusLastYear(now: number, then: number): number | null {
+  if (then <= 0) return null
+  return Math.round(((now - then) / then) * 100)
+}
+
+/** The year-on-year line under a money tile, when there is a year to compare. */
+function lastYearHint(now: number, then: number): string | undefined {
+  const change = versusLastYear(now, then)
+  if (change === null) return undefined
+  return t('dashboard.vsLastYear', { change: change > 0 ? `+${change}` : String(change) })
+}
 
 /* Today is always shown alongside the chosen period — it is the one figure
  * the CEO wants without changing a filter. */
@@ -267,16 +268,7 @@ const moneyCards = computed<Card[]>(() =>
           value: money(figures.value.incomeBaseMinor),
           delta: trend(figures.value.incomeBaseMinor, before.value.incomeBaseMinor),
           link: '/finance',
-        },
-        {
-          key: 'today',
-          label: t('dashboard.today'),
-          value: money(todayIncome.value),
-          delta: null,
-          link: '/finance',
-          hint: todaySold.value > 0
-            ? t('dashboard.todaySold', { amount: money(todaySold.value) })
-            : t('dashboard.todayHint'),
+          hint: lastYearHint(figures.value.incomeBaseMinor, yearAgo.value.incomeBaseMinor),
         },
         {
           key: 'expense',
@@ -291,6 +283,7 @@ const moneyCards = computed<Card[]>(() =>
           value: money(figures.value.profitBaseMinor),
           delta: trend(figures.value.profitBaseMinor, before.value.profitBaseMinor),
           link: '/finance',
+          hint: lastYearHint(figures.value.profitBaseMinor, yearAgo.value.profitBaseMinor),
         },
         {
           key: 'outstanding',
