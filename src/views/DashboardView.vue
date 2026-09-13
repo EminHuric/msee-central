@@ -427,7 +427,33 @@ const workCards = computed<Card[]>(() => [
 
 /* ---- Charts ---------------------------------------------------------- */
 
-const points = computed(() => seriesOver(current.value, period.value))
+/**
+ * The chart moves through years on its own, independent of the period above.
+ *
+ * WHY IT IS NOT TIED TO THE FILTER. The figures answer "how is this month going";
+ * the chart answers "how is the business going", and those want different spans.
+ * Forcing one control to serve both meant the chart could only ever show the
+ * slice somebody had chosen for the tiles.
+ *
+ * Forward as well as back, because bookings are taken for next summer and the
+ * money is earned when they are taken: next year is not empty, and a chart that
+ * refuses to look at it hides work already done.
+ */
+const chartYear = ref(new Date().getFullYear())
+
+const chartPeriod = computed<Period>(() => ({
+  from: `${chartYear.value}-01-01`,
+  to: `${chartYear.value}-12-31`,
+  key: 'custom',
+}))
+
+/** Whether there is anything at all in a year, so an empty one can say so. */
+const chartHasData = computed(() =>
+  slice(snap.value, chartPeriod.value).sales.length > 0 ||
+  slice(snap.value, chartPeriod.value).transactions.length > 0,
+)
+
+const points = computed(() => seriesOver(slice(snap.value, chartPeriod.value), chartPeriod.value))
 
 /**
  * The six metrics the overview chart draws, each with the period before it.
@@ -812,6 +838,28 @@ onMounted(async () => {
           period before it beside every figure. See the component for why the
           money and the counts are two groups rather than two axes.
         -->
+        <div v-if="shows('overview') && canMoney" class="chart-years">
+          <!-- Moving through years: back as far as there is history, forward for
+               bookings already taken. -->
+          <button class="btn btn-ghost btn-sm" @click="chartYear -= 1">
+            <AppIcon name="chevronRight" :size="14" class="back" />
+          </button>
+          <span class="chart-year">{{ chartYear }}</span>
+          <button class="btn btn-ghost btn-sm" @click="chartYear += 1">
+            <AppIcon name="chevronRight" :size="14" />
+          </button>
+          <button
+            v-if="chartYear !== new Date().getFullYear()"
+            class="btn btn-ghost btn-sm"
+            @click="chartYear = new Date().getFullYear()"
+          >
+            {{ t('stayCalendar.now') }}
+          </button>
+          <span v-if="!chartHasData" class="tertiary small">
+            {{ t('dashboard.yearEmpty', { year: chartYear }) }}
+          </span>
+        </div>
+
         <BusinessOverview
           v-if="shows('overview') && canMoney"
           :labels="moneyChart.labels"
@@ -985,6 +1033,21 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.chart-years {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.chart-year {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.chart-years .back {
+  transform: rotate(180deg);
+}
+
 .earned {
   list-style: none;
   margin: 0;

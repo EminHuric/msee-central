@@ -429,6 +429,7 @@ export default {
   },
 
   dashboard: {
+    yearEmpty: 'nothing recorded in {year} yet',
     byService: 'Which service it came from',
     byServiceHint: 'Everything sold in this period, by service.',
     earnedFrom: 'What the money came from',

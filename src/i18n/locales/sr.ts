@@ -428,6 +428,7 @@ export default {
   },
 
   dashboard: {
+    yearEmpty: 'u {year} još nema ničega',
     byService: 'Od koje usluge',
     byServiceHint: 'Sve prodato u ovom periodu, po usluzi.',
     earnedFrom: 'Od čega je novac',

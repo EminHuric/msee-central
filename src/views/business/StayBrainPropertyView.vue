@@ -580,12 +580,6 @@ onMounted(load)
         </div>
       </section>
 
-      <!-- Why nothing here is editable, said once rather than implied. -->
-      <p class="where-to-book">
-        <AppIcon name="info" :size="14" />
-        {{ t('staybrain.bookInRms') }}
-      </p>
-
       <div v-if="!listing.rmsWorkspaceId" class="card">
         <div class="card-body">
           <p class="field-hint warn">
@@ -625,27 +619,6 @@ onMounted(load)
           :currency="listing.currency"
         />
 
-        <!-- The units, with what the RMS knows about each. -->
-        <section v-if="apartments.length" class="card">
-          <div class="card-header">
-            <h2 class="card-title">{{ t('staybrain.unitsLabel') }}</h2>
-            <p class="field-hint">{{ t('staybrain.fromRms') }}</p>
-          </div>
-          <ul class="units">
-            <li v-for="unit in apartments" :key="unit.id" class="unit">
-              <span class="unit-name">{{ unit.name }}</span>
-              <span class="unit-meta">{{ t('staybrain.sleeps', { n: unit.maxGuests }) }}</span>
-              <span class="unit-meta">
-                <template v-if="unit.pricePerNight > 0">
-                  {{ money(Math.round(unit.pricePerNight * 100)) }}
-                  {{ t('staybrain.perNight') }}
-                </template>
-              </span>
-              <span v-if="unit.description" class="unit-meta desc">{{ unit.description }}</span>
-            </li>
-          </ul>
-        </section>
-
         <div v-else class="card">
           <div class="empty">
             <p class="empty-title">{{ t('staybrain.noUnits') }}</p>
@@ -657,7 +630,11 @@ onMounted(load)
       <!-- The guests we brought, with everything the RMS knows about them. -->
       <section class="card">
         <div class="card-header">
-          <h2 class="card-title">{{ t('staybrain.ourBookings') }}</h2>
+          <div>
+            <h2 class="card-title">{{ t('staybrain.ourBookings') }}</h2>
+            <!-- Said here, where somebody wonders why they cannot edit one. -->
+            <p class="field-hint">{{ t('staybrain.bookInRms') }}</p>
+          </div>
         </div>
 
         <div v-if="!ours.length" class="empty">
@@ -841,14 +818,6 @@ onMounted(load)
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
-}
-
-.where-to-book {
-  align-items: center;
-  color: var(--text-secondary);
-  display: flex;
-  font-size: var(--text-sm);
-  gap: var(--space-2);
 }
 
 .units,
