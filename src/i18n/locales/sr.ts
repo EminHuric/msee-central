@@ -428,6 +428,9 @@ export default {
   },
 
   dashboard: {
+    today: 'Danas',
+    todayHint: 'Novac koji je stigao danas.',
+    todaySold: 'stiglo danas · {amount} dogovoreno danas',
     todayIncome: 'Današnji prihod',
     todayExpenses: 'Današnji troškovi',
     todayProfit: 'Današnji profit',
@@ -2534,6 +2537,13 @@ export default {
     advance_remainder: 'Avans + ostatak',
     instalments: 'Na rate',
     custom: 'Dogovor po klijentu',
+  },
+  saleBalance: {
+    unpaid: 'Nije plaćeno',
+    advance_due: 'Avans dospeo',
+    part_paid: 'Delimično plaćeno',
+    paid: 'Plaćeno',
+    overpaid: 'Preplaćeno',
   },
   payStatus: {
     paid: 'Plaćeno',

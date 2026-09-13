@@ -381,7 +381,7 @@ watch(clientId, load)
                   </td>
                   <td :data-label="t('table.status')">
                     <span class="badge" :class="`pay-${balances.get(sale.id)?.status}`">
-                      {{ t(`payStatus.${balances.get(sale.id)?.status}`) }}
+                      {{ t(`saleBalance.${balances.get(sale.id)?.status}`) }}
                     </span>
                   </td>
                 </tr>

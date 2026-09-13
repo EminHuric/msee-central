@@ -829,7 +829,7 @@ onMounted(async () => {
               </td>
               <td :data-label="t('table.status')">
                 <span class="badge" :class="`pay-${balanceMap.get(sale.id)?.status}`">
-                  {{ t(`payStatus.${balanceMap.get(sale.id)?.status}`) }}
+                  {{ t(`saleBalance.${balanceMap.get(sale.id)?.status}`) }}
                 </span>
               </td>
               <td class="col-actions">

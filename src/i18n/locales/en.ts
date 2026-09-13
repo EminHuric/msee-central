@@ -429,6 +429,9 @@ export default {
   },
 
   dashboard: {
+    today: 'Today',
+    todayHint: 'Money that arrived today.',
+    todaySold: 'arrived today · {amount} agreed today',
     todayIncome: 'Today\'s income',
     todayExpenses: 'Today\'s expenses',
     todayProfit: 'Today\'s profit',
@@ -2535,6 +2538,13 @@ export default {
     advance_remainder: 'Advance + remainder',
     instalments: 'Instalments',
     custom: 'Agreed per client',
+  },
+  saleBalance: {
+    unpaid: 'Not paid',
+    advance_due: 'Advance due',
+    part_paid: 'Part paid',
+    paid: 'Paid',
+    overpaid: 'Overpaid',
   },
   payStatus: {
     paid: 'Paid',

@@ -59,6 +59,23 @@ export const NO_STRUCTURE: PaymentStructure = {
  * against it. Nothing here is stored, so a payment recorded anywhere updates
  * every screen that shows it.
  */
+/**
+ * Where a sale stands on being paid.
+ *
+ * A named list rather than an inline union, so the label check can compare the
+ * translations against it. As an inline union nothing did: four of these five
+ * had no label at all and rendered on screen as `payStatus.unpaid`, which is how
+ * a raw key reaches a customer-facing table and stays there.
+ */
+export const SALE_BALANCE_STATES = [
+  'unpaid',
+  'advance_due',
+  'part_paid',
+  'paid',
+  'overpaid',
+] as const
+export type SaleBalanceStatus = (typeof SALE_BALANCE_STATES)[number]
+
 export interface SaleBalance {
   valueBaseMinor: number
   paidBaseMinor: number
@@ -66,7 +83,7 @@ export interface SaleBalance {
   /** True when an advance was required and has not been covered yet. */
   advanceDue: boolean
   advanceBaseMinor: number
-  status: 'unpaid' | 'advance_due' | 'part_paid' | 'paid' | 'overpaid'
+  status: SaleBalanceStatus
   /** What each remaining instalment comes to, when there are instalments. */
   instalmentBaseMinor: number
 }
