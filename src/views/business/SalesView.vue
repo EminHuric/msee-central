@@ -527,8 +527,17 @@ onMounted(async () => {
       </article>
     </div>
 
-    <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
+    <!--
+      Editor, over the page rather than above it.
+
+      It used to sit between the totals and the list, which meant that pressing
+      "edit" on the fortieth row jumped the page to the top and left the person
+      to scroll back afterwards to find where they were. A dialog keeps the list
+      exactly where it was, and on a phone it is the only shape that works at
+      all. Same backdrop as the payment dialog below, so the two behave alike.
+    -->
+    <div v-if="draft" class="modal-backdrop" @click.self="draft = null">
+      <section class="card editor modal-wide">
       <div class="card-header">
         <h2 class="card-title">{{ draft.id ? t('sales.editSale') : t('sales.newSale') }}</h2>
         <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
@@ -771,7 +780,8 @@ onMounted(async () => {
           <span v-if="saving" class="spinner" />{{ t('common.save') }}
         </button>
       </div>
-    </section>
+      </section>
+    </div>
 
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">
@@ -1041,6 +1051,20 @@ onMounted(async () => {
 }
 
 .editor { border-color: var(--accent-soft-border); }
+
+/*
+ * A dialog that holds a long form.
+ *
+ * Capped at 90% of the viewport and scrolled internally, because this form is
+ * taller than a phone: without the cap the Save button sits below the fold with
+ * no way to reach it, which is a dialog that cannot be completed.
+ */
+.modal-wide {
+  width: min(760px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
 .search { position: relative; display: flex; align-items: center; }
 .search-icon { position: absolute; left: var(--space-3); color: var(--text-tertiary); pointer-events: none; }
 .search-input { padding-left: calc(var(--space-3) * 2 + 16px); }

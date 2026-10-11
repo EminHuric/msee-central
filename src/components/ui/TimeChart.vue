@@ -74,9 +74,87 @@ function y(value: number): number {
   return PAD_T + plotH.value * (1 - value / max.value)
 }
 
-function linePath(values: number[]): string {
-  return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
+/**
+ * A smooth line, with the one constraint that matters for money.
+ *
+ * Straight segments make a chart of a dozen months look like a seismograph:
+ * every point is a corner, and the eye reads corners as events. A curve reads
+ * as a trend, which is what a series of monthly totals actually is.
+ *
+ * The curve is MONOTONE cubic (Fritsch-Carlson), not the usual Catmull-Rom.
+ * The difference is the whole reason this is twenty lines instead of three: a
+ * plain smoothing spline overshoots between points, so a month of 0 followed by
+ * a month of 4.000 draws a dip BELOW zero on the way up — a chart showing
+ * negative revenue in a month that simply had none. Monotone interpolation
+ * cannot overshoot: between two points the curve stays between their values.
+ */
+function smoothPath(values: number[]): string {
+  const n = values.length
+  if (n === 0) return ''
+  if (n === 1) return `M${x(0).toFixed(1)} ${y(values[0] ?? 0).toFixed(1)}`
+
+  const px = values.map((_, i) => x(i))
+  const py = values.map((v) => y(v))
+
+  /* Secant slopes between consecutive points. */
+  const slope: number[] = []
+  for (let i = 0; i < n - 1; i += 1) {
+    const dx = (px[i + 1] ?? 0) - (px[i] ?? 0)
+    slope.push(dx === 0 ? 0 : ((py[i + 1] ?? 0) - (py[i] ?? 0)) / dx)
+  }
+
+  /* Tangents: the average of the neighbouring secants, ends excepted. */
+  const tangent: number[] = [slope[0] ?? 0]
+  for (let i = 1; i < n - 1; i += 1) tangent.push(((slope[i - 1] ?? 0) + (slope[i] ?? 0)) / 2)
+  tangent.push(slope[n - 2] ?? 0)
+
+  /* The Fritsch-Carlson limiter — this is what forbids the overshoot. */
+  for (let i = 0; i < n - 1; i += 1) {
+    const d = slope[i] ?? 0
+
+    if (d === 0) {
+      tangent[i] = 0
+      tangent[i + 1] = 0
+      continue
+    }
+
+    const a = (tangent[i] ?? 0) / d
+    const b = (tangent[i + 1] ?? 0) / d
+    const size = a * a + b * b
+
+    if (size > 9) {
+      const scale = 3 / Math.sqrt(size)
+      tangent[i] = scale * a * d
+      tangent[i + 1] = scale * b * d
+    }
+  }
+
+  let path = `M${(px[0] ?? 0).toFixed(1)} ${(py[0] ?? 0).toFixed(1)}`
+
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = ((px[i + 1] ?? 0) - (px[i] ?? 0)) / 3
+    const c1x = (px[i] ?? 0) + h
+    const c1y = (py[i] ?? 0) + (tangent[i] ?? 0) * h
+    const c2x = (px[i + 1] ?? 0) - h
+    const c2y = (py[i + 1] ?? 0) - (tangent[i + 1] ?? 0) * h
+    path += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${(px[i + 1] ?? 0).toFixed(1)} ${(py[i + 1] ?? 0).toFixed(1)}`
+  }
+
+  return path
 }
+
+function linePath(values: number[]): string {
+  return smoothPath(values)
+}
+
+/*
+ * A gradient id of this chart's own.
+ *
+ * SVG gradients are referenced by a document-wide id, so two charts on one page
+ * sharing an id means the second silently repaints the first.
+ */
+let nextChart = 0
+const uid = `tc${(nextChart += 1)}-${Math.random().toString(36).slice(2, 8)}`
 
 function areaPath(values: number[]): string {
   if (values.length === 0) return ''
@@ -133,13 +211,20 @@ function onMove(event: MouseEvent): void {
 
       <template v-if="hasData">
         <template v-for="(s, i) in series" :key="s.key">
-          <path
-            v-if="area && series.length === 1"
-            :d="areaPath(s.values)"
-            :fill="colorOf(s, i)"
-            fill-opacity="0.12"
-            stroke="none"
-          />
+          <!--
+            The fill fades out downwards rather than sitting as a flat block,
+            which is what stops a single-series chart reading as a solid shape
+            with a line on top.
+          -->
+          <template v-if="area && series.length === 1">
+            <defs>
+              <linearGradient :id="`${uid}-${s.key}`" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" :stop-color="colorOf(s, i)" stop-opacity="0.32" />
+                <stop offset="100%" :stop-color="colorOf(s, i)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path :d="areaPath(s.values)" :fill="`url(#${uid}-${s.key})`" stroke="none" />
+          </template>
           <path
             :d="linePath(s.values)"
             fill="none"
