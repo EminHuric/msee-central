@@ -104,6 +104,13 @@ const totals = computed(() => {
       .reduce((n, tx) => n + tx.amount.baseMinor, 0),
     advanceDue: rows.filter((b) => b.advanceDue).length,
     /*
+     * What we made FOR them, which is not ours and must never be added to the
+     * three figures above. A 27.000 euro season that earned us 2.720 says more
+     * about the relationship than the 2.720 does, and it is the number the
+     * client themselves would quote.
+     */
+    madeFor: sales.value.reduce((n, sale) => n + (sale.basisValue?.baseMinor ?? 0), 0),
+    /*
      * How long the oldest unpaid sale has been unpaid.
      *
      * The amount alone is a fact; the age is the decision. Ninety days owing and
@@ -265,6 +272,15 @@ watch(clientId, load)
           <span class="figure-value" :class="{ warn: totals.advanceDue > 0 }">
             {{ totals.advanceDue }}
           </span>
+        </article>
+        <!--
+          Only for the clients we actually earn this for. An empty box reading
+          nought on every other client would teach people to stop reading the row.
+        -->
+        <article v-if="totals.madeFor > 0" class="card figure">
+          <span class="figure-label">{{ t('dashboard.madeForClients') }}</span>
+          <span class="figure-value">{{ money(totals.madeFor) }}</span>
+          <span class="figure-note">{{ t('report.theirMoney') }}</span>
         </article>
       </div>
 

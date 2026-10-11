@@ -181,6 +181,38 @@ const madeForClients = computed(() => {
   }
 })
 
+/**
+ * Their money, client by client, over the whole history.
+ *
+ * Deliberately not sliced by the period picker. "How much have we made these
+ * people" is a question about a relationship, and a relationship is not a month:
+ * a client who brought in twenty-seven thousand over a season reads as nothing
+ * in a week that happened to be quiet. The card above already answers the
+ * period; this answers the partnership.
+ */
+const madeForByClient = computed(() => {
+  const rows = new Map<string, { name: string; made: number; ours: number }>()
+
+  snapshot.value.sales.forEach((sale) => {
+    const made = sale.basisValue?.baseMinor ?? 0
+    if (made <= 0) return
+
+    const key = sale.clientId || sale.clientName
+    const row = rows.get(key) ?? { name: sale.clientName || t('finance.noClient'), made: 0, ours: 0 }
+    row.made += made
+    row.ours += sale.value.baseMinor
+    rows.set(key, row)
+  })
+
+  const list = [...rows.values()].sort((a, b) => b.made - a.made)
+
+  return {
+    list,
+    made: list.reduce((n, row) => n + row.made, 0),
+    ours: list.reduce((n, row) => n + row.ours, 0),
+  }
+})
+
 const headline = computed(() => [
   {
     key: 'income',
@@ -526,6 +558,52 @@ onMounted(async () => {
             </div>
           </section>
         </div>
+
+        <!--
+          What the work was worth to the people it was done for.
+
+          Last on the page on purpose: everything above is this company's money,
+          and this is not. Keeping it apart is the whole point — the day these
+          two are read as one total is the day the books stop meaning anything.
+        -->
+        <section v-if="madeForByClient.list.length" class="card">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('finance.madeForTitle') }}</h2>
+          </div>
+          <div class="card-body">
+            <p class="tertiary small made-note">{{ t('finance.madeForSubtitle') }}</p>
+            <div class="table-wrap">
+              <!--
+                Three short columns, so this stays a table on a phone rather
+                than becoming cards: turning "name, theirs, ours" into three
+                stacked lines loses the comparison that is the whole point.
+              -->
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>{{ t('clients.title') }}</th>
+                    <th class="num">{{ t('finance.madeForThem') }}</th>
+                    <th class="num">{{ t('finance.madeForUs') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in madeForByClient.list" :key="row.name">
+                    <td>{{ row.name }}</td>
+                    <td class="num strong">{{ money(row.made) }}</td>
+                    <td class="num muted">{{ money(row.ours) }}</td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td class="strong">{{ t('finance.madeForTotal') }}</td>
+                    <td class="num strong">{{ money(madeForByClient.made) }}</td>
+                    <td class="num muted">{{ money(madeForByClient.ours) }}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
       </template>
 
       <!-- Ledger ------------------------------------------------------ -->
@@ -820,6 +898,23 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/*
+ * Their money, kept visually apart from ours.
+ *
+ * The footer rule is heavier than a row border on purpose: the total is the
+ * line somebody reads out loud, and on a 55" screen across a room a hairline
+ * disappears entirely.
+ */
+.made-note {
+  margin: 0 0 var(--space-3);
+  max-width: 62ch;
+}
+
+.made-note + .table-wrap tfoot td {
+  border-top: 2px solid var(--border-default);
+  padding-top: var(--space-2);
+}
+
 .owed-total {
   font-size: var(--text-xl);
   font-variant-numeric: tabular-nums;
