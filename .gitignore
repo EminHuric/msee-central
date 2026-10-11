@@ -47,3 +47,7 @@ firebase-export-*
 
 # TypeScript incremental build artefact
 *.tsbuildinfo
+
+# Scratch scripts and data dumps. The repo is PUBLIC: a backup of the live
+# database is real client data and must never be committed to it.
+tools/_*
