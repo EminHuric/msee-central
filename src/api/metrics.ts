@@ -248,6 +248,18 @@ export interface CompanyFigures {
   /** Money that arrived, from transactions marked paid. */
   incomeBaseMinor: number
   expenseBaseMinor: number
+  /**
+   * Revenue minus costs — and revenue here means SOLD, not collected.
+   *
+   * This used to be collected minus costs, which put two different measures
+   * side by side on the same row: 4.586 of income, 10,30 of cost, and a profit
+   * of 1.848. Three figures that cannot be reconciled by anybody reading them,
+   * because the first came from the sales and the third from the bank.
+   *
+   * Profit is now the subtraction the row claims to be doing. What is left over
+   * in cash is `incomeBaseMinor` minus `expenseBaseMinor`, and the outstanding
+   * tile is the difference between the two worlds.
+   */
   profitBaseMinor: number
   /** What was agreed in the period — sold, not collected. */
   soldBaseMinor: number
@@ -300,12 +312,13 @@ export function companyFigures(snap: Snapshot, all: Snapshot = snap): CompanyFig
     .reduce((n, tx) => n + tx.amount.baseMinor, 0)
 
   const allBalances = all.sales.map((sale) => balanceOf(sale, all.transactions))
+  const sold = snap.sales.reduce((n, s) => n + s.value.baseMinor, 0)
 
   return {
     incomeBaseMinor: income,
     expenseBaseMinor: expense,
-    profitBaseMinor: income - expense,
-    soldBaseMinor: snap.sales.reduce((n, s) => n + s.value.baseMinor, 0),
+    profitBaseMinor: sold - expense,
+    soldBaseMinor: sold,
     madeForClientsBaseMinor: snap.sales.reduce(
       (n, s) => n + (s.basisValue?.baseMinor ?? 0),
       0,
@@ -409,7 +422,13 @@ export function seriesOver(snap: Snapshot, period: Period): SeriesPoint[] {
     if (row) row.clients += 1
   }
 
-  for (const row of buckets.values()) row.profit = row.income - row.expense
+  /*
+   * Sold minus cost, matching the profit card above every chart that draws
+   * this. Collected minus cost is a different and equally real figure, but a
+   * line that disagrees with the total printed beside it is just a bug with a
+   * gradient.
+   */
+  for (const row of buckets.values()) row.profit = row.sold - row.expense
 
   return [...buckets.values()]
 }
@@ -587,13 +606,15 @@ export function goalProgress(goal: Goal, snap: Snapshot): GoalProgress {
           .reduce((n, tx) => n + tx.amount.baseMinor, 0)
 
       case 'profit': {
-        const paid = win.transactions.filter((tx) => tx.status === 'paid')
+        /* Sold minus cost, the same subtraction the dashboard shows. */
+        const sold = mineOnly(win.sales)
+          .filter((s) => serviceMatch(s.serviceId))
+          .reduce((n, s) => n + s.value.baseMinor, 0)
+
         return (
-          paid
-            .filter((tx) => INCOME_TYPES.includes(tx.type))
-            .reduce((n, tx) => n + tx.amount.baseMinor, 0) -
-          paid
-            .filter((tx) => OUTGOING_TYPES.includes(tx.type))
+          sold -
+          win.transactions
+            .filter((tx) => tx.status === 'paid' && OUTGOING_TYPES.includes(tx.type))
             .reduce((n, tx) => n + tx.amount.baseMinor, 0)
         )
       }

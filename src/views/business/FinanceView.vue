@@ -231,8 +231,17 @@ const headline = computed(() => [
   {
     key: 'profit',
     label: t('finance.profit'),
-    value: money(totals.value.profitBaseMinor),
-    delta: trend(totals.value.profitBaseMinor, before.value.profitBaseMinor),
+    /*
+     * Against the income card above, which is what was SOLD. Reading
+     * `totals.profitBaseMinor` here took collected minus cost and printed it
+     * one tile along from sold minus nothing — three numbers in a row that did
+     * not subtract.
+     */
+    value: money(sold.value.period - totals.value.expenseBaseMinor),
+    delta: trend(
+      sold.value.period - totals.value.expenseBaseMinor,
+      sold.value.before - before.value.expenseBaseMinor,
+    ),
     accent: true,
   },
   {
