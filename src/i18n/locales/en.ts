@@ -772,6 +772,15 @@ export default {
     former: 'Former',
   },
 
+  backup: {
+    title: 'Backup',
+    subtitle: 'A copy of everything, on your own disk.',
+    download: 'Download a copy',
+    hint: 'It only reads — nothing is changed, so you can take one whenever you like. Keep the file somewhere other than this computer.',
+    done: '{n} records saved to {file}.',
+    refused: 'not included, because this account cannot read them: {list}',
+    saved: 'Copy saved.',
+  },
   clients: {
     duplicateWarning: '{name} already exists. Press Save again to add this one anyway.',
     description: 'Description',

@@ -12,15 +12,45 @@
  * up is worse than no rules engine at all.
  */
 
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import { downloadBackup, type BackupResult } from '@/api/backup'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { PERMISSIONS } from '@/types/permissions'
 import { RETENTION_DAYS } from '@/types/records'
 
 const auth = useAuthStore()
+
+/*
+ * Only somebody who can read the company's records can copy them.
+ *
+ * Not a second permission of its own: a backup is a read of everything, so the
+ * right to take one is simply the right to see it. The rules enforce that
+ * anyway — what somebody cannot read does not reach the file, and the file says
+ * which parts those were.
+ */
+const canBackUp = computed(() => auth.hasPermission(PERMISSIONS.FINANCE_VIEW))
+
+const backingUp = ref(false)
+const backupResult = ref<BackupResult | null>(null)
+
+async function takeBackup(): Promise<void> {
+  if (backingUp.value) return
+
+  backingUp.value = true
+  try {
+    backupResult.value = await downloadBackup()
+    ui.notify('ok', t('backup.saved'))
+  } catch {
+    ui.notify('danger', t('errors.generic'))
+  } finally {
+    backingUp.value = false
+  }
+}
 const ui = useUiStore()
 const { t } = useI18n()
 
@@ -40,6 +70,37 @@ const automations = [
 
 <template>
   <div class="stack">
+    <!--
+      A copy of everything, on your own disk.
+
+      First on this page because it is the one setting that protects every other
+      thing in the system. It reads and never writes, so pressing it is always
+      safe — including right now, before anything else is changed.
+    -->
+    <section v-if="canBackUp" class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">{{ t('backup.title') }}</h2>
+          <p class="field-hint">{{ t('backup.subtitle') }}</p>
+        </div>
+        <button class="btn btn-primary" :disabled="backingUp" @click="takeBackup">
+          <span v-if="backingUp" class="spinner" />
+          <AppIcon v-else name="arrowDown" :size="15" />
+          {{ t('backup.download') }}
+        </button>
+      </div>
+
+      <div class="card-body">
+        <p v-if="backupResult" class="field-hint">
+          {{ t('backup.done', { n: backupResult.total, file: backupResult.filename }) }}
+          <template v-if="backupResult.refused.length">
+            · {{ t('backup.refused', { list: backupResult.refused.join(', ') }) }}
+          </template>
+        </p>
+        <p v-else class="field-hint">{{ t('backup.hint') }}</p>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-header">
         <h2 class="card-title">{{ t('settingsHub.appearance') }}</h2>

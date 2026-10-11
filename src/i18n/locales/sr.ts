@@ -771,6 +771,15 @@ export default {
     former: 'Bivši',
   },
 
+  backup: {
+    title: 'Rezervna kopija',
+    subtitle: 'Kopija svega, na tvom disku.',
+    download: 'Preuzmi kopiju',
+    hint: 'Samo čita — ništa se ne menja, pa je možeš uzeti kad god hoćeš. Čuvaj fajl i negde van ovog računara.',
+    done: '{n} zapisa sačuvano u {file}.',
+    refused: 'nije uključeno, jer ovaj nalog ne sme da ih čita: {list}',
+    saved: 'Kopija sačuvana.',
+  },
   clients: {
     duplicateWarning: '{name} već postoji. Pritisni Sačuvaj ponovo ako ipak želiš i ovog.',
     description: 'Opis',
