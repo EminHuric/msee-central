@@ -533,6 +533,83 @@ const goals = computed(() =>
     .slice(0, 4),
 )
 
+/**
+ * The year, the target, and what is left to do about it.
+ *
+ * WHY THIS IS NOT JUST ANOTHER GOAL IN THE LIST BELOW. A list of goals answers
+ * "how am I doing"; this answers "what do I do today", which is a different
+ * question and the only one worth putting at the top of a screen. The gap alone
+ * does not answer it either — 6.400 euros is a number, "about 1.300 a month, or
+ * four more jobs the size you usually sell" is a plan.
+ *
+ * The typical sale is the MEDIAN, not the average. One 2.720 euro commission in
+ * a year of 50 euro adverts drags a mean so far from reality that the advice
+ * built on it would be nonsense; the median says what a normal job is worth.
+ *
+ * Everything here is derived from the goal the person set in /goals, so changing
+ * the target changes this. Nothing is hard-coded, including the 11.000.
+ */
+const yearTarget = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+
+  /*
+   * The longest active money goal covering today — the annual one, whatever it
+   * was called. A quarterly target would answer a narrower question than the
+   * one this band is for.
+   */
+  const goal = snap.value.goals
+    .filter(
+      (g) =>
+        g.status === 'active' &&
+        (g.metric === 'revenue' || g.metric === 'sales_value') &&
+        g.startDate <= today &&
+        g.endDate >= today,
+    )
+    .sort((a, b) => (b.endDate > a.endDate ? 1 : -1))[0]
+
+  if (!goal) return null
+
+  const progress = goalProgress(goal, snap.value)
+  const gap = Math.max(0, goal.target - progress.current)
+
+  const inWindow = snap.value.sales.filter(
+    (s) => s.saleDate >= goal.startDate && s.saleDate <= goal.endDate,
+  )
+  const sorted = inWindow.map((s) => s.value.baseMinor).sort((a, b) => a - b)
+  const typical = sorted.length ? (sorted[Math.floor(sorted.length / 2)] ?? 0) : 0
+
+  const months = Math.max(1, progress.daysLeft) / 30.44
+  const biggest = sorted.length ? (sorted[sorted.length - 1] ?? 0) : 0
+  const needed = gap > 0 && typical > 0 ? Math.ceil(gap / typical) : 0
+
+  return {
+    goal,
+    current: progress.current,
+    target: goal.target,
+    percent: progress.percent,
+    onTrack: progress.onTrack,
+    daysLeft: Math.max(0, progress.daysLeft),
+    gap,
+    /* Rounded up: three and a bit jobs is four jobs. */
+    salesNeeded: needed,
+    typical,
+    biggest,
+    /*
+     * Which advice to give.
+     *
+     * When the gap is a handful of ordinary jobs, saying how many is a plan.
+     * When it is a hundred and twenty-nine fifty-euro adverts, saying how many
+     * is a joke — and the honest reading is that the usual small work cannot
+     * close this gap at all, so the message has to point at the big jobs
+     * instead. Printing "129 jobs" as advice would be arithmetic pretending to
+     * be judgement.
+     */
+    reachable: needed > 0 && needed <= 15,
+    perMonth: gap > 0 ? Math.round(gap / months) : 0,
+    ever: everFigures.value.soldBaseMinor,
+  }
+})
+
 const hasAnything = computed(
   () =>
     snap.value.clients.length > 0 ||
@@ -815,6 +892,78 @@ onUnmounted(() => {
         </template>
 
         <PeriodPicker v-model="period" />
+
+        <!--
+          The year against its target.
+
+          Wide, above the money cards, and the only block on this page that ends
+          in an instruction. Hidden entirely when no annual goal is set: a band
+          reading "0 of 0" teaches people to ignore the top of the screen.
+        -->
+        <section v-if="shows('yearTarget') && yearTarget" class="card target">
+          <div class="target-head">
+            <div>
+              <h2 class="card-title">{{ yearTarget.goal.title }}</h2>
+              <p class="target-sub">
+                {{ t('dashboard.targetDaysLeft', { n: yearTarget.daysLeft }) }}
+              </p>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="router.push('/goals')">
+              {{ t('dashboard.targetEdit') }}
+            </button>
+          </div>
+
+          <div class="target-figures">
+            <div>
+              <span class="figure-label">{{ t('dashboard.targetThisYear') }}</span>
+              <span class="target-big">{{ money(yearTarget.current) }}</span>
+            </div>
+            <div>
+              <span class="figure-label">{{ t('dashboard.targetGoal') }}</span>
+              <span class="target-value">{{ money(yearTarget.target) }}</span>
+            </div>
+            <div>
+              <span class="figure-label">{{ t('dashboard.targetGap') }}</span>
+              <span class="target-value" :class="yearTarget.gap > 0 ? 'warn' : 'pos'">
+                {{ yearTarget.gap > 0 ? money(yearTarget.gap) : t('dashboard.targetDone') }}
+              </span>
+            </div>
+            <div>
+              <span class="figure-label">{{ t('dashboard.targetEver') }}</span>
+              <span class="target-value">{{ money(yearTarget.ever) }}</span>
+            </div>
+          </div>
+
+          <div class="target-bar" role="img" :aria-label="`${yearTarget.percent}%`">
+            <span
+              class="target-fill"
+              :class="yearTarget.onTrack ? 'ok' : 'behind'"
+              :style="{ width: Math.min(100, yearTarget.percent) + '%' }"
+            />
+          </div>
+
+          <!-- What to do about it, which is the point of the whole band. -->
+          <p v-if="yearTarget.gap > 0 && yearTarget.reachable" class="target-advice">
+            {{
+              t('dashboard.targetAdvice', {
+                perMonth: money(yearTarget.perMonth),
+                sales: yearTarget.salesNeeded,
+                typical: money(yearTarget.typical),
+              })
+            }}
+          </p>
+          <p v-else-if="yearTarget.gap > 0" class="target-advice">
+            {{
+              t('dashboard.targetAdviceBig', {
+                perMonth: money(yearTarget.perMonth),
+                sales: yearTarget.salesNeeded,
+                typical: money(yearTarget.typical),
+                biggest: money(yearTarget.biggest),
+              })
+            }}
+          </p>
+          <p v-else class="target-advice pos">{{ t('dashboard.targetBeaten') }}</p>
+        </section>
 
         <!-- Money ------------------------------------------------------ -->
         <template v-if="shows('money') && moneyCards.length">
@@ -1160,6 +1309,65 @@ onUnmounted(() => {
 .delta { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); font-weight: 600; }
 
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); }
+
+/* ---- The year against its target ------------------------------------ *
+ *
+ * Sized to be read from across a room: this is the block somebody glances at
+ * on a wall screen, and a 13px label that works on a laptop is invisible at
+ * three metres.
+ */
+.target { padding: var(--space-5); }
+
+.target-head {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.target-sub { color: var(--text-tertiary); font-size: var(--text-sm); margin: 2px 0 0; }
+
+.target-figures {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.target-figures > div { display: flex; flex-direction: column; gap: 2px; }
+
+.target-big {
+  font-size: clamp(var(--text-2xl), 4vw, var(--text-3xl));
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.target-value {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.target-bar {
+  background: var(--bg-inset);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.target-fill { display: block; height: 100%; border-radius: 999px; }
+.target-fill.ok { background: var(--ok-500); }
+.target-fill.behind { background: var(--warn-500); }
+
+.target-advice {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  margin: var(--space-3) 0 0;
+}
+
+.target-advice.pos { color: var(--ok-500); }
 
 .goals { list-style: none; margin: 0; padding: 0; }
 .goals li { display: grid; grid-template-columns: minmax(90px, 1fr) 2fr auto; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); }

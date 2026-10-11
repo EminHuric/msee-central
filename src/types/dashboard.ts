@@ -50,6 +50,17 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'today', labelKey: 'widget.today', permission: null, wide: true },
   { id: 'quickActions', labelKey: 'widget.quickActions', permission: null },
 
+  /*
+   * The year against its target, at the top because it is the one thing on this
+   * screen that says what to do rather than what happened.
+   */
+  {
+    id: 'yearTarget',
+    labelKey: 'widget.yearTarget',
+    permission: PERMISSIONS.FINANCE_VIEW,
+    wide: true,
+  },
+
   /* ---- Money --------------------------------------------------------- */
   { id: 'money', labelKey: 'widget.money', permission: PERMISSIONS.FINANCE_VIEW, wide: true },
   { id: 'overview', labelKey: 'widget.overview', permission: PERMISSIONS.FINANCE_VIEW, wide: true },

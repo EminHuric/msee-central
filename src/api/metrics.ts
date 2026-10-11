@@ -560,7 +560,24 @@ export function goalProgress(goal: Goal, snap: Snapshot): GoalProgress {
 
   const current = ((): number => {
     switch (goal.metric) {
+      /*
+       * Revenue is what was SOLD, not what has arrived.
+       *
+       * This counted paid transactions, which made a goal called "Prihod" mean
+       * something different from the word "Prihod" on every other screen in the
+       * application — where it has always been what was agreed. The difference
+       * is not academic: a company with 3.320 euros outstanding would watch its
+       * target sit still after closing the deal that met it, and only move weeks
+       * later when the money landed. That is a target nobody trusts.
+       *
+       * `collected` is the metric for money that actually arrived, and it is
+       * right below.
+       */
       case 'revenue':
+        return mineOnly(win.sales)
+          .filter((s) => serviceMatch(s.serviceId))
+          .reduce((n, s) => n + s.value.baseMinor, 0)
+
       case 'collected':
         return win.transactions
           .filter(
