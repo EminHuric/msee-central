@@ -21,6 +21,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import { fetchEmployees } from '@/api/employees'
 import { fetchRoles, roleDescription, roleName, saveRole, type RoleInput } from '@/api/roles'
 import { slugify } from '@/api/administration'
@@ -180,126 +181,128 @@ onMounted(load)
     </header>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">
-          {{ editingExisting ? t('roles.editRole') : t('roles.newRole') }}
-        </h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="cancel">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="r-name">
-              {{ t('roles.name') }}<span class="req">*</span>
-            </label>
-            <input id="r-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
-            <p class="field-hint">{{ t('roles.nameHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="r-status">{{ t('table.status') }}</label>
-            <select id="r-status" v-model="draft.status" class="select">
-              <option value="active">{{ t('roles.statusActive') }}</option>
-              <option value="inactive">{{ t('roles.statusInactive') }}</option>
-            </select>
-            <p class="field-hint">{{ t('roles.statusHint') }}</p>
-          </div>
+    <EditorDialog :open="!!(draft)" wide @close="cancel">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">
+            {{ editingExisting ? t('roles.editRole') : t('roles.newRole') }}
+          </h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="cancel">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <div class="field">
-          <label class="field-label" for="r-desc">{{ t('roles.description') }}</label>
-          <input
-            id="r-desc"
-            v-model="draft.description"
-            class="input"
-            :maxlength="LIMITS.shortText"
-          />
-          <p class="field-hint">{{ t('roles.descriptionHint') }}</p>
-        </div>
-
-        <div
-          v-if="editingExisting && holders(draft.id) > 0"
-          class="alert alert-warn"
-        >
-          <AppIcon name="users" :size="16" />
-          <span>{{ t('roles.inUseWarning', { n: holders(draft.id) }) }}</span>
-        </div>
-
-        <!-- Permissions -->
-        <div>
-          <div class="spread perm-head">
-            <div>
-              <span class="field-label">{{ t('roles.permissions') }}</span>
-              <p class="field-hint">{{ t('roles.permissionsHint') }}</p>
-            </div>
-            <span class="badge badge-plain badge-accent">
-              {{ t('roles.selectedCount', draft.permissions.length, { named: { n: draft.permissions.length } }) }}
-            </span>
-          </div>
-
-          <p v-if="draft.permissions.length === 0" class="field-error perm-warning">
-            {{ t('roles.noPermissions') }}
-          </p>
-
-          <div class="groups">
-            <fieldset v-for="group in PERMISSION_GROUPS" :key="group.key" class="group">
-              <legend class="group-legend">
-                {{ t(`permissionGroup.${group.key}`) }}
-                <span class="tertiary">
-                  {{ groupSelected(group.permissions) }}/{{ group.permissions.length }}
-                </span>
-              </legend>
-
-              <div class="group-actions">
-                <button type="button" class="linkish" @click="setGroup(group.permissions, true)">
-                  {{ t('roles.selectGroup') }}
-                </button>
-                <button type="button" class="linkish" @click="setGroup(group.permissions, false)">
-                  {{ t('roles.clearGroup') }}
-                </button>
-              </div>
-
-              <label
-                v-for="permission in group.permissions"
-                :key="permission"
-                class="check perm"
-              >
-                <input
-                  type="checkbox"
-                  :checked="draft.permissions.includes(permission)"
-                  @change="togglePermission(permission)"
-                />
-                <span class="perm-text">
-                  <span class="perm-label">
-                    {{ t(`permission.${permission}.label`) }}
-                    <span v-if="isSensitive(permission)" class="perm-flag">
-                      {{ t('roles.sensitive') }}
-                    </span>
-                  </span>
-                  <span class="perm-desc">{{ t(`permission.${permission}.description`) }}</span>
-                </span>
+        <div class="card-body stack">
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="r-name">
+                {{ t('roles.name') }}<span class="req">*</span>
               </label>
-            </fieldset>
+              <input id="r-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
+              <p class="field-hint">{{ t('roles.nameHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="r-status">{{ t('table.status') }}</label>
+              <select id="r-status" v-model="draft.status" class="select">
+                <option value="active">{{ t('roles.statusActive') }}</option>
+                <option value="inactive">{{ t('roles.statusInactive') }}</option>
+              </select>
+              <p class="field-hint">{{ t('roles.statusHint') }}</p>
+            </div>
           </div>
 
-          <p class="field-hint sensitive-note">
-            <AppIcon name="alert" :size="13" /> {{ t('roles.sensitiveHint') }}
-          </p>
-        </div>
-      </div>
+          <div class="field">
+            <label class="field-label" for="r-desc">{{ t('roles.description') }}</label>
+            <input
+              id="r-desc"
+              v-model="draft.description"
+              class="input"
+              :maxlength="LIMITS.shortText"
+            />
+            <p class="field-hint">{{ t('roles.descriptionHint') }}</p>
+          </div>
 
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="cancel">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />
-          {{ saving ? t('common.saving') : t('common.save') }}
-        </button>
-      </div>
-    </section>
+          <div
+            v-if="editingExisting && holders(draft.id) > 0"
+            class="alert alert-warn"
+          >
+            <AppIcon name="users" :size="16" />
+            <span>{{ t('roles.inUseWarning', { n: holders(draft.id) }) }}</span>
+          </div>
+
+          <!-- Permissions -->
+          <div>
+            <div class="spread perm-head">
+              <div>
+                <span class="field-label">{{ t('roles.permissions') }}</span>
+                <p class="field-hint">{{ t('roles.permissionsHint') }}</p>
+              </div>
+              <span class="badge badge-plain badge-accent">
+                {{ t('roles.selectedCount', draft.permissions.length, { named: { n: draft.permissions.length } }) }}
+              </span>
+            </div>
+
+            <p v-if="draft.permissions.length === 0" class="field-error perm-warning">
+              {{ t('roles.noPermissions') }}
+            </p>
+
+            <div class="groups">
+              <fieldset v-for="group in PERMISSION_GROUPS" :key="group.key" class="group">
+                <legend class="group-legend">
+                  {{ t(`permissionGroup.${group.key}`) }}
+                  <span class="tertiary">
+                    {{ groupSelected(group.permissions) }}/{{ group.permissions.length }}
+                  </span>
+                </legend>
+
+                <div class="group-actions">
+                  <button type="button" class="linkish" @click="setGroup(group.permissions, true)">
+                    {{ t('roles.selectGroup') }}
+                  </button>
+                  <button type="button" class="linkish" @click="setGroup(group.permissions, false)">
+                    {{ t('roles.clearGroup') }}
+                  </button>
+                </div>
+
+                <label
+                  v-for="permission in group.permissions"
+                  :key="permission"
+                  class="check perm"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="draft.permissions.includes(permission)"
+                    @change="togglePermission(permission)"
+                  />
+                  <span class="perm-text">
+                    <span class="perm-label">
+                      {{ t(`permission.${permission}.label`) }}
+                      <span v-if="isSensitive(permission)" class="perm-flag">
+                        {{ t('roles.sensitive') }}
+                      </span>
+                    </span>
+                    <span class="perm-desc">{{ t(`permission.${permission}.description`) }}</span>
+                  </span>
+                </label>
+              </fieldset>
+            </div>
+
+            <p class="field-hint sensitive-note">
+              <AppIcon name="alert" :size="13" /> {{ t('roles.sensitiveHint') }}
+            </p>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="cancel">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />
+            {{ saving ? t('common.saving') : t('common.save') }}
+          </button>
+        </div>
+      </template>
+    </EditorDialog>
 
     <!-- List ----------------------------------------------------------- -->
     <div v-if="loading" class="card">

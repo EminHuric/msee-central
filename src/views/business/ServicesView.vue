@@ -16,6 +16,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CustomFields from '@/components/CustomFields.vue'
 import { fetchSales } from '@/api/sales'
@@ -281,159 +282,161 @@ onMounted(load)
     </header>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">
-          {{ draft.id ? t('services.editService') : t('services.newService') }}
-        </h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="s-name">
-              {{ t('services.name') }}<span class="req">*</span>
-            </label>
-            <input id="s-name" v-model="draft.name" class="input" :maxlength="LIMITS.position" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-cat">{{ t('services.category') }}</label>
-            <input id="s-cat" v-model="draft.category" class="input" list="s-cats" :maxlength="LIMITS.name" />
-            <datalist id="s-cats">
-              <option v-for="c in categories" :key="c" :value="c" />
-            </datalist>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-desc">{{ t('services.description') }}</label>
-            <input id="s-desc" v-model="draft.description" class="input" :maxlength="LIMITS.shortText" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-model">{{ t('services.pricingModel') }}</label>
-            <select id="s-model" v-model="draft.pricingModel" class="select">
-              <option v-for="m in PRICING_MODELS" :key="m" :value="m">
-                {{ t(`pricingModel.${m}`) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-price">{{ t('services.defaultPrice') }}</label>
-            <input id="s-price" v-model.number="draftPrice" class="input" type="number" step="0.01" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-cur">{{ t('finance.currency') }}</label>
-            <select id="s-cur" v-model="draftCurrency" class="select">
-              <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-unit">{{ t('services.unit') }}</label>
-            <input id="s-unit" v-model="draft.unit" class="input" :maxlength="LIMITS.name" />
-            <p class="field-hint">{{ t('services.unitHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="s-status">{{ t('table.status') }}</label>
-            <select id="s-status" v-model="draft.status" class="select">
-              <option value="active">{{ t('organisation.statusActive') }}</option>
-              <option value="inactive">{{ t('organisation.statusInactive') }}</option>
-            </select>
-          </div>
+    <EditorDialog :open="!!(draft)" wide @close="draft = null">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">
+            {{ draft.id ? t('services.editService') : t('services.newService') }}
+          </h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <!-- Payment structure ------------------------------------------ -->
-        <fieldset class="block">
-          <legend>{{ t('services.paymentStructure') }}</legend>
-          <p class="field-hint">{{ t('services.paymentHint') }}</p>
-
+        <div class="card-body stack">
           <div class="field-grid">
             <div class="field">
-              <label class="field-label" for="p-model">{{ t('sales.paymentModel') }}</label>
-              <select id="p-model" v-model="draftTerms!.payment.model" class="select">
-                <option v-for="m in PAYMENT_MODELS" :key="m" :value="m">
-                  {{ t(`paymentModel.${m}`) }}
+              <label class="field-label" for="s-name">
+                {{ t('services.name') }}<span class="req">*</span>
+              </label>
+              <input id="s-name" v-model="draft.name" class="input" :maxlength="LIMITS.position" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-cat">{{ t('services.category') }}</label>
+              <input id="s-cat" v-model="draft.category" class="input" list="s-cats" :maxlength="LIMITS.name" />
+              <datalist id="s-cats">
+                <option v-for="c in categories" :key="c" :value="c" />
+              </datalist>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-desc">{{ t('services.description') }}</label>
+              <input id="s-desc" v-model="draft.description" class="input" :maxlength="LIMITS.shortText" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-model">{{ t('services.pricingModel') }}</label>
+              <select id="s-model" v-model="draft.pricingModel" class="select">
+                <option v-for="m in PRICING_MODELS" :key="m" :value="m">
+                  {{ t(`pricingModel.${m}`) }}
                 </option>
               </select>
             </div>
 
-            <div v-if="draftTerms!.payment.model !== 'one_off'" class="field">
-              <label class="field-label" for="p-adv">{{ t('services.advanceRequired') }}</label>
-              <div class="inline-row">
-                <input id="p-adv" v-model.number="draftAdvance" class="input" type="number" step="0.01" />
-                <button class="btn btn-ghost btn-sm" type="button" @click="suggestHalf">
-                  {{ t('services.half') }}
-                </button>
+            <div class="field">
+              <label class="field-label" for="s-price">{{ t('services.defaultPrice') }}</label>
+              <input id="s-price" v-model.number="draftPrice" class="input" type="number" step="0.01" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-cur">{{ t('finance.currency') }}</label>
+              <select id="s-cur" v-model="draftCurrency" class="select">
+                <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-unit">{{ t('services.unit') }}</label>
+              <input id="s-unit" v-model="draft.unit" class="input" :maxlength="LIMITS.name" />
+              <p class="field-hint">{{ t('services.unitHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="s-status">{{ t('table.status') }}</label>
+              <select id="s-status" v-model="draft.status" class="select">
+                <option value="active">{{ t('organisation.statusActive') }}</option>
+                <option value="inactive">{{ t('organisation.statusInactive') }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Payment structure ------------------------------------------ -->
+          <fieldset class="block">
+            <legend>{{ t('services.paymentStructure') }}</legend>
+            <p class="field-hint">{{ t('services.paymentHint') }}</p>
+
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="p-model">{{ t('sales.paymentModel') }}</label>
+                <select id="p-model" v-model="draftTerms!.payment.model" class="select">
+                  <option v-for="m in PAYMENT_MODELS" :key="m" :value="m">
+                    {{ t(`paymentModel.${m}`) }}
+                  </option>
+                </select>
               </div>
-              <p class="field-hint">{{ t('services.advanceHint') }}</p>
-            </div>
 
-            <div v-if="draftTerms!.payment.model === 'instalments'" class="field">
-              <label class="field-label" for="p-count">{{ t('sales.instalmentCount') }}</label>
-              <input
-                id="p-count"
-                v-model.number="draftTerms!.payment.instalmentCount"
-                class="input"
-                type="number"
-                min="0"
-              />
+              <div v-if="draftTerms!.payment.model !== 'one_off'" class="field">
+                <label class="field-label" for="p-adv">{{ t('services.advanceRequired') }}</label>
+                <div class="inline-row">
+                  <input id="p-adv" v-model.number="draftAdvance" class="input" type="number" step="0.01" />
+                  <button class="btn btn-ghost btn-sm" type="button" @click="suggestHalf">
+                    {{ t('services.half') }}
+                  </button>
+                </div>
+                <p class="field-hint">{{ t('services.advanceHint') }}</p>
+              </div>
+
+              <div v-if="draftTerms!.payment.model === 'instalments'" class="field">
+                <label class="field-label" for="p-count">{{ t('sales.instalmentCount') }}</label>
+                <input
+                  id="p-count"
+                  v-model.number="draftTerms!.payment.instalmentCount"
+                  class="input"
+                  type="number"
+                  min="0"
+                />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="p-due">{{ t('services.paymentDeadline') }}</label>
+                <input id="p-due" v-model.number="draftTerms!.payment.dueInDays" class="input" type="number" min="0" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="p-comm">{{ t('services.commissionPercent') }}</label>
+                <input
+                  id="p-comm"
+                  v-model.number="draftTerms!.commissionPercent"
+                  class="input"
+                  type="number"
+                  min="0"
+                  max="100"
+                />
+                <p class="field-hint">{{ t('services.commissionHint') }}</p>
+              </div>
             </div>
 
             <div class="field">
-              <label class="field-label" for="p-due">{{ t('services.paymentDeadline') }}</label>
-              <input id="p-due" v-model.number="draftTerms!.payment.dueInDays" class="input" type="number" min="0" />
+              <label class="field-label" for="p-note">{{ t('services.paymentNote') }}</label>
+              <input id="p-note" v-model="draftTerms!.payment.note" class="input" :maxlength="LIMITS.shortText" />
             </div>
+          </fieldset>
 
+          <details class="more">
+            <summary>{{ t('common.moreDetails') }}</summary>
             <div class="field">
-              <label class="field-label" for="p-comm">{{ t('services.commissionPercent') }}</label>
-              <input
-                id="p-comm"
-                v-model.number="draftTerms!.commissionPercent"
-                class="input"
-                type="number"
-                min="0"
-                max="100"
-              />
-              <p class="field-hint">{{ t('services.commissionHint') }}</p>
+              <label class="field-label" for="s-details">{{ t('services.details') }}</label>
+              <textarea id="s-details" v-model="draft.details" class="textarea" rows="4" :maxlength="LIMITS.longText" />
+              <p class="field-hint">{{ t('services.detailsHint') }}</p>
             </div>
-          </div>
+            <div class="field">
+              <label class="field-label" for="s-notes">{{ t('clients.notes') }}</label>
+              <textarea id="s-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+            </div>
+          </details>
 
-          <div class="field">
-            <label class="field-label" for="p-note">{{ t('services.paymentNote') }}</label>
-            <input id="p-note" v-model="draftTerms!.payment.note" class="input" :maxlength="LIMITS.shortText" />
-          </div>
-        </fieldset>
+          <CustomFields v-model="draft.custom" :fields="serviceFields" can-see-management />
+        </div>
 
-        <details class="more">
-          <summary>{{ t('common.moreDetails') }}</summary>
-          <div class="field">
-            <label class="field-label" for="s-details">{{ t('services.details') }}</label>
-            <textarea id="s-details" v-model="draft.details" class="textarea" rows="4" :maxlength="LIMITS.longText" />
-            <p class="field-hint">{{ t('services.detailsHint') }}</p>
-          </div>
-          <div class="field">
-            <label class="field-label" for="s-notes">{{ t('clients.notes') }}</label>
-            <textarea id="s-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
-          </div>
-        </details>
-
-        <CustomFields v-model="draft.custom" :fields="serviceFields" can-see-management />
-      </div>
-
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />{{ t('common.save') }}
-        </button>
-      </div>
-    </section>
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
+        </div>
+      </template>
+    </EditorDialog>
 
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">

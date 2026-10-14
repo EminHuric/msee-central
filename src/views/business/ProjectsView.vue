@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { fetchClients } from '@/api/clients'
 import { fetchEmployees } from '@/api/employees'
@@ -220,52 +221,54 @@ onMounted(async () => {
     </header>
 
     <!-- Create --------------------------------------------------------- -->
-    <section v-if="creating" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">{{ t('projects.newProject') }}</h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="creating = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <p class="field-hint">{{ t('projects.createHint') }}</p>
-
-        <div class="field">
-          <label class="field-label" for="p-name">
-            {{ t('projects.name') }}<span class="req">*</span>
-          </label>
-          <input id="p-name" v-model="creating.name" class="input" maxlength="120" />
+    <EditorDialog :open="!!(creating)" wide @close="creating = null">
+      <template v-if="creating">
+        <div class="card-header">
+          <h2 class="card-title">{{ t('projects.newProject') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="creating = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <div class="field">
-          <label class="field-label" for="p-objective">{{ t('projects.objective') }}</label>
-          <input id="p-objective" v-model="creating.objective" class="input" maxlength="200" />
-          <p class="field-hint">{{ t('projects.objectiveHint') }}</p>
-        </div>
+        <div class="card-body stack">
+          <p class="field-hint">{{ t('projects.createHint') }}</p>
 
-        <div class="field-grid">
           <div class="field">
-            <label class="field-label" for="p-service">{{ t('table.service') }}</label>
-            <select id="p-service" v-model="creating.serviceId" class="select">
-              <option :value="null">—</option>
-              <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </select>
+            <label class="field-label" for="p-name">
+              {{ t('projects.name') }}<span class="req">*</span>
+            </label>
+            <input id="p-name" v-model="creating.name" class="input" maxlength="120" />
           </div>
+
           <div class="field">
-            <label class="field-label" for="p-end">{{ t('projects.deadline') }}</label>
-            <input id="p-end" v-model="creating.endDate" class="input" type="date" />
+            <label class="field-label" for="p-objective">{{ t('projects.objective') }}</label>
+            <input id="p-objective" v-model="creating.objective" class="input" maxlength="200" />
+            <p class="field-hint">{{ t('projects.objectiveHint') }}</p>
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="p-service">{{ t('table.service') }}</label>
+              <select id="p-service" v-model="creating.serviceId" class="select">
+                <option :value="null">—</option>
+                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="p-end">{{ t('projects.deadline') }}</label>
+              <input id="p-end" v-model="creating.endDate" class="input" type="date" />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="creating = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commitNew">
-          <span v-if="saving" class="spinner" />{{ t('projects.createAndOpen') }}
-        </button>
-      </div>
-    </section>
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="creating = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commitNew">
+            <span v-if="saving" class="spinner" />{{ t('projects.createAndOpen') }}
+          </button>
+        </div>
+      </template>
+    </EditorDialog>
 
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">

@@ -18,6 +18,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import { fetchEmployees } from '@/api/employees'
@@ -666,309 +667,311 @@ onMounted(load)
 
     <!-- ===================== PROGRAMMES ===================== -->
     <template v-else-if="tab === 'programmes'">
-      <section v-if="programmeDraft" class="card editor">
-        <div class="card-header">
-          <h2 class="card-title">
-            {{ programmeDraft.id ? t('bonuses.editProgramme') : t('bonuses.newProgramme') }}
-          </h2>
-          <button
-            class="btn btn-ghost btn-icon"
-            :aria-label="t('common.close')"
-            @click="programmeDraft = null"
-          >
-            <AppIcon name="close" :size="18" />
-          </button>
-        </div>
-
-        <div class="card-body stack">
-          <div class="field-grid">
-            <div class="field">
-              <label class="field-label" for="b-name">
-                {{ t('bonuses.name') }}<span class="req">*</span>
-              </label>
-              <input id="b-name" v-model="programmeDraft.name" class="input" :maxlength="LIMITS.position" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="b-metric">{{ t('bonuses.metric') }}</label>
-              <select id="b-metric" v-model="programmeDraft.metric" class="select">
-                <option v-for="m in BONUS_METRICS" :key="m" :value="m">
-                  {{ t(`bonusMetric.${m}`) }}
-                </option>
-              </select>
-              <p class="field-hint">{{ t('bonuses.metricHint') }}</p>
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="b-audience">{{ t('bonuses.audience') }}</label>
-              <select id="b-audience" v-model="programmeDraft.audience" class="select">
-                <option v-for="a in BONUS_AUDIENCES" :key="a" :value="a">
-                  {{ t(`bonusAudience.${a}`) }}
-                </option>
-              </select>
-            </div>
-
-            <div v-if="programmeDraft.audience === 'department'" class="field">
-              <label class="field-label" for="b-dept">{{ t('goals.department') }}</label>
-              <select id="b-dept" v-model="programmeDraft.departmentId" class="select">
-                <option :value="null">—</option>
-                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
-              </select>
-            </div>
-
-            <div v-if="snapshot.services.length" class="field">
-              <label class="field-label" for="b-svc">{{ t('goals.service') }}</label>
-              <select id="b-svc" v-model="programmeDraft.serviceId" class="select">
-                <option :value="null">{{ t('goals.anyService') }}</option>
-                <option v-for="s in snapshot.services" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="b-from">{{ t('goals.startDate') }}</label>
-              <input id="b-from" v-model="programmeDraft.startDate" class="input" type="date" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="b-to">{{ t('goals.endDate') }}</label>
-              <input id="b-to" v-model="programmeDraft.endDate" class="input" type="date" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="b-status">{{ t('table.status') }}</label>
-              <select id="b-status" v-model="programmeDraft.status" class="select">
-                <option v-for="s in PROGRAMME_STATUSES" :key="s" :value="s">
-                  {{ t(`programmeStatus.${s}`) }}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div v-if="programmeDraft.audience === 'selected'" class="field">
-            <span class="field-label">{{ t('bonuses.members') }}</span>
-            <div class="picker">
-              <label v-for="p in people" :key="p.uid" class="check">
-                <input
-                  type="checkbox"
-                  :checked="programmeDraft.memberUids.includes(p.uid)"
-                  @change="toggleMember(p.uid)"
-                />
-                <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Milestones ---------------------------------------------- -->
-          <fieldset class="block">
-            <legend>{{ t('bonuses.milestones') }}</legend>
-            <p class="field-hint">{{ t('bonuses.milestonesHint') }}</p>
-
-            <div v-for="(m, i) in sortedDraftMilestones" :key="m.id" class="level">
-              <div class="level-head">
-                <span class="level-rank">{{ i + 1 }}</span>
-                <span class="level-summary">{{ describeLevel(m) }}</span>
-                <button
-                  class="btn btn-ghost btn-sm danger"
-                  type="button"
-                  :aria-label="t('common.delete')"
-                  @click="removeMilestone(m.id)"
-                >
-                  <AppIcon name="trash" :size="14" />
-                </button>
-              </div>
-
-              <div class="level-grid">
-                <div class="field">
-                  <label class="field-label" :for="`m-target-${i}`">
-                    {{ t('bonuses.target') }}
-                  </label>
-                  <input
-                    :id="`m-target-${i}`"
-                    v-model.number="m.target"
-                    class="input"
-                    type="number"
-                    min="0"
-                  />
-                  <p class="field-hint">{{ t(`bonusMetric.${programmeDraft.metric}`) }}</p>
-                </div>
-
-                <div class="field">
-                  <label class="field-label" :for="`m-type-${i}`">
-                    {{ t('bonuses.rewardType') }}
-                  </label>
-                  <select :id="`m-type-${i}`" v-model="m.type" class="select">
-                    <option v-for="type in REWARD_TYPES" :key="type" :value="type">
-                      {{ t(`rewardType.${type}`) }}
-                    </option>
-                  </select>
-                </div>
-
-                <!-- Money and percentage are numbers; everything else is a thing. -->
-                <div v-if="m.type === 'money'" class="field">
-                  <label class="field-label" :for="`m-amount-${i}`">
-                    {{ t('bonuses.rewardAmount') }}
-                  </label>
-                  <input
-                    :id="`m-amount-${i}`"
-                    v-model.number="milestoneAmounts[m.id]"
-                    class="input"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-
-                <div v-else-if="m.type === 'percentage'" class="field">
-                  <label class="field-label" :for="`m-percent-${i}`">
-                    {{ t('bonuses.rewardPercent') }}
-                  </label>
-                  <input
-                    :id="`m-percent-${i}`"
-                    v-model.number="m.rewardPercent"
-                    class="input"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                  />
-                  <p class="field-hint">{{ t('bonuses.percentHint') }}</p>
-                </div>
-
-                <div v-else class="field">
-                  <label class="field-label" :for="`m-label-${i}`">
-                    {{ t('bonuses.rewardName') }}
-                  </label>
-                  <input
-                    :id="`m-label-${i}`"
-                    v-model="m.rewardLabel"
-                    class="input"
-                    :maxlength="LIMITS.name"
-                    :placeholder="t('bonuses.rewardNamePlaceholder')"
-                  />
-                </div>
-              </div>
-
-              <div class="field">
-                <label class="field-label" :for="`m-desc-${i}`">
-                  {{ t('bonuses.rewardDescription') }}
-                </label>
-                <input
-                  :id="`m-desc-${i}`"
-                  v-model="m.description"
-                  class="input"
-                  :maxlength="LIMITS.shortText"
-                />
-              </div>
-
-              <div class="field">
-                <label class="field-label" :for="`m-note-${i}`">
-                  {{ t('bonuses.levelConditions') }}
-                </label>
-                <input
-                  :id="`m-note-${i}`"
-                  v-model="m.note"
-                  class="input"
-                  :maxlength="LIMITS.shortText"
-                  :placeholder="t('bonuses.levelConditionsPlaceholder')"
-                />
-              </div>
-
-              <!-- A picture, for a reward somebody is meant to want. -->
-              <div class="field">
-                <span class="field-label">{{ t('bonuses.rewardImage') }}</span>
-                <div class="image-row">
-                  <img
-                    v-if="m.rewardImage"
-                    :src="m.rewardImage"
-                    alt=""
-                    class="image-preview"
-                  />
-                  <div v-else class="image-empty">
-                    <AppIcon name="gift" :size="20" />
-                  </div>
-
-                  <div class="image-actions">
-                    <label class="btn btn-secondary btn-sm">
-                      <input
-                        type="file"
-                        class="sr-only"
-                        :accept="ACCEPTED_TYPES.join(',')"
-                        @change="pickImage(m, $event)"
-                      />
-                      {{ m.rewardImage ? t('bonuses.changeImage') : t('bonuses.addImage') }}
-                    </label>
-                    <button
-                      v-if="m.rewardImage"
-                      class="btn btn-ghost btn-sm danger"
-                      type="button"
-                      @click="m.rewardImage = null"
-                    >
-                      {{ t('common.remove') }}
-                    </button>
-                    <p class="field-hint">{{ t('bonuses.imageHint') }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button class="btn btn-secondary btn-sm" type="button" @click="addMilestone">
-              <AppIcon name="plus" :size="14" /> {{ t('bonuses.addLevel') }}
+      <EditorDialog :open="!!(programmeDraft)" wide @close="programmeDraft = null">
+        <template v-if="programmeDraft">
+          <div class="card-header">
+            <h2 class="card-title">
+              {{ programmeDraft.id ? t('bonuses.editProgramme') : t('bonuses.newProgramme') }}
+            </h2>
+            <button
+              class="btn btn-ghost btn-icon"
+              :aria-label="t('common.close')"
+              @click="programmeDraft = null"
+            >
+              <AppIcon name="close" :size="18" />
             </button>
-          </fieldset>
-
-          <div class="switches">
-            <label class="check">
-              <input v-model="programmeDraft.requiresApproval" type="checkbox" />
-              <span class="check-text">{{ t('bonuses.requiresApproval') }}</span>
-            </label>
-            <label class="check">
-              <input v-model="programmeDraft.repeats" type="checkbox" />
-              <span class="check-text">{{ t('bonuses.repeats') }}</span>
-            </label>
-            <label class="check">
-              <input v-model="programmeDraft.visibleToStaff" type="checkbox" />
-              <span class="check-text">{{ t('bonuses.visibleToStaff') }}</span>
-            </label>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="b-desc">{{ t('bonuses.description') }}</label>
-            <textarea
-              id="b-desc"
-              v-model="programmeDraft.description"
-              class="textarea"
-              :maxlength="LIMITS.longText"
-            />
+          <div class="card-body stack">
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="b-name">
+                  {{ t('bonuses.name') }}<span class="req">*</span>
+                </label>
+                <input id="b-name" v-model="programmeDraft.name" class="input" :maxlength="LIMITS.position" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="b-metric">{{ t('bonuses.metric') }}</label>
+                <select id="b-metric" v-model="programmeDraft.metric" class="select">
+                  <option v-for="m in BONUS_METRICS" :key="m" :value="m">
+                    {{ t(`bonusMetric.${m}`) }}
+                  </option>
+                </select>
+                <p class="field-hint">{{ t('bonuses.metricHint') }}</p>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="b-audience">{{ t('bonuses.audience') }}</label>
+                <select id="b-audience" v-model="programmeDraft.audience" class="select">
+                  <option v-for="a in BONUS_AUDIENCES" :key="a" :value="a">
+                    {{ t(`bonusAudience.${a}`) }}
+                  </option>
+                </select>
+              </div>
+
+              <div v-if="programmeDraft.audience === 'department'" class="field">
+                <label class="field-label" for="b-dept">{{ t('goals.department') }}</label>
+                <select id="b-dept" v-model="programmeDraft.departmentId" class="select">
+                  <option :value="null">—</option>
+                  <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                </select>
+              </div>
+
+              <div v-if="snapshot.services.length" class="field">
+                <label class="field-label" for="b-svc">{{ t('goals.service') }}</label>
+                <select id="b-svc" v-model="programmeDraft.serviceId" class="select">
+                  <option :value="null">{{ t('goals.anyService') }}</option>
+                  <option v-for="s in snapshot.services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="b-from">{{ t('goals.startDate') }}</label>
+                <input id="b-from" v-model="programmeDraft.startDate" class="input" type="date" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="b-to">{{ t('goals.endDate') }}</label>
+                <input id="b-to" v-model="programmeDraft.endDate" class="input" type="date" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="b-status">{{ t('table.status') }}</label>
+                <select id="b-status" v-model="programmeDraft.status" class="select">
+                  <option v-for="s in PROGRAMME_STATUSES" :key="s" :value="s">
+                    {{ t(`programmeStatus.${s}`) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div v-if="programmeDraft.audience === 'selected'" class="field">
+              <span class="field-label">{{ t('bonuses.members') }}</span>
+              <div class="picker">
+                <label v-for="p in people" :key="p.uid" class="check">
+                  <input
+                    type="checkbox"
+                    :checked="programmeDraft.memberUids.includes(p.uid)"
+                    @change="toggleMember(p.uid)"
+                  />
+                  <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Milestones ---------------------------------------------- -->
+            <fieldset class="block">
+              <legend>{{ t('bonuses.milestones') }}</legend>
+              <p class="field-hint">{{ t('bonuses.milestonesHint') }}</p>
+
+              <div v-for="(m, i) in sortedDraftMilestones" :key="m.id" class="level">
+                <div class="level-head">
+                  <span class="level-rank">{{ i + 1 }}</span>
+                  <span class="level-summary">{{ describeLevel(m) }}</span>
+                  <button
+                    class="btn btn-ghost btn-sm danger"
+                    type="button"
+                    :aria-label="t('common.delete')"
+                    @click="removeMilestone(m.id)"
+                  >
+                    <AppIcon name="trash" :size="14" />
+                  </button>
+                </div>
+
+                <div class="level-grid">
+                  <div class="field">
+                    <label class="field-label" :for="`m-target-${i}`">
+                      {{ t('bonuses.target') }}
+                    </label>
+                    <input
+                      :id="`m-target-${i}`"
+                      v-model.number="m.target"
+                      class="input"
+                      type="number"
+                      min="0"
+                    />
+                    <p class="field-hint">{{ t(`bonusMetric.${programmeDraft.metric}`) }}</p>
+                  </div>
+
+                  <div class="field">
+                    <label class="field-label" :for="`m-type-${i}`">
+                      {{ t('bonuses.rewardType') }}
+                    </label>
+                    <select :id="`m-type-${i}`" v-model="m.type" class="select">
+                      <option v-for="type in REWARD_TYPES" :key="type" :value="type">
+                        {{ t(`rewardType.${type}`) }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <!-- Money and percentage are numbers; everything else is a thing. -->
+                  <div v-if="m.type === 'money'" class="field">
+                    <label class="field-label" :for="`m-amount-${i}`">
+                      {{ t('bonuses.rewardAmount') }}
+                    </label>
+                    <input
+                      :id="`m-amount-${i}`"
+                      v-model.number="milestoneAmounts[m.id]"
+                      class="input"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+
+                  <div v-else-if="m.type === 'percentage'" class="field">
+                    <label class="field-label" :for="`m-percent-${i}`">
+                      {{ t('bonuses.rewardPercent') }}
+                    </label>
+                    <input
+                      :id="`m-percent-${i}`"
+                      v-model.number="m.rewardPercent"
+                      class="input"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                    />
+                    <p class="field-hint">{{ t('bonuses.percentHint') }}</p>
+                  </div>
+
+                  <div v-else class="field">
+                    <label class="field-label" :for="`m-label-${i}`">
+                      {{ t('bonuses.rewardName') }}
+                    </label>
+                    <input
+                      :id="`m-label-${i}`"
+                      v-model="m.rewardLabel"
+                      class="input"
+                      :maxlength="LIMITS.name"
+                      :placeholder="t('bonuses.rewardNamePlaceholder')"
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" :for="`m-desc-${i}`">
+                    {{ t('bonuses.rewardDescription') }}
+                  </label>
+                  <input
+                    :id="`m-desc-${i}`"
+                    v-model="m.description"
+                    class="input"
+                    :maxlength="LIMITS.shortText"
+                  />
+                </div>
+
+                <div class="field">
+                  <label class="field-label" :for="`m-note-${i}`">
+                    {{ t('bonuses.levelConditions') }}
+                  </label>
+                  <input
+                    :id="`m-note-${i}`"
+                    v-model="m.note"
+                    class="input"
+                    :maxlength="LIMITS.shortText"
+                    :placeholder="t('bonuses.levelConditionsPlaceholder')"
+                  />
+                </div>
+
+                <!-- A picture, for a reward somebody is meant to want. -->
+                <div class="field">
+                  <span class="field-label">{{ t('bonuses.rewardImage') }}</span>
+                  <div class="image-row">
+                    <img
+                      v-if="m.rewardImage"
+                      :src="m.rewardImage"
+                      alt=""
+                      class="image-preview"
+                    />
+                    <div v-else class="image-empty">
+                      <AppIcon name="gift" :size="20" />
+                    </div>
+
+                    <div class="image-actions">
+                      <label class="btn btn-secondary btn-sm">
+                        <input
+                          type="file"
+                          class="sr-only"
+                          :accept="ACCEPTED_TYPES.join(',')"
+                          @change="pickImage(m, $event)"
+                        />
+                        {{ m.rewardImage ? t('bonuses.changeImage') : t('bonuses.addImage') }}
+                      </label>
+                      <button
+                        v-if="m.rewardImage"
+                        class="btn btn-ghost btn-sm danger"
+                        type="button"
+                        @click="m.rewardImage = null"
+                      >
+                        {{ t('common.remove') }}
+                      </button>
+                      <p class="field-hint">{{ t('bonuses.imageHint') }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn btn-secondary btn-sm" type="button" @click="addMilestone">
+                <AppIcon name="plus" :size="14" /> {{ t('bonuses.addLevel') }}
+              </button>
+            </fieldset>
+
+            <div class="switches">
+              <label class="check">
+                <input v-model="programmeDraft.requiresApproval" type="checkbox" />
+                <span class="check-text">{{ t('bonuses.requiresApproval') }}</span>
+              </label>
+              <label class="check">
+                <input v-model="programmeDraft.repeats" type="checkbox" />
+                <span class="check-text">{{ t('bonuses.repeats') }}</span>
+              </label>
+              <label class="check">
+                <input v-model="programmeDraft.visibleToStaff" type="checkbox" />
+                <span class="check-text">{{ t('bonuses.visibleToStaff') }}</span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="b-desc">{{ t('bonuses.description') }}</label>
+              <textarea
+                id="b-desc"
+                v-model="programmeDraft.description"
+                class="textarea"
+                :maxlength="LIMITS.longText"
+              />
+            </div>
+
+            <!--
+              The rules, in the CEO's words, read by everybody on the programme.
+              A reward scheme whose conditions are not written down is one people
+              argue about afterwards.
+            -->
+            <div class="field">
+              <label class="field-label" for="b-rules">{{ t('bonuses.rules') }}</label>
+              <textarea
+                id="b-rules"
+                v-model="programmeDraft.rules"
+                class="textarea"
+                rows="3"
+                :maxlength="LIMITS.longText"
+                :placeholder="t('bonuses.rulesPlaceholder')"
+              />
+              <p class="field-hint">{{ t('bonuses.rulesHint') }}</p>
+            </div>
           </div>
 
-          <!--
-            The rules, in the CEO's words, read by everybody on the programme.
-            A reward scheme whose conditions are not written down is one people
-            argue about afterwards.
-          -->
-          <div class="field">
-            <label class="field-label" for="b-rules">{{ t('bonuses.rules') }}</label>
-            <textarea
-              id="b-rules"
-              v-model="programmeDraft.rules"
-              class="textarea"
-              rows="3"
-              :maxlength="LIMITS.longText"
-              :placeholder="t('bonuses.rulesPlaceholder')"
-            />
-            <p class="field-hint">{{ t('bonuses.rulesHint') }}</p>
+          <div class="card-footer">
+            <button class="btn btn-secondary" @click="programmeDraft = null">
+              {{ t('common.cancel') }}
+            </button>
+            <button class="btn btn-primary" :disabled="saving" @click="commitProgramme">
+              <span v-if="saving" class="spinner" />{{ t('common.save') }}
+            </button>
           </div>
-        </div>
-
-        <div class="card-footer">
-          <button class="btn btn-secondary" @click="programmeDraft = null">
-            {{ t('common.cancel') }}
-          </button>
-          <button class="btn btn-primary" :disabled="saving" @click="commitProgramme">
-            <span v-if="saving" class="spinner" />{{ t('common.save') }}
-          </button>
-        </div>
-      </section>
+        </template>
+      </EditorDialog>
 
       <div v-if="programmes.length === 0" class="card">
         <div class="empty">
@@ -1119,67 +1122,69 @@ onMounted(load)
 
     <!-- ===================== INCENTIVE WORK ===================== -->
     <template v-else-if="tab === 'work'">
-      <section v-if="workDraft" class="card editor">
-        <div class="card-header">
-          <h2 class="card-title">{{ t('bonuses.assignWork') }}</h2>
-          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="workDraft = null">
-            <AppIcon name="close" :size="18" />
-          </button>
-        </div>
+      <EditorDialog :open="!!(workDraft)" wide @close="workDraft = null">
+        <template v-if="workDraft">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('bonuses.assignWork') }}</h2>
+            <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="workDraft = null">
+              <AppIcon name="close" :size="18" />
+            </button>
+          </div>
 
-        <div class="card-body stack">
-          <p class="field-hint">{{ t('bonuses.workHint') }}</p>
+          <div class="card-body stack">
+            <p class="field-hint">{{ t('bonuses.workHint') }}</p>
 
-          <div class="field-grid">
-            <div class="field">
-              <label class="field-label" for="w-title">
-                {{ t('bonuses.workTitle') }}<span class="req">*</span>
-              </label>
-              <input id="w-title" v-model="workDraft.title" class="input" :maxlength="LIMITS.position" />
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="w-title">
+                  {{ t('bonuses.workTitle') }}<span class="req">*</span>
+                </label>
+                <input id="w-title" v-model="workDraft.title" class="input" :maxlength="LIMITS.position" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-assignee">
+                  {{ t('table.assignee') }}<span class="req">*</span>
+                </label>
+                <select
+                  id="w-assignee"
+                  :value="workDraft.assigneeUid"
+                  class="select"
+                  @change="onAssigneeChange(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">—</option>
+                  <option v-for="p in people" :key="p.uid" :value="p.uid">
+                    {{ p.firstName }} {{ p.lastName }}
+                  </option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-due">{{ t('table.dueDate') }}</label>
+                <input id="w-due" v-model="workDraft.dueDate" class="input" type="date" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-reward">{{ t('bonuses.rewardAmount') }}</label>
+                <input id="w-reward" v-model.number="workReward" class="input" type="number" step="0.01" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-label">{{ t('bonuses.rewardLabel') }}</label>
+                <input id="w-label" v-model="workDraft.rewardLabel" class="input" :maxlength="LIMITS.name" />
+              </div>
             </div>
+
             <div class="field">
-              <label class="field-label" for="w-assignee">
-                {{ t('table.assignee') }}<span class="req">*</span>
-              </label>
-              <select
-                id="w-assignee"
-                :value="workDraft.assigneeUid"
-                class="select"
-                @change="onAssigneeChange(($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">—</option>
-                <option v-for="p in people" :key="p.uid" :value="p.uid">
-                  {{ p.firstName }} {{ p.lastName }}
-                </option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="w-due">{{ t('table.dueDate') }}</label>
-              <input id="w-due" v-model="workDraft.dueDate" class="input" type="date" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="w-reward">{{ t('bonuses.rewardAmount') }}</label>
-              <input id="w-reward" v-model.number="workReward" class="input" type="number" step="0.01" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="w-label">{{ t('bonuses.rewardLabel') }}</label>
-              <input id="w-label" v-model="workDraft.rewardLabel" class="input" :maxlength="LIMITS.name" />
+              <label class="field-label" for="w-desc">{{ t('bonuses.description') }}</label>
+              <textarea id="w-desc" v-model="workDraft.description" class="textarea" :maxlength="LIMITS.longText" />
             </div>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="w-desc">{{ t('bonuses.description') }}</label>
-            <textarea id="w-desc" v-model="workDraft.description" class="textarea" :maxlength="LIMITS.longText" />
+          <div class="card-footer">
+            <button class="btn btn-secondary" @click="workDraft = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving" @click="commitWork">
+              <span v-if="saving" class="spinner" />{{ t('bonuses.assignWork') }}
+            </button>
           </div>
-        </div>
-
-        <div class="card-footer">
-          <button class="btn btn-secondary" @click="workDraft = null">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="commitWork">
-            <span v-if="saving" class="spinner" />{{ t('bonuses.assignWork') }}
-          </button>
-        </div>
-      </section>
+        </template>
+      </EditorDialog>
 
       <div v-if="work.length === 0" class="card">
         <div class="empty">

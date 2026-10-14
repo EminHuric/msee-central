@@ -20,6 +20,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { deleteGoal, fetchGoals, saveGoal } from '@/api/company'
 import { fetchEmployees } from '@/api/employees'
@@ -228,132 +229,134 @@ onMounted(load)
     </header>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">{{ draft.id ? t('goals.editGoal') : t('goals.newGoal') }}</h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field">
-          <label class="field-label" for="g-title">
-            {{ t('goals.goalTitle') }}<span class="req">*</span>
-          </label>
-          <input id="g-title" v-model="draft.title" class="input" :maxlength="LIMITS.position" />
+    <EditorDialog :open="!!(draft)" wide @close="draft = null">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">{{ draft.id ? t('goals.editGoal') : t('goals.newGoal') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <div class="field-grid">
+        <div class="card-body stack">
           <div class="field">
-            <label class="field-label" for="g-metric">{{ t('goals.metric') }}</label>
-            <select id="g-metric" v-model="draft.metric" class="select">
-              <option v-for="m in GOAL_METRICS" :key="m" :value="m">{{ t(`goalMetric.${m}`) }}</option>
-            </select>
-            <p class="field-hint">{{ t('goals.metricHint') }}</p>
+            <label class="field-label" for="g-title">
+              {{ t('goals.goalTitle') }}<span class="req">*</span>
+            </label>
+            <input id="g-title" v-model="draft.title" class="input" :maxlength="LIMITS.position" />
           </div>
 
-          <div class="field">
-            <label class="field-label" for="g-target">{{ t('goals.target') }}</label>
-            <input
-              id="g-target"
-              v-model.number="draftTarget"
-              class="input"
-              type="number"
-              :step="draftIsMoney ? 0.01 : 1"
-            />
-          </div>
-
-          <div v-if="draft.metric === 'manual'" class="field">
-            <label class="field-label" for="g-manual">{{ t('goals.manualValue') }}</label>
-            <input id="g-manual" v-model.number="draftManual" class="input" type="number" />
-            <p class="field-hint">{{ t('goals.manualHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="g-scope">{{ t('goals.scope') }}</label>
-            <select id="g-scope" v-model="draft.scope" class="select">
-              <option v-for="s in GOAL_SCOPES" :key="s" :value="s">{{ t(`goalScope.${s}`) }}</option>
-            </select>
-          </div>
-
-          <div v-if="draft.scope === 'department'" class="field">
-            <label class="field-label" for="g-dept">{{ t('goals.department') }}</label>
-            <div class="inline-row">
-              <select id="g-dept" v-model="draft.departmentId" class="select">
-                <option :value="null">—</option>
-                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="g-metric">{{ t('goals.metric') }}</label>
+              <select id="g-metric" v-model="draft.metric" class="select">
+                <option v-for="m in GOAL_METRICS" :key="m" :value="m">{{ t(`goalMetric.${m}`) }}</option>
               </select>
-              <button class="btn btn-ghost btn-sm" type="button" @click="selectDepartment">
-                {{ t('goals.selectAll') }}
-              </button>
+              <p class="field-hint">{{ t('goals.metricHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-target">{{ t('goals.target') }}</label>
+              <input
+                id="g-target"
+                v-model.number="draftTarget"
+                class="input"
+                type="number"
+                :step="draftIsMoney ? 0.01 : 1"
+              />
+            </div>
+
+            <div v-if="draft.metric === 'manual'" class="field">
+              <label class="field-label" for="g-manual">{{ t('goals.manualValue') }}</label>
+              <input id="g-manual" v-model.number="draftManual" class="input" type="number" />
+              <p class="field-hint">{{ t('goals.manualHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-scope">{{ t('goals.scope') }}</label>
+              <select id="g-scope" v-model="draft.scope" class="select">
+                <option v-for="s in GOAL_SCOPES" :key="s" :value="s">{{ t(`goalScope.${s}`) }}</option>
+              </select>
+            </div>
+
+            <div v-if="draft.scope === 'department'" class="field">
+              <label class="field-label" for="g-dept">{{ t('goals.department') }}</label>
+              <div class="inline-row">
+                <select id="g-dept" v-model="draft.departmentId" class="select">
+                  <option :value="null">—</option>
+                  <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" type="button" @click="selectDepartment">
+                  {{ t('goals.selectAll') }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="snapshot.services.length" class="field">
+              <label class="field-label" for="g-svc">{{ t('goals.service') }}</label>
+              <select id="g-svc" v-model="draft.serviceId" class="select">
+                <option :value="null">{{ t('goals.anyService') }}</option>
+                <option v-for="s in snapshot.services" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-from">{{ t('goals.startDate') }}</label>
+              <input id="g-from" v-model="draft.startDate" class="input" type="date" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-to">{{ t('goals.endDate') }}</label>
+              <input id="g-to" v-model="draft.endDate" class="input" type="date" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-status">{{ t('table.status') }}</label>
+              <select id="g-status" v-model="draft.status" class="select">
+                <option v-for="s in GOAL_STATUSES" :key="s" :value="s">{{ t(`goalStatus.${s}`) }}</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="g-vis">{{ t('goals.visibility') }}</label>
+              <select id="g-vis" v-model="draft.visibility" class="select">
+                <option v-for="v in GOAL_VISIBILITY" :key="v" :value="v">
+                  {{ t(`goalVisibility.${v}`) }}
+                </option>
+              </select>
             </div>
           </div>
 
-          <div v-if="snapshot.services.length" class="field">
-            <label class="field-label" for="g-svc">{{ t('goals.service') }}</label>
-            <select id="g-svc" v-model="draft.serviceId" class="select">
-              <option :value="null">{{ t('goals.anyService') }}</option>
-              <option v-for="s in snapshot.services" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </select>
+          <!-- Who it is for: many, not one ------------------------------ -->
+          <div v-if="draft.scope !== 'company'" class="field">
+            <span class="field-label">{{ t('goals.owners') }}</span>
+            <p class="field-hint">{{ t('goals.ownersHint') }}</p>
+            <div class="picker">
+              <label v-for="p in people" :key="p.uid" class="check">
+                <input
+                  type="checkbox"
+                  :checked="draft.ownerUids.includes(p.uid)"
+                  @change="toggleOwner(p.uid)"
+                />
+                <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+              </label>
+            </div>
           </div>
 
           <div class="field">
-            <label class="field-label" for="g-from">{{ t('goals.startDate') }}</label>
-            <input id="g-from" v-model="draft.startDate" class="input" type="date" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="g-to">{{ t('goals.endDate') }}</label>
-            <input id="g-to" v-model="draft.endDate" class="input" type="date" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="g-status">{{ t('table.status') }}</label>
-            <select id="g-status" v-model="draft.status" class="select">
-              <option v-for="s in GOAL_STATUSES" :key="s" :value="s">{{ t(`goalStatus.${s}`) }}</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="g-vis">{{ t('goals.visibility') }}</label>
-            <select id="g-vis" v-model="draft.visibility" class="select">
-              <option v-for="v in GOAL_VISIBILITY" :key="v" :value="v">
-                {{ t(`goalVisibility.${v}`) }}
-              </option>
-            </select>
+            <label class="field-label" for="g-desc">{{ t('goals.description') }}</label>
+            <textarea id="g-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
           </div>
         </div>
 
-        <!-- Who it is for: many, not one ------------------------------ -->
-        <div v-if="draft.scope !== 'company'" class="field">
-          <span class="field-label">{{ t('goals.owners') }}</span>
-          <p class="field-hint">{{ t('goals.ownersHint') }}</p>
-          <div class="picker">
-            <label v-for="p in people" :key="p.uid" class="check">
-              <input
-                type="checkbox"
-                :checked="draft.ownerUids.includes(p.uid)"
-                @change="toggleOwner(p.uid)"
-              />
-              <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
-            </label>
-          </div>
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
         </div>
-
-        <div class="field">
-          <label class="field-label" for="g-desc">{{ t('goals.description') }}</label>
-          <textarea id="g-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
-        </div>
-      </div>
-
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />{{ t('common.save') }}
-        </button>
-      </div>
-    </section>
+      </template>
+    </EditorDialog>
 
     <div class="toolbar">
       <div class="segmented">

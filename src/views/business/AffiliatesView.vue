@@ -21,6 +21,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import {
@@ -342,64 +343,66 @@ onMounted(load)
 
     <!-- ============================ PARTNER ============================ -->
     <template v-else-if="isPartner">
-      <section v-if="leadDraft" class="card editor">
-        <div class="card-header">
-          <h2 class="card-title">{{ t('affiliates.submitLead') }}</h2>
-          <button
-            class="btn btn-ghost btn-icon"
-            :aria-label="t('common.close')"
-            @click="leadDraft = null"
-          >
-            <AppIcon name="close" :size="18" />
-          </button>
-        </div>
+      <EditorDialog :open="!!(leadDraft)" wide @close="leadDraft = null">
+        <template v-if="leadDraft">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('affiliates.submitLead') }}</h2>
+            <button
+              class="btn btn-ghost btn-icon"
+              :aria-label="t('common.close')"
+              @click="leadDraft = null"
+            >
+              <AppIcon name="close" :size="18" />
+            </button>
+          </div>
 
-        <div class="card-body stack">
-          <p class="field-hint">{{ t('affiliates.submitHint') }}</p>
+          <div class="card-body stack">
+            <p class="field-hint">{{ t('affiliates.submitHint') }}</p>
 
-          <div class="field-grid">
-            <div class="field">
-              <label class="field-label" for="al-company">{{ t('leads.company') }}</label>
-              <input id="al-company" v-model="leadDraft.company" class="input" :maxlength="LIMITS.name" />
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="al-company">{{ t('leads.company') }}</label>
+                <input id="al-company" v-model="leadDraft.company" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="al-name">{{ t('leads.name') }}</label>
+                <input id="al-name" v-model="leadDraft.name" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="al-phone">{{ t('clients.phone') }}</label>
+                <input id="al-phone" v-model="leadDraft.phone" class="input" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="al-email">{{ t('clients.email') }}</label>
+                <input id="al-email" v-model="leadDraft.email" class="input" type="email" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="al-service">{{ t('leads.serviceInterest') }}</label>
+                <select id="al-service" v-model="leadDraft.serviceId" class="select">
+                  <option :value="null">—</option>
+                  <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="al-city">{{ t('clients.city') }}</label>
+                <input id="al-city" v-model="leadDraft.city" class="input" :maxlength="LIMITS.name" />
+              </div>
             </div>
+
             <div class="field">
-              <label class="field-label" for="al-name">{{ t('leads.name') }}</label>
-              <input id="al-name" v-model="leadDraft.name" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="al-phone">{{ t('clients.phone') }}</label>
-              <input id="al-phone" v-model="leadDraft.phone" class="input" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="al-email">{{ t('clients.email') }}</label>
-              <input id="al-email" v-model="leadDraft.email" class="input" type="email" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="al-service">{{ t('leads.serviceInterest') }}</label>
-              <select id="al-service" v-model="leadDraft.serviceId" class="select">
-                <option :value="null">—</option>
-                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="al-city">{{ t('clients.city') }}</label>
-              <input id="al-city" v-model="leadDraft.city" class="input" :maxlength="LIMITS.name" />
+              <label class="field-label" for="al-desc">{{ t('leads.description') }}</label>
+              <textarea id="al-desc" v-model="leadDraft.notes" class="textarea" :maxlength="LIMITS.longText" />
             </div>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="al-desc">{{ t('leads.description') }}</label>
-            <textarea id="al-desc" v-model="leadDraft.notes" class="textarea" :maxlength="LIMITS.longText" />
+          <div class="card-footer">
+            <button class="btn btn-secondary" @click="leadDraft = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving" @click="commitLead">
+              <span v-if="saving" class="spinner" />{{ t('affiliates.submitLead') }}
+            </button>
           </div>
-        </div>
-
-        <div class="card-footer">
-          <button class="btn btn-secondary" @click="leadDraft = null">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="commitLead">
-            <span v-if="saving" class="spinner" />{{ t('affiliates.submitLead') }}
-          </button>
-        </div>
-      </section>
+        </template>
+      </EditorDialog>
 
       <div class="figures">
         <article class="card figure">
@@ -514,149 +517,151 @@ onMounted(load)
       </div>
 
       <!-- Editor ----------------------------------------------------- -->
-      <section v-if="draft" class="card editor">
-        <div class="card-header">
-          <h2 class="card-title">
-            {{ draft.id ? t('affiliates.editAffiliate') : t('affiliates.newAffiliate') }}
-          </h2>
-          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-            <AppIcon name="close" :size="18" />
-          </button>
-        </div>
-
-        <div class="card-body stack">
-          <div class="field-grid">
-            <div class="field">
-              <label class="field-label" for="a-type">{{ t('affiliates.type') }}</label>
-              <select id="a-type" v-model="draft.type" class="select">
-                <option v-for="ty in AFFILIATE_TYPES" :key="ty" :value="ty">
-                  {{ t(`affiliateType.${ty}`) }}
-                </option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="a-name">
-                {{ t('affiliates.name') }}<span class="req">*</span>
-              </label>
-              <input id="a-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="a-emp">{{ t('affiliates.account') }}</label>
-              <select
-                id="a-emp"
-                :value="draft.employeeUid ?? ''"
-                class="select"
-                @change="onEmployeeChange(($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">—</option>
-                <option v-for="p in people" :key="p.uid" :value="p.uid">
-                  {{ p.firstName }} {{ p.lastName }}
-                </option>
-              </select>
-              <p class="field-hint">{{ t('affiliates.accountHint') }}</p>
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="a-email">{{ t('clients.email') }}</label>
-              <input id="a-email" v-model="draft.email" class="input" type="email" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="a-phone">{{ t('clients.phone') }}</label>
-              <input id="a-phone" v-model="draft.phone" class="input" />
-            </div>
-
-            <div class="field">
-              <label class="field-label" for="a-status">{{ t('table.status') }}</label>
-              <select id="a-status" v-model="draft.status" class="select">
-                <option value="active">{{ t('organisation.statusActive') }}</option>
-                <option value="paused">{{ t('clientStatus.paused') }}</option>
-                <option value="ended">{{ t('organisation.statusInactive') }}</option>
-              </select>
-            </div>
+      <EditorDialog :open="!!(draft)" wide @close="draft = null">
+        <template v-if="draft">
+          <div class="card-header">
+            <h2 class="card-title">
+              {{ draft.id ? t('affiliates.editAffiliate') : t('affiliates.newAffiliate') }}
+            </h2>
+            <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+              <AppIcon name="close" :size="18" />
+            </button>
           </div>
 
-          <!-- Commission rules ---------------------------------------- -->
-          <div class="rules">
-            <div class="rules-head">
-              <h3 class="rules-title">{{ t('affiliates.rules') }}</h3>
-              <button class="btn btn-secondary btn-sm" @click="addRule">
-                <AppIcon name="plus" :size="14" /> {{ t('affiliates.addRule') }}
-              </button>
-            </div>
-            <p class="field-hint">{{ t('affiliates.rulesHint') }}</p>
-
-            <div v-for="(rule, i) in draft.rules" :key="rule.id" class="rule card">
-              <div class="field-grid">
-                <div class="field">
-                  <label class="field-label" :for="`r-svc-${i}`">{{ t('affiliates.ruleService') }}</label>
-                  <select :id="`r-svc-${i}`" v-model="rule.serviceId" class="select">
-                    <option :value="null">{{ t('affiliates.ruleAnyService') }}</option>
-                    <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label class="field-label" :for="`r-model-${i}`">{{ t('affiliates.ruleModel') }}</label>
-                  <select :id="`r-model-${i}`" v-model="rule.model" class="select">
-                    <option v-for="m in COMMISSION_MODELS" :key="m" :value="m">
-                      {{ t(`commissionModel.${m}`) }}
-                    </option>
-                  </select>
-                </div>
-
-                <div v-if="rule.model === 'percentage'" class="field">
-                  <label class="field-label" :for="`r-pct-${i}`">{{ t('affiliates.rulePercent') }}</label>
-                  <input :id="`r-pct-${i}`" v-model.number="rule.percent" class="input" type="number" min="0" max="100" />
-                </div>
-
-                <div v-else class="field">
-                  <label class="field-label" :for="`r-fix-${i}`">{{ t('affiliates.ruleFixed') }}</label>
-                  <input :id="`r-fix-${i}`" v-model.number="ruleAmounts[rule.id]" class="input" type="number" step="0.01" />
-                </div>
-
-                <div class="field">
-                  <label class="field-label" :for="`r-note-${i}`">{{ t('affiliates.ruleNote') }}</label>
-                  <input :id="`r-note-${i}`" v-model="rule.note" class="input" :maxlength="LIMITS.name" />
-                </div>
+          <div class="card-body stack">
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="a-type">{{ t('affiliates.type') }}</label>
+                <select id="a-type" v-model="draft.type" class="select">
+                  <option v-for="ty in AFFILIATE_TYPES" :key="ty" :value="ty">
+                    {{ t(`affiliateType.${ty}`) }}
+                  </option>
+                </select>
               </div>
 
-              <div class="rule-foot">
-                <label class="check">
-                  <input v-model="rule.recurring" type="checkbox" />
-                  <span class="check-text">{{ t('affiliates.ruleRecurring') }}</span>
+              <div class="field">
+                <label class="field-label" for="a-name">
+                  {{ t('affiliates.name') }}<span class="req">*</span>
                 </label>
-                <label class="check">
-                  <input v-model="rule.requiresFullPayment" type="checkbox" />
-                  <span class="check-text">{{ t('affiliates.ruleFullPayment') }}</span>
-                </label>
-                <span class="spacer" />
-                <button
-                  class="btn btn-ghost btn-sm danger"
-                  :aria-label="t('common.delete')"
-                  @click="draft.rules.splice(i, 1)"
+                <input id="a-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="a-emp">{{ t('affiliates.account') }}</label>
+                <select
+                  id="a-emp"
+                  :value="draft.employeeUid ?? ''"
+                  class="select"
+                  @change="onEmployeeChange(($event.target as HTMLSelectElement).value)"
                 >
-                  <AppIcon name="trash" :size="14" />
+                  <option value="">—</option>
+                  <option v-for="p in people" :key="p.uid" :value="p.uid">
+                    {{ p.firstName }} {{ p.lastName }}
+                  </option>
+                </select>
+                <p class="field-hint">{{ t('affiliates.accountHint') }}</p>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="a-email">{{ t('clients.email') }}</label>
+                <input id="a-email" v-model="draft.email" class="input" type="email" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="a-phone">{{ t('clients.phone') }}</label>
+                <input id="a-phone" v-model="draft.phone" class="input" />
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="a-status">{{ t('table.status') }}</label>
+                <select id="a-status" v-model="draft.status" class="select">
+                  <option value="active">{{ t('organisation.statusActive') }}</option>
+                  <option value="paused">{{ t('clientStatus.paused') }}</option>
+                  <option value="ended">{{ t('organisation.statusInactive') }}</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Commission rules ---------------------------------------- -->
+            <div class="rules">
+              <div class="rules-head">
+                <h3 class="rules-title">{{ t('affiliates.rules') }}</h3>
+                <button class="btn btn-secondary btn-sm" @click="addRule">
+                  <AppIcon name="plus" :size="14" /> {{ t('affiliates.addRule') }}
                 </button>
               </div>
+              <p class="field-hint">{{ t('affiliates.rulesHint') }}</p>
+
+              <div v-for="(rule, i) in draft.rules" :key="rule.id" class="rule card">
+                <div class="field-grid">
+                  <div class="field">
+                    <label class="field-label" :for="`r-svc-${i}`">{{ t('affiliates.ruleService') }}</label>
+                    <select :id="`r-svc-${i}`" v-model="rule.serviceId" class="select">
+                      <option :value="null">{{ t('affiliates.ruleAnyService') }}</option>
+                      <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label class="field-label" :for="`r-model-${i}`">{{ t('affiliates.ruleModel') }}</label>
+                    <select :id="`r-model-${i}`" v-model="rule.model" class="select">
+                      <option v-for="m in COMMISSION_MODELS" :key="m" :value="m">
+                        {{ t(`commissionModel.${m}`) }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div v-if="rule.model === 'percentage'" class="field">
+                    <label class="field-label" :for="`r-pct-${i}`">{{ t('affiliates.rulePercent') }}</label>
+                    <input :id="`r-pct-${i}`" v-model.number="rule.percent" class="input" type="number" min="0" max="100" />
+                  </div>
+
+                  <div v-else class="field">
+                    <label class="field-label" :for="`r-fix-${i}`">{{ t('affiliates.ruleFixed') }}</label>
+                    <input :id="`r-fix-${i}`" v-model.number="ruleAmounts[rule.id]" class="input" type="number" step="0.01" />
+                  </div>
+
+                  <div class="field">
+                    <label class="field-label" :for="`r-note-${i}`">{{ t('affiliates.ruleNote') }}</label>
+                    <input :id="`r-note-${i}`" v-model="rule.note" class="input" :maxlength="LIMITS.name" />
+                  </div>
+                </div>
+
+                <div class="rule-foot">
+                  <label class="check">
+                    <input v-model="rule.recurring" type="checkbox" />
+                    <span class="check-text">{{ t('affiliates.ruleRecurring') }}</span>
+                  </label>
+                  <label class="check">
+                    <input v-model="rule.requiresFullPayment" type="checkbox" />
+                    <span class="check-text">{{ t('affiliates.ruleFullPayment') }}</span>
+                  </label>
+                  <span class="spacer" />
+                  <button
+                    class="btn btn-ghost btn-sm danger"
+                    :aria-label="t('common.delete')"
+                    @click="draft.rules.splice(i, 1)"
+                  >
+                    <AppIcon name="trash" :size="14" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="a-notes">{{ t('clients.notes') }}</label>
+              <textarea id="a-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
             </div>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="a-notes">{{ t('clients.notes') }}</label>
-            <textarea id="a-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+          <div class="card-footer">
+            <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving" @click="commit">
+              <span v-if="saving" class="spinner" />{{ t('common.save') }}
+            </button>
           </div>
-        </div>
-
-        <div class="card-footer">
-          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="commit">
-            <span v-if="saving" class="spinner" />{{ t('common.save') }}
-          </button>
-        </div>
-      </section>
+        </template>
+      </EditorDialog>
 
       <!-- Partners ---------------------------------------------------- -->
       <template v-if="tab === 'partners'">

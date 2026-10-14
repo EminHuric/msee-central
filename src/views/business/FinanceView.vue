@@ -22,6 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import RankChart from '@/components/ui/RankChart.vue'
 import TimeChart from '@/components/ui/TimeChart.vue'
@@ -617,162 +618,164 @@ onMounted(async () => {
 
       <!-- Ledger ------------------------------------------------------ -->
       <template v-else>
-        <section v-if="draft" class="card editor">
-          <div class="card-header">
-            <h2 class="card-title">
-              {{ draft.id ? t('finance.editRecord') : t('finance.newRecord') }}
-            </h2>
-            <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-              <AppIcon name="close" :size="18" />
-            </button>
-          </div>
-
-          <div class="card-body stack">
-            <div class="field-grid">
-              <div class="field">
-                <label class="field-label" for="f-type">{{ t('finance.type') }}</label>
-                <select id="f-type" v-model="draft.type" class="select">
-                  <option v-for="ty in TRANSACTION_TYPES" :key="ty" :value="ty">
-                    {{ t(`transactionType.${ty}`) }}
-                  </option>
-                </select>
-                <p class="field-hint">{{ t('finance.typeHint') }}</p>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-desc">
-                  {{ t('finance.description') }}<span class="req">*</span>
-                </label>
-                <input id="f-desc" v-model="draft.description" class="input" :maxlength="LIMITS.position" />
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-amount">{{ t('finance.amount') }}</label>
-                <input id="f-amount" v-model.number="draftAmount" class="input" type="number" step="0.01" />
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-cur">{{ t('finance.currency') }}</label>
-                <select id="f-cur" v-model="draftCurrency" class="select">
-                  <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-cat">{{ t('finance.category') }}</label>
-                <select id="f-cat" v-model="draft.category" class="select">
-                  <option v-for="c in TRANSACTION_CATEGORIES" :key="c" :value="c">
-                    {{ t(`transactionCategory.${c}`) }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-date">{{ t('finance.date') }}</label>
-                <input id="f-date" v-model="draft.date" class="input" type="date" />
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-status">{{ t('finance.paymentStatus') }}</label>
-                <select id="f-status" v-model="draft.status" class="select">
-                  <option v-for="s in PAYMENT_STATES" :key="s" :value="s">
-                    {{ t(`payState.${s}`) }}
-                  </option>
-                </select>
-              </div>
-
-              <div v-if="draft.status !== 'paid'" class="field">
-                <label class="field-label" for="f-due">{{ t('finance.dueDate') }}</label>
-                <input id="f-due" v-model="draft.dueDate" class="input" type="date" />
-              </div>
-
-              <div v-if="sales.length" class="field">
-                <label class="field-label" for="f-sale">{{ t('finance.sale') }}</label>
-                <select
-                  id="f-sale"
-                  :value="draft.saleId ?? ''"
-                  class="select"
-                  @change="onSaleChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">—</option>
-                  <option v-for="s in sales" :key="s.id" :value="s.id">
-                    {{ s.title }} · {{ s.clientName }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-client">{{ t('table.client') }}</label>
-                <select
-                  id="f-client"
-                  :value="draft.clientId ?? ''"
-                  class="select"
-                  @change="onClientChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">—</option>
-                  <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-service">{{ t('table.service') }}</label>
-                <select
-                  id="f-service"
-                  :value="draft.serviceId ?? ''"
-                  class="select"
-                  @change="onServiceChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">—</option>
-                  <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-                </select>
-              </div>
-
-              <div v-if="projects.length" class="field">
-                <label class="field-label" for="f-project">{{ t('table.project') }}</label>
-                <select id="f-project" v-model="draft.projectId" class="select">
-                  <option :value="null">—</option>
-                  <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-emp">{{ t('table.employee') }}</label>
-                <select
-                  id="f-emp"
-                  :value="draft.employeeUid ?? ''"
-                  class="select"
-                  @change="onEmployeeChange(($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="">—</option>
-                  <option v-for="p in people" :key="p.uid" :value="p.uid">
-                    {{ p.firstName }} {{ p.lastName }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="f-method">{{ t('finance.method') }}</label>
-                <input id="f-method" v-model="draft.method" class="input" :maxlength="LIMITS.name" />
-              </div>
+        <EditorDialog :open="!!(draft)" wide @close="draft = null">
+          <template v-if="draft">
+            <div class="card-header">
+              <h2 class="card-title">
+                {{ draft.id ? t('finance.editRecord') : t('finance.newRecord') }}
+              </h2>
+              <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+                <AppIcon name="close" :size="18" />
+              </button>
             </div>
 
-            <div class="field">
-              <label class="field-label" for="f-notes">{{ t('clients.notes') }}</label>
-              <textarea id="f-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+            <div class="card-body stack">
+              <div class="field-grid">
+                <div class="field">
+                  <label class="field-label" for="f-type">{{ t('finance.type') }}</label>
+                  <select id="f-type" v-model="draft.type" class="select">
+                    <option v-for="ty in TRANSACTION_TYPES" :key="ty" :value="ty">
+                      {{ t(`transactionType.${ty}`) }}
+                    </option>
+                  </select>
+                  <p class="field-hint">{{ t('finance.typeHint') }}</p>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-desc">
+                    {{ t('finance.description') }}<span class="req">*</span>
+                  </label>
+                  <input id="f-desc" v-model="draft.description" class="input" :maxlength="LIMITS.position" />
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-amount">{{ t('finance.amount') }}</label>
+                  <input id="f-amount" v-model.number="draftAmount" class="input" type="number" step="0.01" />
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-cur">{{ t('finance.currency') }}</label>
+                  <select id="f-cur" v-model="draftCurrency" class="select">
+                    <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-cat">{{ t('finance.category') }}</label>
+                  <select id="f-cat" v-model="draft.category" class="select">
+                    <option v-for="c in TRANSACTION_CATEGORIES" :key="c" :value="c">
+                      {{ t(`transactionCategory.${c}`) }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-date">{{ t('finance.date') }}</label>
+                  <input id="f-date" v-model="draft.date" class="input" type="date" />
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-status">{{ t('finance.paymentStatus') }}</label>
+                  <select id="f-status" v-model="draft.status" class="select">
+                    <option v-for="s in PAYMENT_STATES" :key="s" :value="s">
+                      {{ t(`payState.${s}`) }}
+                    </option>
+                  </select>
+                </div>
+
+                <div v-if="draft.status !== 'paid'" class="field">
+                  <label class="field-label" for="f-due">{{ t('finance.dueDate') }}</label>
+                  <input id="f-due" v-model="draft.dueDate" class="input" type="date" />
+                </div>
+
+                <div v-if="sales.length" class="field">
+                  <label class="field-label" for="f-sale">{{ t('finance.sale') }}</label>
+                  <select
+                    id="f-sale"
+                    :value="draft.saleId ?? ''"
+                    class="select"
+                    @change="onSaleChange(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">—</option>
+                    <option v-for="s in sales" :key="s.id" :value="s.id">
+                      {{ s.title }} · {{ s.clientName }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-client">{{ t('table.client') }}</label>
+                  <select
+                    id="f-client"
+                    :value="draft.clientId ?? ''"
+                    class="select"
+                    @change="onClientChange(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">—</option>
+                    <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-service">{{ t('table.service') }}</label>
+                  <select
+                    id="f-service"
+                    :value="draft.serviceId ?? ''"
+                    class="select"
+                    @change="onServiceChange(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">—</option>
+                    <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                  </select>
+                </div>
+
+                <div v-if="projects.length" class="field">
+                  <label class="field-label" for="f-project">{{ t('table.project') }}</label>
+                  <select id="f-project" v-model="draft.projectId" class="select">
+                    <option :value="null">—</option>
+                    <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-emp">{{ t('table.employee') }}</label>
+                  <select
+                    id="f-emp"
+                    :value="draft.employeeUid ?? ''"
+                    class="select"
+                    @change="onEmployeeChange(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">—</option>
+                    <option v-for="p in people" :key="p.uid" :value="p.uid">
+                      {{ p.firstName }} {{ p.lastName }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="f-method">{{ t('finance.method') }}</label>
+                  <input id="f-method" v-model="draft.method" class="input" :maxlength="LIMITS.name" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="f-notes">{{ t('clients.notes') }}</label>
+                <textarea id="f-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+              </div>
+
+              <p v-if="draft.saleId && draft.affiliateId" class="field-hint warn">
+                {{ t('sales.commissionHint') }}
+              </p>
             </div>
 
-            <p v-if="draft.saleId && draft.affiliateId" class="field-hint warn">
-              {{ t('sales.commissionHint') }}
-            </p>
-          </div>
-
-          <div class="card-footer">
-            <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-            <button class="btn btn-primary" :disabled="saving" @click="commit">
-              <span v-if="saving" class="spinner" />{{ t('common.save') }}
-            </button>
-          </div>
-        </section>
+            <div class="card-footer">
+              <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" :disabled="saving" @click="commit">
+                <span v-if="saving" class="spinner" />{{ t('common.save') }}
+              </button>
+            </div>
+          </template>
+        </EditorDialog>
 
         <div class="toolbar">
           <div class="search toolbar-grow">

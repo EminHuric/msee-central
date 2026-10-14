@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { buildCalendar, deleteEvent, fetchEvents, fetchGoals, monthGrid, saveEvent } from '@/api/company'
 import { fetchClients } from '@/api/clients'
@@ -284,97 +285,99 @@ onMounted(load)
     </header>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">{{ draft.id ? t('calendar.editEvent') : t('calendar.newEvent') }}</h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field">
-          <label class="field-label" for="e-title">
-            {{ t('calendar.eventTitle') }}<span class="req">*</span>
-          </label>
-          <input id="e-title" v-model="draft.title" class="input" :maxlength="LIMITS.position" />
+    <EditorDialog :open="!!(draft)" wide @close="draft = null">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">{{ draft.id ? t('calendar.editEvent') : t('calendar.newEvent') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <div class="field-grid">
+        <div class="card-body stack">
           <div class="field">
-            <label class="field-label" for="e-kind">{{ t('calendar.kind') }}</label>
-            <select id="e-kind" v-model="draft.kind" class="select">
-              <option v-for="k in EVENT_KINDS" :key="k" :value="k">{{ t(`eventKind.${k}`) }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-date">{{ t('calendar.date') }}</label>
-            <input id="e-date" v-model="draft.date" class="input" type="date" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-from">{{ t('calendar.startTime') }}</label>
-            <input id="e-from" v-model="draft.startTime" class="input" type="time" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-to">{{ t('calendar.endTime') }}</label>
-            <input id="e-to" v-model="draft.endTime" class="input" type="time" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-loc">{{ t('calendar.location') }}</label>
-            <input id="e-loc" v-model="draft.location" class="input" :maxlength="LIMITS.name" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-client">{{ t('calendar.client') }}</label>
-            <select id="e-client" v-model="draft.clientId" class="select">
-              <option :value="null">—</option>
-              <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="field-label" for="e-proj">{{ t('calendar.project') }}</label>
-            <select id="e-proj" v-model="draft.projectId" class="select">
-              <option :value="null">—</option>
-              <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">{{ t('calendar.attendees') }}</span>
-          <p class="field-hint">{{ t('calendar.attendeesHint') }}</p>
-          <div class="attendees">
-            <label v-for="p in people" :key="p.uid" class="check">
-              <input
-                type="checkbox"
-                :checked="draft.attendeeUids.includes(p.uid)"
-                @change="toggleAttendee(p.uid)"
-              />
-              <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+            <label class="field-label" for="e-title">
+              {{ t('calendar.eventTitle') }}<span class="req">*</span>
             </label>
+            <input id="e-title" v-model="draft.title" class="input" :maxlength="LIMITS.position" />
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="e-kind">{{ t('calendar.kind') }}</label>
+              <select id="e-kind" v-model="draft.kind" class="select">
+                <option v-for="k in EVENT_KINDS" :key="k" :value="k">{{ t(`eventKind.${k}`) }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-date">{{ t('calendar.date') }}</label>
+              <input id="e-date" v-model="draft.date" class="input" type="date" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-from">{{ t('calendar.startTime') }}</label>
+              <input id="e-from" v-model="draft.startTime" class="input" type="time" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-to">{{ t('calendar.endTime') }}</label>
+              <input id="e-to" v-model="draft.endTime" class="input" type="time" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-loc">{{ t('calendar.location') }}</label>
+              <input id="e-loc" v-model="draft.location" class="input" :maxlength="LIMITS.name" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-client">{{ t('calendar.client') }}</label>
+              <select id="e-client" v-model="draft.clientId" class="select">
+                <option :value="null">—</option>
+                <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="e-proj">{{ t('calendar.project') }}</label>
+              <select id="e-proj" v-model="draft.projectId" class="select">
+                <option :value="null">—</option>
+                <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="field-label">{{ t('calendar.attendees') }}</span>
+            <p class="field-hint">{{ t('calendar.attendeesHint') }}</p>
+            <div class="attendees">
+              <label v-for="p in people" :key="p.uid" class="check">
+                <input
+                  type="checkbox"
+                  :checked="draft.attendeeUids.includes(p.uid)"
+                  @change="toggleAttendee(p.uid)"
+                />
+                <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="e-desc">{{ t('calendar.description') }}</label>
+            <textarea id="e-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
           </div>
         </div>
 
-        <div class="field">
-          <label class="field-label" for="e-desc">{{ t('calendar.description') }}</label>
-          <textarea id="e-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
+        <div class="card-footer">
+          <button
+            v-if="draft.id"
+            class="btn btn-ghost danger"
+            @click="pendingDelete = eventFor(`event-${draft.id}`) ?? null"
+          >
+            {{ t('common.delete') }}
+          </button>
+          <span class="spacer" />
+          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
         </div>
-      </div>
-
-      <div class="card-footer">
-        <button
-          v-if="draft.id"
-          class="btn btn-ghost danger"
-          @click="pendingDelete = eventFor(`event-${draft.id}`) ?? null"
-        >
-          {{ t('common.delete') }}
-        </button>
-        <span class="spacer" />
-        <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />{{ t('common.save') }}
-        </button>
-      </div>
-    </section>
+      </template>
+    </EditorDialog>
 
     <div v-if="loading" class="card">
       <div class="card-body stack">

@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CustomFields from '@/components/CustomFields.vue'
 import TagInput from '@/components/ui/TagInput.vue'
@@ -283,212 +284,214 @@ onMounted(async () => {
     </header>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">
-          {{ draft.id ? t('clients.editClient') : t('clients.newClient') }}
-        </h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="c-name">
-              {{ t('clients.name') }}<span class="req">*</span>
-            </label>
-            <input id="c-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-desc">{{ t('clients.description') }}</label>
-            <input id="c-desc" v-model="draft.description" class="input" :maxlength="LIMITS.shortText" />
-            <p class="field-hint">{{ t('clients.descriptionHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-contact">{{ t('clients.contactName') }}</label>
-            <input id="c-contact" v-model="draft.contactName" class="input" :maxlength="LIMITS.name" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-email">{{ t('clients.email') }}</label>
-            <input id="c-email" v-model="draft.email" class="input" type="email" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-phone">{{ t('clients.phone') }}</label>
-            <input id="c-phone" v-model="draft.phone" class="input" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-resp">{{ t('clients.responsible') }}</label>
-            <select
-              id="c-resp"
-              :value="draft.responsibleUid ?? ''"
-              class="select"
-              @change="onResponsibleChange(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">—</option>
-              <option v-for="p in people" :key="p.uid" :value="p.uid">
-                {{ p.firstName }} {{ p.lastName }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-status">{{ t('table.status') }}</label>
-            <select id="c-status" v-model="draft.status" class="select">
-              <option v-for="s in CLIENT_STATUSES" :key="s" :value="s">
-                {{ t(`clientStatus.${s}`) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="c-since">{{ t('clients.since') }}</label>
-            <input id="c-since" v-model="draft.clientSince" class="input" type="date" />
-          </div>
+    <EditorDialog :open="!!(draft)" wide @close="draft = null">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">
+            {{ draft.id ? t('clients.editClient') : t('clients.newClient') }}
+          </h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <!-- Advanced, folded away so the common case stays short --------- -->
-        <details class="more">
-          <summary>{{ t('common.moreDetails') }}</summary>
-
+        <div class="card-body stack">
           <div class="field-grid">
             <div class="field">
-              <label class="field-label" for="c-city">{{ t('clients.city') }}</label>
-              <input id="c-city" v-model="draft.city" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-country">{{ t('clients.country') }}</label>
-              <input id="c-country" v-model="draft.country" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-address">{{ t('clients.address') }}</label>
-              <input id="c-address" v-model="draft.address" class="input" :maxlength="LIMITS.shortText" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-web">{{ t('clients.website') }}</label>
-              <input id="c-web" v-model="draft.website" class="input" type="url" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-industry">{{ t('clients.industry') }}</label>
-              <input id="c-industry" v-model="draft.industry" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-ig">{{ t('clients.instagram') }}</label>
-              <input id="c-ig" v-model="draft.instagram" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-owner">{{ t('clients.ownerName') }}</label>
-              <input id="c-owner" v-model="draft.ownerName" class="input" :maxlength="LIMITS.name" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="c-manager">{{ t('clients.managerName') }}</label>
-              <input id="c-manager" v-model="draft.managerName" class="input" :maxlength="LIMITS.name" />
-            </div>
-          </div>
-
-          <div class="field">
-            <span class="field-label">{{ t('clients.tags') }}</span>
-            <TagInput v-model="draft.tags" :placeholder="t('clients.tagsHint')" />
-          </div>
-
-          <!--
-            Where this client exists in the other systems MsEe runs.
-
-            Deliberately worded as a reference somebody writes down, not a
-            connection. Nothing here talks to StayBrain or the booking system,
-            and a green dot implying otherwise would be worse than the field
-            not existing.
-          -->
-          <fieldset class="block">
-            <legend>{{ t('clients.externalRefs') }}</legend>
-            <p class="field-hint">{{ t('clients.externalRefsHint') }}</p>
-
-            <div v-for="(ref, i) in draft.externalRefs" :key="i" class="ref-row">
-              <div class="field">
-                <label class="field-label" :for="`c-ref-sys-${i}`">
-                  {{ t('clients.externalSystem') }}
-                </label>
-                <select :id="`c-ref-sys-${i}`" v-model="ref.system" class="select">
-                  <option v-for="s in EXTERNAL_SYSTEMS" :key="s" :value="s">
-                    {{ t(`externalSystem.${s}`) }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label class="field-label" :for="`c-ref-id-${i}`">
-                  {{ t('clients.externalReference') }}
-                </label>
-                <input
-                  :id="`c-ref-id-${i}`"
-                  v-model="ref.reference"
-                  class="input"
-                  :maxlength="LIMITS.name"
-                />
-              </div>
-
-              <div class="field">
-                <label class="field-label" :for="`c-ref-url-${i}`">
-                  {{ t('clients.externalUrl') }}
-                </label>
-                <input :id="`c-ref-url-${i}`" v-model="ref.url" class="input" type="url" />
-              </div>
-
-              <button
-                class="btn btn-ghost btn-sm danger"
-                type="button"
-                :aria-label="t('common.remove')"
-                @click="draft.externalRefs.splice(i, 1)"
-              >
-                <AppIcon name="trash" :size="14" />
-              </button>
-            </div>
-
-            <button class="btn btn-secondary btn-sm" type="button" @click="addExternalRef">
-              <AppIcon name="plus" :size="14" /> {{ t('clients.addExternalRef') }}
-            </button>
-          </fieldset>
-
-          <div v-if="services.length" class="field">
-            <span class="field-label">{{ t('clients.services') }}</span>
-            <div class="options">
-              <label v-for="s in services" :key="s.id" class="check">
-                <input
-                  type="checkbox"
-                  :checked="draft.serviceIds.includes(s.id)"
-                  @change="toggleService(s.id)"
-                />
-                <span class="check-text">{{ s.name }}</span>
+              <label class="field-label" for="c-name">
+                {{ t('clients.name') }}<span class="req">*</span>
               </label>
+              <input id="c-name" v-model="draft.name" class="input" :maxlength="LIMITS.name" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-desc">{{ t('clients.description') }}</label>
+              <input id="c-desc" v-model="draft.description" class="input" :maxlength="LIMITS.shortText" />
+              <p class="field-hint">{{ t('clients.descriptionHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-contact">{{ t('clients.contactName') }}</label>
+              <input id="c-contact" v-model="draft.contactName" class="input" :maxlength="LIMITS.name" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-email">{{ t('clients.email') }}</label>
+              <input id="c-email" v-model="draft.email" class="input" type="email" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-phone">{{ t('clients.phone') }}</label>
+              <input id="c-phone" v-model="draft.phone" class="input" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-resp">{{ t('clients.responsible') }}</label>
+              <select
+                id="c-resp"
+                :value="draft.responsibleUid ?? ''"
+                class="select"
+                @change="onResponsibleChange(($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">—</option>
+                <option v-for="p in people" :key="p.uid" :value="p.uid">
+                  {{ p.firstName }} {{ p.lastName }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-status">{{ t('table.status') }}</label>
+              <select id="c-status" v-model="draft.status" class="select">
+                <option v-for="s in CLIENT_STATUSES" :key="s" :value="s">
+                  {{ t(`clientStatus.${s}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-since">{{ t('clients.since') }}</label>
+              <input id="c-since" v-model="draft.clientSince" class="input" type="date" />
             </div>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="c-notes">{{ t('clients.notes') }}</label>
-            <textarea id="c-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
-          </div>
-        </details>
+          <!-- Advanced, folded away so the common case stays short --------- -->
+          <details class="more">
+            <summary>{{ t('common.moreDetails') }}</summary>
 
-        <CustomFields
-          v-model="draft.custom"
-          :fields="clientFields"
-          :can-see-management="canSeeManagement"
-        />
-      </div>
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="c-city">{{ t('clients.city') }}</label>
+                <input id="c-city" v-model="draft.city" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-country">{{ t('clients.country') }}</label>
+                <input id="c-country" v-model="draft.country" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-address">{{ t('clients.address') }}</label>
+                <input id="c-address" v-model="draft.address" class="input" :maxlength="LIMITS.shortText" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-web">{{ t('clients.website') }}</label>
+                <input id="c-web" v-model="draft.website" class="input" type="url" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-industry">{{ t('clients.industry') }}</label>
+                <input id="c-industry" v-model="draft.industry" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-ig">{{ t('clients.instagram') }}</label>
+                <input id="c-ig" v-model="draft.instagram" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-owner">{{ t('clients.ownerName') }}</label>
+                <input id="c-owner" v-model="draft.ownerName" class="input" :maxlength="LIMITS.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="c-manager">{{ t('clients.managerName') }}</label>
+                <input id="c-manager" v-model="draft.managerName" class="input" :maxlength="LIMITS.name" />
+              </div>
+            </div>
 
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />{{ t('common.save') }}
-        </button>
-      </div>
-    </section>
+            <div class="field">
+              <span class="field-label">{{ t('clients.tags') }}</span>
+              <TagInput v-model="draft.tags" :placeholder="t('clients.tagsHint')" />
+            </div>
+
+            <!--
+              Where this client exists in the other systems MsEe runs.
+
+              Deliberately worded as a reference somebody writes down, not a
+              connection. Nothing here talks to StayBrain or the booking system,
+              and a green dot implying otherwise would be worse than the field
+              not existing.
+            -->
+            <fieldset class="block">
+              <legend>{{ t('clients.externalRefs') }}</legend>
+              <p class="field-hint">{{ t('clients.externalRefsHint') }}</p>
+
+              <div v-for="(ref, i) in draft.externalRefs" :key="i" class="ref-row">
+                <div class="field">
+                  <label class="field-label" :for="`c-ref-sys-${i}`">
+                    {{ t('clients.externalSystem') }}
+                  </label>
+                  <select :id="`c-ref-sys-${i}`" v-model="ref.system" class="select">
+                    <option v-for="s in EXTERNAL_SYSTEMS" :key="s" :value="s">
+                      {{ t(`externalSystem.${s}`) }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" :for="`c-ref-id-${i}`">
+                    {{ t('clients.externalReference') }}
+                  </label>
+                  <input
+                    :id="`c-ref-id-${i}`"
+                    v-model="ref.reference"
+                    class="input"
+                    :maxlength="LIMITS.name"
+                  />
+                </div>
+
+                <div class="field">
+                  <label class="field-label" :for="`c-ref-url-${i}`">
+                    {{ t('clients.externalUrl') }}
+                  </label>
+                  <input :id="`c-ref-url-${i}`" v-model="ref.url" class="input" type="url" />
+                </div>
+
+                <button
+                  class="btn btn-ghost btn-sm danger"
+                  type="button"
+                  :aria-label="t('common.remove')"
+                  @click="draft.externalRefs.splice(i, 1)"
+                >
+                  <AppIcon name="trash" :size="14" />
+                </button>
+              </div>
+
+              <button class="btn btn-secondary btn-sm" type="button" @click="addExternalRef">
+                <AppIcon name="plus" :size="14" /> {{ t('clients.addExternalRef') }}
+              </button>
+            </fieldset>
+
+            <div v-if="services.length" class="field">
+              <span class="field-label">{{ t('clients.services') }}</span>
+              <div class="options">
+                <label v-for="s in services" :key="s.id" class="check">
+                  <input
+                    type="checkbox"
+                    :checked="draft.serviceIds.includes(s.id)"
+                    @change="toggleService(s.id)"
+                  />
+                  <span class="check-text">{{ s.name }}</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="c-notes">{{ t('clients.notes') }}</label>
+              <textarea id="c-notes" v-model="draft.notes" class="textarea" :maxlength="LIMITS.longText" />
+            </div>
+          </details>
+
+          <CustomFields
+            v-model="draft.custom"
+            :fields="clientFields"
+            :can-see-management="canSeeManagement"
+          />
+        </div>
+
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
+        </div>
+      </template>
+    </EditorDialog>
 
     <!-- Filters -------------------------------------------------------- -->
     <div class="toolbar">

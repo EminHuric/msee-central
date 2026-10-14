@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import CustomFields from '@/components/CustomFields.vue'
 import NotesPanel from '@/components/NotesPanel.vue'
@@ -355,161 +356,163 @@ watch(projectId, load)
       </header>
 
       <!-- Editor ------------------------------------------------------- -->
-      <section v-if="editing && draft" class="card editor">
-        <div class="card-header">
-          <h2 class="card-title">{{ t('projects.editProject') }}</h2>
-          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="editing = false">
-            <AppIcon name="close" :size="18" />
-          </button>
-        </div>
-
-        <div class="card-body stack">
-          <div class="field-grid">
-            <div class="field">
-              <label class="field-label" for="e-name">
-                {{ t('projects.name') }}<span class="req">*</span>
-              </label>
-              <input id="e-name" v-model="draft.name" class="input" maxlength="120" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-objective">{{ t('projects.objective') }}</label>
-              <input id="e-objective" v-model="draft.objective" class="input" maxlength="200" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-status">{{ t('table.status') }}</label>
-              <select id="e-status" v-model="draft.status" class="select">
-                <option v-for="s in PROJECT_STATUSES" :key="s" :value="s">
-                  {{ t(`projectStatus.${s}`) }}
-                </option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-priority">{{ t('table.priority') }}</label>
-              <select id="e-priority" v-model="draft.priority" class="select">
-                <option v-for="p in PRIORITIES" :key="p" :value="p">{{ t(`priority.${p}`) }}</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-owner">{{ t('projects.owner') }}</label>
-              <select id="e-owner" v-model="draft.ownerUid" class="select">
-                <option :value="null">—</option>
-                <option v-for="p in people" :key="p.uid" :value="p.uid">
-                  {{ p.firstName }} {{ p.lastName }}
-                </option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-service">{{ t('table.service') }}</label>
-              <select id="e-service" v-model="draft.serviceId" class="select">
-                <option :value="null">—</option>
-                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-start">{{ t('projects.startDate') }}</label>
-              <input id="e-start" v-model="draft.startDate" class="input" type="date" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-end">{{ t('projects.deadline') }}</label>
-              <input id="e-end" v-model="draft.endDate" class="input" type="date" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-budget">{{ t('projects.budget') }}</label>
-              <input id="e-budget" v-model.number="draftBudget" class="input" type="number" step="0.01" />
-            </div>
-            <div class="field">
-              <label class="field-label" for="e-cur">{{ t('finance.currency') }}</label>
-              <select id="e-cur" v-model="draftCurrency" class="select">
-                <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-              </select>
-            </div>
+      <EditorDialog :open="!!(editing && draft)" wide @close="editing = false">
+        <template v-if="editing && draft">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('projects.editProject') }}</h2>
+            <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="editing = false">
+              <AppIcon name="close" :size="18" />
+            </button>
           </div>
 
-          <div class="field">
-            <label class="field-label" for="e-desc">{{ t('projects.description') }}</label>
-            <textarea id="e-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="e-cover">{{ t('projects.cover') }}</label>
-            <input id="e-cover" class="input" type="file" accept="image/*" @change="onCover" />
-            <p class="field-hint">{{ t('projects.coverHint') }}</p>
-          </div>
-
-          <!-- Clients: many, and removable ---------------------------- -->
-          <div class="field">
-            <span class="field-label">{{ t('projects.clients') }}</span>
-            <p class="field-hint">{{ t('projects.clientsHint') }}</p>
-            <div class="picker">
-              <label v-for="c in clients" :key="c.id" class="check">
-                <input
-                  type="checkbox"
-                  :checked="draft.clientIds.includes(c.id)"
-                  @change="toggleClient(c.id)"
-                />
-                <span class="check-text">{{ c.name }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="field">
-            <span class="field-label">{{ t('projects.team') }}</span>
-            <div class="picker">
-              <label v-for="p in people" :key="p.uid" class="check">
-                <input
-                  type="checkbox"
-                  :checked="draft.teamUids.includes(p.uid)"
-                  @change="toggleMember(p.uid)"
-                />
-                <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Milestones ----------------------------------------------- -->
-          <div class="field">
-            <span class="field-label">{{ t('projects.milestones') }}</span>
-            <p class="field-hint">{{ t('projects.milestonesHint') }}</p>
-
-            <ul v-if="draft.milestones.length" class="milestones">
-              <li v-for="m in draft.milestones" :key="m.id">
-                <label class="check">
-                  <input v-model="m.done" type="checkbox" />
-                  <span class="check-text" :class="{ 'is-done': m.done }">{{ m.title }}</span>
+          <div class="card-body stack">
+            <div class="field-grid">
+              <div class="field">
+                <label class="field-label" for="e-name">
+                  {{ t('projects.name') }}<span class="req">*</span>
                 </label>
-                <input v-model="m.dueDate" class="input date" type="date" />
-                <button
-                  class="btn btn-ghost btn-sm danger"
-                  :aria-label="t('common.delete')"
-                  @click="removeMilestone(m)"
-                >
-                  <AppIcon name="close" :size="13" />
-                </button>
-              </li>
-            </ul>
+                <input id="e-name" v-model="draft.name" class="input" maxlength="120" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-objective">{{ t('projects.objective') }}</label>
+                <input id="e-objective" v-model="draft.objective" class="input" maxlength="200" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-status">{{ t('table.status') }}</label>
+                <select id="e-status" v-model="draft.status" class="select">
+                  <option v-for="s in PROJECT_STATUSES" :key="s" :value="s">
+                    {{ t(`projectStatus.${s}`) }}
+                  </option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-priority">{{ t('table.priority') }}</label>
+                <select id="e-priority" v-model="draft.priority" class="select">
+                  <option v-for="p in PRIORITIES" :key="p" :value="p">{{ t(`priority.${p}`) }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-owner">{{ t('projects.owner') }}</label>
+                <select id="e-owner" v-model="draft.ownerUid" class="select">
+                  <option :value="null">—</option>
+                  <option v-for="p in people" :key="p.uid" :value="p.uid">
+                    {{ p.firstName }} {{ p.lastName }}
+                  </option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-service">{{ t('table.service') }}</label>
+                <select id="e-service" v-model="draft.serviceId" class="select">
+                  <option :value="null">—</option>
+                  <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-start">{{ t('projects.startDate') }}</label>
+                <input id="e-start" v-model="draft.startDate" class="input" type="date" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-end">{{ t('projects.deadline') }}</label>
+                <input id="e-end" v-model="draft.endDate" class="input" type="date" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-budget">{{ t('projects.budget') }}</label>
+                <input id="e-budget" v-model.number="draftBudget" class="input" type="number" step="0.01" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="e-cur">{{ t('finance.currency') }}</label>
+                <select id="e-cur" v-model="draftCurrency" class="select">
+                  <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+                </select>
+              </div>
+            </div>
 
-            <form class="add-row" @submit.prevent="addMilestone">
-              <input
-                v-model="newMilestone"
-                class="input"
-                :placeholder="t('projects.addMilestone')"
-                maxlength="120"
-              />
-              <input v-model="newMilestoneDate" class="input date" type="date" />
-              <button class="btn btn-secondary" type="submit"><AppIcon name="plus" :size="15" /></button>
-            </form>
+            <div class="field">
+              <label class="field-label" for="e-desc">{{ t('projects.description') }}</label>
+              <textarea id="e-desc" v-model="draft.description" class="textarea" :maxlength="LIMITS.longText" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="e-cover">{{ t('projects.cover') }}</label>
+              <input id="e-cover" class="input" type="file" accept="image/*" @change="onCover" />
+              <p class="field-hint">{{ t('projects.coverHint') }}</p>
+            </div>
+
+            <!-- Clients: many, and removable ---------------------------- -->
+            <div class="field">
+              <span class="field-label">{{ t('projects.clients') }}</span>
+              <p class="field-hint">{{ t('projects.clientsHint') }}</p>
+              <div class="picker">
+                <label v-for="c in clients" :key="c.id" class="check">
+                  <input
+                    type="checkbox"
+                    :checked="draft.clientIds.includes(c.id)"
+                    @change="toggleClient(c.id)"
+                  />
+                  <span class="check-text">{{ c.name }}</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <span class="field-label">{{ t('projects.team') }}</span>
+              <div class="picker">
+                <label v-for="p in people" :key="p.uid" class="check">
+                  <input
+                    type="checkbox"
+                    :checked="draft.teamUids.includes(p.uid)"
+                    @change="toggleMember(p.uid)"
+                  />
+                  <span class="check-text">{{ p.firstName }} {{ p.lastName }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Milestones ----------------------------------------------- -->
+            <div class="field">
+              <span class="field-label">{{ t('projects.milestones') }}</span>
+              <p class="field-hint">{{ t('projects.milestonesHint') }}</p>
+
+              <ul v-if="draft.milestones.length" class="milestones">
+                <li v-for="m in draft.milestones" :key="m.id">
+                  <label class="check">
+                    <input v-model="m.done" type="checkbox" />
+                    <span class="check-text" :class="{ 'is-done': m.done }">{{ m.title }}</span>
+                  </label>
+                  <input v-model="m.dueDate" class="input date" type="date" />
+                  <button
+                    class="btn btn-ghost btn-sm danger"
+                    :aria-label="t('common.delete')"
+                    @click="removeMilestone(m)"
+                  >
+                    <AppIcon name="close" :size="13" />
+                  </button>
+                </li>
+              </ul>
+
+              <form class="add-row" @submit.prevent="addMilestone">
+                <input
+                  v-model="newMilestone"
+                  class="input"
+                  :placeholder="t('projects.addMilestone')"
+                  maxlength="120"
+                />
+                <input v-model="newMilestoneDate" class="input date" type="date" />
+                <button class="btn btn-secondary" type="submit"><AppIcon name="plus" :size="15" /></button>
+              </form>
+            </div>
+
+            <CustomFields v-model="draft.custom" :fields="projectFields" can-see-management />
           </div>
 
-          <CustomFields v-model="draft.custom" :fields="projectFields" can-see-management />
-        </div>
-
-        <div class="card-footer">
-          <button class="btn btn-secondary" @click="editing = false">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="commit">
-            <span v-if="saving" class="spinner" />{{ t('common.save') }}
-          </button>
-        </div>
-      </section>
+          <div class="card-footer">
+            <button class="btn btn-secondary" @click="editing = false">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving" @click="commit">
+              <span v-if="saving" class="spinner" />{{ t('common.save') }}
+            </button>
+          </div>
+        </template>
+      </EditorDialog>
 
       <!-- Money -------------------------------------------------------- -->
       <div v-if="canMoney" class="figures">

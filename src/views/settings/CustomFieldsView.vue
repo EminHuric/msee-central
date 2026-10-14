@@ -15,6 +15,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/ui/AppIcon.vue'
+import EditorDialog from '@/components/ui/EditorDialog.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { deleteFieldDef, fetchFieldDefs, saveFieldDef } from '@/api/records'
 import { LIMITS } from '@/lib/validation'
@@ -248,80 +249,82 @@ onMounted(load)
     </section>
 
     <!-- Editor --------------------------------------------------------- -->
-    <section v-if="draft" class="card editor">
-      <div class="card-header">
-        <h2 class="card-title">{{ draft.id ? t('fields.editField') : t('fields.newField') }}</h2>
-        <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div class="card-body stack">
-        <div class="field-grid">
-          <div class="field">
-            <label class="field-label" for="cf-label">
-              {{ t('fields.label') }}<span class="req">*</span>
-            </label>
-            <input id="cf-label" v-model="draft.label" class="input" :maxlength="LIMITS.name" />
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="cf-entity">{{ t('fields.appliesTo') }}</label>
-            <select id="cf-entity" v-model="draft.entity" class="select" :disabled="!!draft.id">
-              <option v-for="e in FIELD_ENTITIES" :key="e" :value="e">
-                {{ t(`fields.entity.${e}`) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="cf-type">{{ t('fields.fieldType') }}</label>
-            <select id="cf-type" v-model="draft.type" class="select">
-              <option v-for="ty in FIELD_TYPES" :key="ty" :value="ty">
-                {{ t(`fields.type.${ty}`) }}
-              </option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="cf-vis">{{ t('fields.visibilityLabel') }}</label>
-            <select id="cf-vis" v-model="draft.visibility" class="select">
-              <option v-for="v in FIELD_VISIBILITY" :key="v" :value="v">
-                {{ t(`fields.visibility.${v}`) }}
-              </option>
-            </select>
-          </div>
-
-          <div v-if="needsOptions" class="field">
-            <label class="field-label" for="cf-options">{{ t('fields.options') }}</label>
-            <input id="cf-options" v-model="optionsText" class="input" />
-            <p class="field-hint">{{ t('fields.optionsHint') }}</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="cf-default">{{ t('fields.defaultValue') }}</label>
-            <input id="cf-default" v-model="draft.defaultValue" class="input" :maxlength="LIMITS.name" />
-          </div>
+    <EditorDialog :open="!!(draft)" wide @close="draft = null">
+      <template v-if="draft">
+        <div class="card-header">
+          <h2 class="card-title">{{ draft.id ? t('fields.editField') : t('fields.newField') }}</h2>
+          <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="draft = null">
+            <AppIcon name="close" :size="18" />
+          </button>
         </div>
 
-        <div class="field">
-          <label class="field-label" for="cf-help">{{ t('fields.helpText') }}</label>
-          <input id="cf-help" v-model="draft.helpText" class="input" :maxlength="LIMITS.shortText" />
+        <div class="card-body stack">
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="cf-label">
+                {{ t('fields.label') }}<span class="req">*</span>
+              </label>
+              <input id="cf-label" v-model="draft.label" class="input" :maxlength="LIMITS.name" />
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="cf-entity">{{ t('fields.appliesTo') }}</label>
+              <select id="cf-entity" v-model="draft.entity" class="select" :disabled="!!draft.id">
+                <option v-for="e in FIELD_ENTITIES" :key="e" :value="e">
+                  {{ t(`fields.entity.${e}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="cf-type">{{ t('fields.fieldType') }}</label>
+              <select id="cf-type" v-model="draft.type" class="select">
+                <option v-for="ty in FIELD_TYPES" :key="ty" :value="ty">
+                  {{ t(`fields.type.${ty}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="cf-vis">{{ t('fields.visibilityLabel') }}</label>
+              <select id="cf-vis" v-model="draft.visibility" class="select">
+                <option v-for="v in FIELD_VISIBILITY" :key="v" :value="v">
+                  {{ t(`fields.visibility.${v}`) }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="needsOptions" class="field">
+              <label class="field-label" for="cf-options">{{ t('fields.options') }}</label>
+              <input id="cf-options" v-model="optionsText" class="input" />
+              <p class="field-hint">{{ t('fields.optionsHint') }}</p>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="cf-default">{{ t('fields.defaultValue') }}</label>
+              <input id="cf-default" v-model="draft.defaultValue" class="input" :maxlength="LIMITS.name" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="cf-help">{{ t('fields.helpText') }}</label>
+            <input id="cf-help" v-model="draft.helpText" class="input" :maxlength="LIMITS.shortText" />
+          </div>
+
+          <label class="check">
+            <input v-model="draft.required" type="checkbox" />
+            <span class="check-text">{{ t('fields.required') }}</span>
+          </label>
         </div>
 
-        <label class="check">
-          <input v-model="draft.required" type="checkbox" />
-          <span class="check-text">{{ t('fields.required') }}</span>
-        </label>
-      </div>
-
-      <div class="card-footer">
-        <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="commit">
-          <span v-if="saving" class="spinner" />{{ t('common.save') }}
-        </button>
-      </div>
-    </section>
+        <div class="card-footer">
+          <button class="btn btn-secondary" @click="draft = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="commit">
+            <span v-if="saving" class="spinner" />{{ t('common.save') }}
+          </button>
+        </div>
+      </template>
+    </EditorDialog>
 
     <ConfirmDialog
       :open="pendingDelete !== null"
