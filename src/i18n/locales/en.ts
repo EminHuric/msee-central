@@ -2059,6 +2059,8 @@ export default {
     allYears: 'All years',
     figuresFor: 'Figures for {year}.',
     figuresAll: 'Figures for every year.',
+    payYearWarn: 'This sale is from {year} — the money will count towards the year in the date above.',
+    payUseSaleDate: 'Use the sale date',
     recordPayment: 'Record payment',
     commissionHint: 'Saving this creates the affiliate commission, as pending.',
     analysis: 'What we learned',

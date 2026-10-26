@@ -150,6 +150,22 @@ const payDate = ref('')
  */
 const editingPayment = ref<Transaction | null>(null)
 
+/**
+ * A payment being dated into a different year from the sale it settles.
+ *
+ * The date field offers today, which is right almost always and quietly wrong
+ * for the one case that keeps happening: settling something from a previous
+ * year. The money then lands in THIS year's income, and the only sign is a
+ * total that does not match what anybody remembers earning. It has already cost
+ * this company two deleted records and an afternoon.
+ *
+ * A warning rather than a block: paying a two-year-old invoice today is a real
+ * thing, and it is the person who knows which of the two happened.
+ */
+const payYearMismatch = computed(
+  () => !!paying.value && !!payDate.value && payDate.value.slice(0, 4) !== paying.value.saleDate.slice(0, 4),
+)
+
 /** What has already been paid against the sale being looked at. */
 const paymentsForSale = computed(() => {
   const sale = paying.value
@@ -1108,6 +1124,12 @@ onMounted(async () => {
             <label class="field-label" for="pay-date">{{ t('sales.paidOn') }}</label>
             <input id="pay-date" v-model="payDate" class="input" type="date" />
             <p class="field-hint">{{ t('sales.paidOnHint') }}</p>
+            <p v-if="payYearMismatch" class="field-hint warn">
+              {{ t('sales.payYearWarn', { year: paying.saleDate.slice(0, 4) }) }}
+              <button type="button" class="link-quiet" @click="payDate = paying.saleDate">
+                {{ t('sales.payUseSaleDate') }}
+              </button>
+            </p>
             <p v-if="balanceMap.get(paying.id)?.advanceDue" class="field-hint warn">
               {{ t('sales.advanceHint') }}
             </p>

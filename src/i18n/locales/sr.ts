@@ -2058,6 +2058,8 @@ export default {
     allYears: 'Sve godine',
     figuresFor: 'Brojke za {year}.',
     figuresAll: 'Brojke za sve godine.',
+    payYearWarn: 'Prodaja je iz {year}. godine — ovaj novac će ući u godinu koju si upisao gore.',
+    payUseSaleDate: 'Stavi datum prodaje',
     recordPayment: 'Upiši uplatu',
     commissionHint: 'Čuvanjem se pravi provizija partneru, u statusu „na čekanju“.',
     analysis: 'Šta smo naučili',
