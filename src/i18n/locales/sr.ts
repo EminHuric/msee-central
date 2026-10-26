@@ -1196,6 +1196,8 @@ export default {
     noClients: 'Još niko ne koristi ovu uslugu.',
     lastSale: 'Poslednja prodaja',
     openService: 'Otvori uslugu',
+    unfiled: 'Bez usluge',
+    unfiledHint: '{n} prodaja nije svrstano ni u jednu uslugu, od toga {recent} iz ove godine. Klikni da ih vidiš.',
     clientsUsing: 'Koriste je',
     commissionPercent: 'Provizija partnera %',
     commissionHint: 'Podrazumevana provizija partnera za ovu uslugu.',

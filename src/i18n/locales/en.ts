@@ -1197,6 +1197,8 @@ export default {
     noClients: 'Nobody uses this service yet.',
     lastSale: 'Last sale',
     openService: 'Open service',
+    unfiled: 'No service',
+    unfiledHint: '{n} sales are filed under no service, {recent} of them from this year. Click to see them.',
     clientsUsing: 'Used by',
     commissionPercent: 'Affiliate commission %',
     commissionHint: 'The default an affiliate earns on this service.',

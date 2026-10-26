@@ -156,6 +156,26 @@ const clientsPer = computed(() => {
 
 const canSeeClients = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_VIEW))
 
+/**
+ * The money that belongs to no service.
+ *
+ * Shown because a catalogue that adds up to a third of the year's revenue and
+ * says nothing about the other two thirds is a page somebody stops believing.
+ * Most of it is older work whose category nobody can recover; some of it is
+ * this year's and simply has not been filed yet. Either way the page should
+ * account for every euro it is implicitly claiming to describe.
+ */
+const unfiled = computed(() => {
+  const rows = sales.value.filter((s) => !s.serviceId)
+  const thisYear = String(new Date().getFullYear())
+
+  return {
+    count: rows.length,
+    value: rows.reduce((n, s) => n + s.value.baseMinor, 0),
+    recent: rows.filter((s) => s.saleDate.startsWith(thisYear)).length,
+  }
+})
+
 const visible = computed(() => {
   const term = search.value.trim().toLowerCase()
 
@@ -504,7 +524,26 @@ onMounted(load)
       </div>
     </div>
 
-    <div v-else class="grid">
+    <!--
+      What has no service, and how much of it there is.
+
+      Above the catalogue rather than buried under it: the gap between this
+      figure and the cards is the first thing worth knowing about how complete
+      the catalogue is.
+    -->
+    <RouterLink
+      v-if="!loading && canSeeMoney && unfiled.count"
+      to="/sales"
+      class="card unfiled"
+    >
+      <span class="unfiled-label">{{ t('services.unfiled') }}</span>
+      <span class="unfiled-value">{{ money(unfiled.value) }}</span>
+      <span class="unfiled-note">
+        {{ t('services.unfiledHint', { n: unfiled.count, recent: unfiled.recent }) }}
+      </span>
+    </RouterLink>
+
+    <div v-if="!loading && visible.length" class="grid">
       <article v-for="service in visible" :key="service.id" class="card service">
         <div class="service-head">
           <div class="service-id">
@@ -709,6 +748,34 @@ onMounted(load)
 .more > summary { cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-3); }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+
+/* Money with no category, stated rather than left to be noticed. */
+.unfiled {
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  text-decoration: none;
+}
+
+.unfiled:hover { border-color: var(--border-strong); }
+
+.unfiled-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.unfiled-value {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.unfiled-note { color: var(--text-tertiary); font-size: var(--text-sm); }
 .service { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-5); }
 .service-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .service-id { display: flex; flex-direction: column; min-width: 0; }
