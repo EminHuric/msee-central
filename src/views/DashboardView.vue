@@ -73,7 +73,17 @@ const { t, locale } = useI18n()
 const loading = ref(true)
 const snap = ref<Snapshot>(EMPTY_SNAPSHOT)
 const activity = ref<ActivityEntry[]>([])
-const period = ref<Period>(periodOf('month'))
+/*
+ * The year, not the month.
+ *
+ * "How is this year going" is the question this screen is opened with, and it
+ * is the one the target band above the cards answers. A month was the old
+ * default and made the top of the application disagree with itself: a target
+ * for the year, over figures for twenty-six days.
+ *
+ * Still a picker, so a month is one click away.
+ */
+const period = ref<Period>(periodOf('year'))
 
 const today = new Date().toISOString().slice(0, 10)
 
