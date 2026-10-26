@@ -309,8 +309,8 @@ const theirsCount = computed(
  */
 .grid {
   display: grid;
-  grid-auto-rows: minmax(30px, auto);
-  grid-template-columns: 130px repeat(var(--nights), minmax(26px, 1fr));
+  grid-auto-rows: minmax(min(30px, 100%), auto);
+  grid-template-columns: 130px repeat(var(--nights), minmax(min(26px, 100%), 1fr));
   min-width: 760px;
 }
 

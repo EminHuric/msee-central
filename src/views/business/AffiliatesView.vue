@@ -904,12 +904,12 @@ onMounted(load)
 .rule-foot { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-3); flex-wrap: wrap; }
 .spacer { flex: 1; }
 
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); }
 .partner { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); }
 .partner-head { display: flex; align-items: center; gap: var(--space-3); }
 .partner-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }

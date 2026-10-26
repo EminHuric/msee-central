@@ -711,7 +711,7 @@ watch(uid, load)
 .warn { color: var(--warn-500); }
 .small { font-size: var(--text-xs); }
 
-.kpis.wide { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); padding: var(--space-4) var(--space-5); }
+.kpis.wide { grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); padding: var(--space-4) var(--space-5); }
 .work-value { font-weight: 650; font-variant-numeric: tabular-nums; }
 .as-paid { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-500); }
 .as-pending, .as-cancelled { background: var(--bg-inset); border-color: var(--border-subtle); color: var(--text-tertiary); }

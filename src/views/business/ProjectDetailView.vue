@@ -714,13 +714,13 @@ watch(projectId, load)
 .add-row { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .add-row .input:first-child { flex: 1; }
 
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 .figure-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
 
-.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--space-4); align-items: start; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: var(--space-4); align-items: start; }
 .column { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .linked { list-style: none; margin: 0; padding: 0; }

@@ -772,7 +772,7 @@ onMounted(async () => {
 .link-quiet { color: var(--text-secondary); }
 .link-quiet:hover { color: var(--text-brand); }
 
-.board { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-2); }
+.board { display: grid; grid-template-columns: repeat(5, minmax(min(190px, 100%), 1fr)); gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-2); }
 @media (max-width: 900px) { .board { grid-template-columns: repeat(5, 220px); } }
 .column { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
 .column-head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-1) var(--space-1); }

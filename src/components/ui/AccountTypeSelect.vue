@@ -57,7 +57,7 @@ const icons: Record<AccountType, string> = {
 <style scoped>
 .types {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
   gap: var(--space-3);
 }
 

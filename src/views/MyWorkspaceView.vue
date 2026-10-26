@@ -622,12 +622,12 @@ onMounted(load)
 <style scoped>
 .who { display: flex; align-items: center; gap: var(--space-4); }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); align-items: start; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); align-items: start; }
 .group-title { padding: var(--space-3) var(--space-5) var(--space-1); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); }
 
 .agenda, .reminders, .rows, .work, .awards, .goals { list-style: none; margin: 0; padding: 0; }
@@ -663,11 +663,11 @@ onMounted(load)
 .work-title, .award-reason { font-size: var(--text-sm); font-weight: 550; }
 .award-amount { font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
 
-.earnings { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-3); margin: 0; padding: var(--space-4) var(--space-5); }
+.earnings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); gap: var(--space-3); margin: 0; padding: var(--space-4) var(--space-5); }
 .earnings dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); margin-bottom: 2px; }
 .earnings dd { margin: 0; font-size: var(--text-md); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.goals li { display: grid; grid-template-columns: minmax(80px, 1fr) 2fr auto; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); }
+.goals li { display: grid; grid-template-columns: minmax(min(80px, 100%), 1fr) 2fr auto; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); }
 .goal-name { font-size: var(--text-sm); }
 .goal-pct { font-size: var(--text-xs); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
 

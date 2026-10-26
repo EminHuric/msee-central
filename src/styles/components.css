@@ -265,7 +265,7 @@
 
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--space-4);
 }
 
@@ -370,7 +370,42 @@
 /* ---- Tables ---------------------------------------------------------- */
 
 .table-wrap {
+  max-width: 100%;
   overflow-x: auto;
+}
+
+/*
+ * Grid and flex children shrink to their track.
+ *
+ * A grid item's `min-width` defaults to AUTO, which means its content's width —
+ * so one long client name, one wide table or one untruncated email stretches
+ * its column past the screen and takes the whole page sideways with it. The
+ * page then slides away under a thumb on every scroll, which is the single
+ * thing that makes an application feel broken on a phone.
+ *
+ * `min-width: 0` lets the track decide instead, and the table inside scrolls in
+ * its own box where it belongs.
+ */
+.grid > *,
+.pair > *,
+.columns > *,
+.figures > *,
+.cards > * {
+  min-width: 0;
+}
+
+/*
+ * Nothing unbreakable may be wider than its box.
+ *
+ * An email address, a URL or a sixty-character business name has no space to
+ * wrap at, and the browser's default is to let it stick out. Breaking mid-word
+ * is ugly exactly once; a page that scrolls sideways is ugly every time it is
+ * touched.
+ */
+.card,
+.table td,
+.table th {
+  overflow-wrap: anywhere;
 }
 
 .table {

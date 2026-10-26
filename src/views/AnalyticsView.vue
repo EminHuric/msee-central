@@ -543,13 +543,13 @@ onMounted(load)
   gap: 2px;
 }
 
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
 .delta { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); font-weight: 600; }
 
-.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); }
 .pos { color: var(--ok-500); }
 .neg { color: var(--danger-500); }
 .small { font-size: var(--text-xs); }

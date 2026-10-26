@@ -409,7 +409,7 @@ onMounted(async () => {
 .search-input { padding-left: calc(var(--space-3) * 2 + 16px); }
 .select.compact { max-width: 190px; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-4); }
 .project { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 
 .cover { position: relative; display: block; width: 100%; height: 128px; background: var(--bg-inset); }

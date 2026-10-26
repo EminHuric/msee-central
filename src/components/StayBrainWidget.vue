@@ -155,7 +155,7 @@ onMounted(async () => {
 .figures {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
 }
 
 .figures > div {
@@ -190,7 +190,7 @@ onMounted(async () => {
   border-top: 1px solid var(--border-subtle);
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .rank-title {

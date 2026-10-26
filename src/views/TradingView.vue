@@ -273,7 +273,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--space-3); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: var(--space-3); }
 
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) var(--space-5); }
 

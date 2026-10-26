@@ -693,7 +693,7 @@ onMounted(async () => {
 .more > summary:hover { color: var(--text-brand); }
 .ref-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 1.5fr) auto;
+  grid-template-columns: minmax(min(140px, 100%), 1fr) minmax(min(140px, 100%), 1fr) minmax(min(160px, 100%), 1.5fr) auto;
   gap: var(--space-3);
   align-items: end;
   margin-bottom: var(--space-3);

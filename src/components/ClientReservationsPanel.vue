@@ -493,7 +493,7 @@ onMounted(load)
 .figures {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -537,7 +537,7 @@ onMounted(load)
 .field-grid {
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 }
 
 .computed-line {

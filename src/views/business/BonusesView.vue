@@ -1567,7 +1567,7 @@ onMounted(load)
 
 .level-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
   gap: var(--space-3);
   align-items: start;
 }
@@ -1840,7 +1840,7 @@ onMounted(load)
   .image-row { flex-direction: column; }
 }
 
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: var(--space-3); }
 .figure { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4); }
 .figure-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
 .figure-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }

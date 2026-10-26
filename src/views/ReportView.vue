@@ -264,7 +264,7 @@ onMounted(load)
 .totals {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   margin-bottom: var(--space-5);
 }
 

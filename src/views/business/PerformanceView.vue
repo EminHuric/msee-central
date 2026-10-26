@@ -302,7 +302,7 @@ onMounted(load)
 .picker { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0 var(--space-5) var(--space-4); }
 .picker-foot { display: flex; gap: var(--space-2); width: 100%; justify-content: flex-end; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-4); }
 .person { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
 .person-head { display: flex; align-items: center; gap: var(--space-3); text-align: left; }
 .person-id { min-width: 0; display: flex; flex-direction: column; }

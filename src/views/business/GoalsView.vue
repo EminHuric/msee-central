@@ -488,7 +488,7 @@ onMounted(load)
 .inline-row .select { flex: 1; }
 .picker { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); max-height: 180px; overflow-y: auto; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); gap: var(--space-4); }
 .goal { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); }
 .goal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .goal-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }

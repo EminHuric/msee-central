@@ -212,7 +212,7 @@ function isGood(m: MetricInput, delta: number): boolean {
 
 .figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 1px;
   background: var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);

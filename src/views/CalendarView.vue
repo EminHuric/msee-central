@@ -511,7 +511,7 @@ onMounted(load)
 .rot-r { transform: rotate(90deg); }
 .rot-l { transform: rotate(-90deg); }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: var(--space-4); align-items: start; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(min(280px, 100%), 1fr); gap: var(--space-4); align-items: start; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
 
 .weekdays {

@@ -734,7 +734,7 @@ onMounted(load)
 .summary {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   padding: var(--space-4);
 }
 
@@ -769,7 +769,7 @@ onMounted(load)
 .collect-figures {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
 }
 
 .collect-figures > div {
@@ -811,7 +811,7 @@ onMounted(load)
   border-top: 1px solid var(--border-subtle);
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
 }
 
 .pay-actions {
@@ -867,7 +867,7 @@ onMounted(load)
   align-items: flex-end;
   display: grid;
   gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
 }
 
 .invoice-sum {

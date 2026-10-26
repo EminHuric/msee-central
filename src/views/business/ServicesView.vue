@@ -747,7 +747,7 @@ onMounted(load)
 .more { border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
 .more > summary { cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-3); }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-4); }
 
 /* Money with no category, stated rather than left to be noticed. */
 .unfiled {

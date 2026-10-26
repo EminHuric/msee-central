@@ -88,7 +88,7 @@ function share(value: number): number {
 <style scoped>
 .rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 
-.row { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; align-items: center; gap: var(--space-3); }
+.row { display: grid; grid-template-columns: minmax(min(90px, 100%), 150px) 1fr auto; align-items: center; gap: var(--space-3); }
 @media (max-width: 560px) {
   .row { grid-template-columns: 1fr auto; }
   .track { grid-column: 1 / -1; order: 3; }

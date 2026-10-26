@@ -15,7 +15,8 @@
       "Bash(curl -s \"http://localhost:5173/src/main.ts\")",
       "Bash(curl -s \"http://localhost:5173/src/router/guards.ts\")",
       "Bash(curl -s -w \"\\\\n[status %{http_code}]\\\\n\" \"http://localhost:5173/src/router/guards.ts\")",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "mcp__claude-in-chrome__tabs_context_mcp"
     ]
   }
 }

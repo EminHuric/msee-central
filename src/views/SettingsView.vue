@@ -153,7 +153,7 @@ function isActive(to: string): boolean {
 <style scoped>
 .layout {
   display: grid;
-  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+  grid-template-columns: minmax(min(190px, 100%), 230px) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
 }
