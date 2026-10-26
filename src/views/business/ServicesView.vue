@@ -132,6 +132,30 @@ const performance = computed(() => {
   return map
 })
 
+/**
+ * Who actually buys each service.
+ *
+ * Read from the sales rather than from a list on the client record, because a
+ * list somebody has to maintain is a list that is wrong within a month. A
+ * client appears here because they bought the thing, which is the only
+ * definition of "uses this service" that cannot drift.
+ */
+const clientsPer = computed(() => {
+  const map = new Map<string, string[]>()
+
+  for (const sale of sales.value) {
+    if (!sale.serviceId || !sale.clientName) continue
+    const names = map.get(sale.serviceId) ?? []
+    if (!names.includes(sale.clientName)) names.push(sale.clientName)
+    map.set(sale.serviceId, names)
+  }
+
+  for (const names of map.values()) names.sort((a, b) => a.localeCompare(b))
+  return map
+})
+
+const canSeeClients = computed(() => auth.hasPermission(PERMISSIONS.CLIENTS_VIEW))
+
 const visible = computed(() => {
   const term = search.value.trim().toLowerCase()
 
@@ -549,6 +573,18 @@ onMounted(load)
         </dl>
 
         <!--
+          Who it is sold to.
+
+          The answer to "open Services and see which client uses which" — the
+          catalogue is otherwise a price list that says nothing about whether
+          anybody is buying.
+        -->
+        <div v-if="canSeeClients && clientsPer.get(service.id)?.length" class="users">
+          <span class="users-label">{{ t('services.clientsUsing') }}</span>
+          <span class="users-names">{{ clientsPer.get(service.id)!.join(' · ') }}</span>
+        </div>
+
+        <!--
           The accommodation service opens its own properties.
 
           StayBrain is not a section of its own any more: selling stays IS this
@@ -597,6 +633,34 @@ onMounted(load)
 </template>
 
 <style scoped>
+/*
+ * Who buys this service.
+ *
+ * Names wrap rather than being cut off at the card's edge: the one thing
+ * somebody looks for here is whether a particular client is in the list, and a
+ * truncated list cannot answer that.
+ */
+.users {
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.users-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.users-names {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 .editor { border-color: var(--accent-soft-border); }
 .search { position: relative; display: flex; align-items: center; }
 .search-icon { position: absolute; left: var(--space-3); color: var(--text-tertiary); pointer-events: none; }

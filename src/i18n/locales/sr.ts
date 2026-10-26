@@ -1192,6 +1192,7 @@ export default {
     half: 'Pola',
     paymentDeadline: 'Rok plaćanja (dana)',
     paymentNote: 'Napomena o plaćanju',
+    clientsUsing: 'Koriste je',
     commissionPercent: 'Provizija partnera %',
     commissionHint: 'Podrazumevana provizija partnera za ovu uslugu.',
     activate: 'Aktiviraj',

@@ -1193,6 +1193,7 @@ export default {
     half: 'Half',
     paymentDeadline: 'Payment deadline (days)',
     paymentNote: 'Payment note',
+    clientsUsing: 'Used by',
     commissionPercent: 'Affiliate commission %',
     commissionHint: 'The default an affiliate earns on this service.',
     activate: 'Activate',
