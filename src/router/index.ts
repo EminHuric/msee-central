@@ -118,6 +118,12 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: PERMISSIONS.SERVICES_VIEW, titleKey: 'services.title' },
       },
       {
+        path: 'services/:id',
+        name: 'service-detail',
+        component: () => import('@/views/business/ServiceDetailView.vue'),
+        meta: { permission: PERMISSIONS.SERVICES_VIEW, titleKey: 'services.title' },
+      },
+      {
         /*
          * No permission gate: an outside partner reaches this page with no
          * internal permissions at all and sees their own panel. What they may

@@ -508,7 +508,15 @@ onMounted(load)
       <article v-for="service in visible" :key="service.id" class="card service">
         <div class="service-head">
           <div class="service-id">
-            <h2 class="service-name">{{ service.name }}</h2>
+            <!--
+              The name is the way in. A card that shows a total and cannot be
+              opened leaves "who is buying this" unanswerable from here.
+            -->
+            <h2 class="service-name">
+              <RouterLink :to="`/services/${service.id}`" class="service-link">
+                {{ service.name }}
+              </RouterLink>
+            </h2>
             <span v-if="service.category" class="tertiary service-cat">{{ service.category }}</span>
           </div>
           <span v-if="service.status === 'inactive'" class="badge badge-plain">
@@ -579,10 +587,15 @@ onMounted(load)
           catalogue is otherwise a price list that says nothing about whether
           anybody is buying.
         -->
-        <div v-if="canSeeClients && clientsPer.get(service.id)?.length" class="users">
+        <RouterLink
+          v-if="canSeeClients && clientsPer.get(service.id)?.length"
+          :to="`/services/${service.id}`"
+          class="users"
+        >
           <span class="users-label">{{ t('services.clientsUsing') }}</span>
           <span class="users-names">{{ clientsPer.get(service.id)!.join(' · ') }}</span>
-        </div>
+          <span class="users-open">{{ t('services.openService') }} →</span>
+        </RouterLink>
 
         <!--
           The accommodation service opens its own properties.
@@ -660,6 +673,26 @@ onMounted(load)
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+
+.users {
+  color: inherit;
+  text-decoration: none;
+}
+
+.users:hover .users-open { text-decoration: underline; }
+
+.users-open {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  margin-top: 2px;
+}
+
+.service-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.service-link:hover { text-decoration: underline; }
 
 .editor { border-color: var(--accent-soft-border); }
 .search { position: relative; display: flex; align-items: center; }
