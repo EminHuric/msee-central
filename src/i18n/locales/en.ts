@@ -2053,6 +2053,8 @@ export default {
     advanceHint: 'The advance has not arrived yet.',
     instalmentCount: 'Instalments',
     dueInDays: 'Due in (days)',
+    editPayment: 'Edit payment',
+    paymentsSoFar: 'Payments so far',
     recordPayment: 'Record payment',
     commissionHint: 'Saving this creates the affiliate commission, as pending.',
     analysis: 'What we learned',

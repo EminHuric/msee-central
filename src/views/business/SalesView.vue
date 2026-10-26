@@ -35,7 +35,12 @@ import {
   structureFromTerms,
   totalsOf,
 } from '@/api/sales'
-import { blankTransaction, fetchTransactions, saveTransaction } from '@/api/finance'
+import {
+  blankTransaction,
+  deleteTransaction,
+  fetchTransactions,
+  saveTransaction,
+} from '@/api/finance'
 import { formatDate } from '@/i18n'
 import { exportCsv } from '@/lib/csv'
 import { LIMITS } from '@/lib/validation'
@@ -44,6 +49,7 @@ import { useUiStore } from '@/stores/ui'
 import type { Client, Project, Service, ServiceTerms } from '@/types/business'
 import {
   CONTACT_CHANNELS,
+  INCOME_TYPES,
   PAYMENT_MODELS,
   SALE_CHANNELS,
   type Affiliate,
@@ -133,6 +139,28 @@ const payAmount = ref(0)
  * usually is not always.
  */
 const payDate = ref('')
+
+/**
+ * The payment being corrected, when one is.
+ *
+ * An amount typed wrong is the single most common mistake anybody makes in this
+ * dialog — 500 for 497 — and until now the only way back was to find the row in
+ * the finance ledger among everything else the company has ever spent or
+ * received. The payment belongs to the sale; so does fixing it.
+ */
+const editingPayment = ref<Transaction | null>(null)
+
+/** What has already been paid against the sale being looked at. */
+const paymentsForSale = computed(() => {
+  const sale = paying.value
+  if (!sale) return []
+
+  return transactions.value
+    .filter(
+      (tx) => tx.saleId === sale.id && !tx.deletedAt && INCOME_TYPES.includes(tx.type),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+})
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -366,6 +394,30 @@ function startPayment(sale: Sale): void {
     : (balance?.remainingBaseMinor ?? 0)
   payAmount.value = fromMinor(Math.max(0, suggested), BASE_CURRENCY)
   payDate.value = today
+  editingPayment.value = null
+}
+
+/** Load a payment already recorded back into the same two fields. */
+function editPayment(tx: Transaction): void {
+  editingPayment.value = tx
+  payAmount.value = fromMinor(tx.amount.minor, tx.amount.currency)
+  payDate.value = tx.date
+}
+
+async function removePayment(tx: Transaction): Promise<void> {
+  if (saving.value) return
+
+  saving.value = true
+  try {
+    await deleteTransaction(tx)
+    if (editingPayment.value?.id === tx.id) startPayment(paying.value as Sale)
+    ui.notify('ok', t('finance.saved'))
+    await load()
+  } catch {
+    ui.notify('danger', t('finance.saveFailed'))
+  } finally {
+    saving.value = false
+  }
 }
 
 async function commitPayment(): Promise<void> {
@@ -377,10 +429,21 @@ async function commitPayment(): Promise<void> {
 
   saving.value = true
   try {
+    /*
+     * Correcting keeps the original record rather than binning it and writing a
+     * new one: its id is what the audit trail, the commission and any export
+     * already point at, and a correction is not a different payment.
+     */
+    const existing = editingPayment.value
+
     await saveTransaction(
       {
-        ...blankTransaction('income'),
-        category: balance?.advanceDue ? 'advance' : 'service_payment',
+        ...(existing ?? blankTransaction('income')),
+        category: existing
+          ? existing.category
+          : balance?.advanceDue
+            ? 'advance'
+            : 'service_payment',
         description: sale.title,
         amount: moneyOf(payAmount.value, BASE_CURRENCY, 1, payDate.value),
         date: payDate.value,
@@ -943,10 +1006,12 @@ onMounted(async () => {
     </section>
 
     <!-- Payment -------------------------------------------------------- -->
-    <div v-if="paying" class="modal-backdrop" @click.self="paying = null">
-      <section class="card modal">
+    <EditorDialog :open="!!paying" @close="paying = null">
+      <template v-if="paying">
         <div class="card-header">
-          <h2 class="card-title">{{ t('sales.recordPayment') }}</h2>
+          <h2 class="card-title">
+            {{ editingPayment ? t('sales.editPayment') : t('sales.recordPayment') }}
+          </h2>
           <button class="btn btn-ghost btn-icon" :aria-label="t('common.close')" @click="paying = null">
             <AppIcon name="close" :size="18" />
           </button>
@@ -970,6 +1035,38 @@ onMounted(async () => {
             </div>
           </dl>
 
+          <!--
+            What has already been paid, and the way back from a typo.
+
+            Listed here rather than only in the finance ledger because this is
+            where somebody is standing when they realise they typed 500 for 497.
+          -->
+          <div v-if="paymentsForSale.length" class="paid-list">
+            <h3 class="paid-title">{{ t('sales.paymentsSoFar') }}</h3>
+            <ul class="paid-rows">
+              <li v-for="tx in paymentsForSale" :key="tx.id" :class="{ on: editingPayment?.id === tx.id }">
+                <span class="paid-date">{{ formatDate(tx.date) }}</span>
+                <span class="paid-amount">{{ money(tx.amount.baseMinor) }}</span>
+                <button
+                  class="btn btn-ghost btn-sm btn-icon"
+                  :aria-label="t('common.edit')"
+                  :disabled="saving"
+                  @click="editPayment(tx)"
+                >
+                  <AppIcon name="edit" :size="14" />
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm btn-icon danger"
+                  :aria-label="t('common.delete')"
+                  :disabled="saving"
+                  @click="removePayment(tx)"
+                >
+                  <AppIcon name="trash" :size="14" />
+                </button>
+              </li>
+            </ul>
+          </div>
+
           <div class="field">
             <label class="field-label" for="pay-amount">{{ t('finance.amount') }}</label>
             <input id="pay-amount" v-model.number="payAmount" class="input" type="number" step="0.01" />
@@ -992,8 +1089,8 @@ onMounted(async () => {
             <span v-if="saving" class="spinner" />{{ t('common.save') }}
           </button>
         </div>
-      </section>
-    </div>
+      </template>
+    </EditorDialog>
 
     <ConfirmDialog
       :open="pendingDelete !== null"
@@ -1049,6 +1146,43 @@ onMounted(async () => {
 
 .percent-row .narrow {
   max-width: 80px;
+}
+
+/* ---- Payments already recorded, inside the payment dialog ----------- */
+.paid-list {
+  background: var(--bg-inset);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.paid-title {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+}
+
+.paid-rows { list-style: none; margin: 0; padding: 0; }
+
+.paid-rows li {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 1fr auto auto auto;
+  padding: var(--space-1) var(--space-2);
+}
+
+/* The row being corrected, so it is obvious which one the fields now hold. */
+.paid-rows li.on { background: var(--accent-soft-bg); }
+
+.paid-date { color: var(--text-secondary); font-size: var(--text-sm); }
+
+.paid-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .editor { border-color: var(--accent-soft-border); }

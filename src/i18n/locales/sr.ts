@@ -2052,6 +2052,8 @@ export default {
     advanceHint: 'Avans još nije stigao.',
     instalmentCount: 'Broj rata',
     dueInDays: 'Rok (dana)',
+    editPayment: 'Izmeni uplatu',
+    paymentsSoFar: 'Dosadašnje uplate',
     recordPayment: 'Upiši uplatu',
     commissionHint: 'Čuvanjem se pravi provizija partneru, u statusu „na čekanju“.',
     analysis: 'Šta smo naučili',
