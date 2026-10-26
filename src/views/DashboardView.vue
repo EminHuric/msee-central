@@ -283,6 +283,17 @@ interface Card {
   delta: number | null
   link?: string
   hint?: string
+  /**
+   * The same stretch of days a year earlier.
+   *
+   * Beside `delta` and not instead of it, because the two answer different
+   * questions. The delta compares against the period before — is this month
+   * going better than last. This compares against the same dates a year ago —
+   * is the business growing, which for a trade with a season is the only
+   * comparison that means anything. August always beats February; that says
+   * nothing. August beating last August is the whole story.
+   */
+  yoy?: string
 }
 
 const todayCards = computed<Card[]>(() =>
@@ -347,6 +358,7 @@ const moneyCards = computed<Card[]>(() =>
           hint: t('dashboard.collectedOf', {
             amount: money(figures.value.incomeBaseMinor),
           }),
+          yoy: lastYearHint(figures.value.soldBaseMinor, yearAgo.value.soldBaseMinor),
         },
         {
           key: 'expense',
@@ -354,6 +366,7 @@ const moneyCards = computed<Card[]>(() =>
           value: money(figures.value.expenseBaseMinor),
           delta: trend(figures.value.expenseBaseMinor, before.value.expenseBaseMinor),
           link: '/finance',
+          yoy: lastYearHint(figures.value.expenseBaseMinor, yearAgo.value.expenseBaseMinor),
         },
         {
           key: 'profit',
@@ -361,7 +374,7 @@ const moneyCards = computed<Card[]>(() =>
           value: money(figures.value.profitBaseMinor),
           delta: trend(figures.value.profitBaseMinor, before.value.profitBaseMinor),
           link: '/finance',
-          hint: lastYearHint(figures.value.profitBaseMinor, yearAgo.value.profitBaseMinor),
+          yoy: lastYearHint(figures.value.profitBaseMinor, yearAgo.value.profitBaseMinor),
         },
         {
           key: 'madeFor',
@@ -377,6 +390,10 @@ const moneyCards = computed<Card[]>(() =>
             today: money(dayFigures.value.madeForClientsBaseMinor),
             total: money(everFigures.value.madeForClientsBaseMinor),
           }),
+          yoy: lastYearHint(
+            figures.value.madeForClientsBaseMinor,
+            yearAgo.value.madeForClientsBaseMinor,
+          ),
         },
         {
           key: 'outstanding',
@@ -993,6 +1010,8 @@ onUnmounted(() => {
                 {{ Math.abs(card.delta) }}%
               </span>
               <span v-if="card.hint" class="figure-hint">{{ card.hint }}</span>
+              <!-- The same dates a year ago, which is the growth question. -->
+              <span v-if="card.yoy" class="figure-hint yoy">{{ card.yoy }}</span>
             </button>
           </div>
         </template>
@@ -1378,6 +1397,14 @@ onUnmounted(() => {
 }
 
 .target-advice.pos { color: var(--ok-500); }
+
+/* The year-on-year line, quieter than the figure and calmer than the delta. */
+.yoy {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  width: 100%;
+}
 
 .goals { list-style: none; margin: 0; padding: 0; }
 .goals li { display: grid; grid-template-columns: minmax(min(90px, 100%), 1fr) 2fr auto; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); }
