@@ -208,10 +208,34 @@ function money(minor: number): string {
 
 const balanceMap = computed(() => balances(sales.value, transactions.value))
 
+/**
+ * Which year the figures are about.
+ *
+ * The totals above this list used to sum every sale ever recorded, so a company
+ * with three years of history read "15.623" on a year it had made four and a
+ * half thousand in. A lifetime total is a real number and belongs on the
+ * dashboard beside the target; on a working list it is the wrong answer to
+ * "how am I doing", given confidently.
+ *
+ * This year by default, because that is the question being asked ninety-nine
+ * times in a hundred, and a year is a filter rather than a fixed rule so last
+ * year is one click away.
+ */
+const yearFilter = ref(String(new Date().getFullYear()))
+
+/** Every year that has a sale in it, newest first. */
+const years = computed(() => {
+  const found = new Set(sales.value.map((s) => s.saleDate.slice(0, 4)).filter(Boolean))
+  /* This year is offered even before it has a sale, so the default is selectable. */
+  found.add(String(new Date().getFullYear()))
+  return [...found].sort().reverse()
+})
+
 const visible = computed(() => {
   const term = search.value.trim().toLowerCase()
 
   const rows = sales.value.filter((s) => {
+    if (yearFilter.value && !s.saleDate.startsWith(yearFilter.value)) return false
     if (channelFilter.value && s.channel !== channelFilter.value) return false
     if (serviceFilter.value && s.serviceId !== serviceFilter.value) return false
     if (ownerFilter.value && s.ownerUid !== ownerFilter.value) return false
@@ -566,7 +590,10 @@ onMounted(async () => {
       </div>
     </header>
 
-    <!-- Totals --------------------------------------------------------- -->
+    <!-- Totals, for the chosen year rather than for all time -------------- -->
+    <p class="figures-for">
+      {{ yearFilter ? t('sales.figuresFor', { year: yearFilter }) : t('sales.figuresAll') }}
+    </p>
     <div class="figures">
       <article class="card figure">
         <span class="figure-label">{{ t('sales.count') }}</span>
@@ -860,6 +887,11 @@ onMounted(async () => {
         />
       </div>
 
+      <select v-model="yearFilter" class="select compact" :aria-label="t('sales.year')">
+        <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+        <option value="">{{ t('sales.allYears') }}</option>
+      </select>
+
       <select v-model="channelFilter" class="select compact" :aria-label="t('sales.channel')">
         <option value="">{{ t('sales.allChannels') }}</option>
         <option v-for="c in SALE_CHANNELS" :key="c" :value="c">{{ t(`saleChannel.${c}`) }}</option>
@@ -1146,6 +1178,12 @@ onMounted(async () => {
 
 .percent-row .narrow {
   max-width: 80px;
+}
+
+.figures-for {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-2);
 }
 
 /* ---- Payments already recorded, inside the payment dialog ----------- */
